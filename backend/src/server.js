@@ -17,7 +17,7 @@ const db = openDb(config.databasePath);
 const applied = runMigrations(db);
 if (applied.length) console.log(`Applied migrations: ${applied.join(', ')}`);
 
-const server = createApp({ db }).listen(config.port, () => {
+const server = createApp({ db, config }).listen(config.port, () => {
   console.log(`Fast-CMMS listening on http://localhost:${config.port} (${config.nodeEnv})`);
 });
 

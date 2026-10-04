@@ -1,0 +1,43 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { dateInZone } from '../lib/dates.js';
+import { HttpError } from '../lib/http-error.js';
+import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
+import { validate } from '../middleware/validate.js';
+import { WORK_ORDER_SORTS } from '../services/work-orders.js';
+
+const listQuery = z.strictObject({
+  ...pageQueryFields,
+  ...sortQueryFields(WORK_ORDER_SORTS, 'created_on', 'desc'),
+});
+
+const statsQuery = z.strictObject({
+  period: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+/**
+ * @param {object} deps
+ * @param {ReturnType<import('../services/work-orders.js').createWorkOrderService>} deps.workOrders
+ * @param {string} deps.timeZone APP_TIMEZONE, for "today"
+ * @param {() => Date} deps.now
+ */
+export function workOrdersRouter({ workOrders, timeZone, now }) {
+  const router = Router();
+
+  router.get('/', validate({ query: listQuery }), (req, res) => {
+    res.json(workOrders.list(req.valid.query));
+  });
+
+  // Declared before /:id so "stats" is not taken for an id.
+  router.get('/stats', validate({ query: statsQuery }), (req, res) => {
+    res.json(workOrders.stats(req.valid.query.period, dateInZone(timeZone, now())));
+  });
+
+  router.get('/:id', validate({ params: idParams }), (req, res) => {
+    const workOrder = workOrders.getById(req.valid.params.id);
+    if (!workOrder) throw new HttpError(404, 'Work order not found');
+    res.json(workOrder);
+  });
+
+  return router;
+}

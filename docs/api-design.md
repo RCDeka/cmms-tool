@@ -8,12 +8,13 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 
 - IDs: integers. Datetimes: ISO 8601 UTC. Dates: `YYYY-MM-DD`. Booleans: `true`/`false`. Enumerated values: codes from `docs/data-model.md`.
 - JSON field names are the database column names (`snake_case`).
-- Pagination (brief): `page` (default 1), `size` (default 50, max 100). Response: `{ "total", "page", "pages", "items": [...] }`. A `page` above `pages` returns an empty `items` array.
-- Sorting: `sort` (whitelisted column, see each endpoint) and `order` (`asc`|`desc`). Any other value → 400.
+- Pagination (brief): `page` (default 1), `size` (default 50, max 100). Response: `{ "total", "page", "pages", "items": [...] }`. `pages` is at least 1, so an empty list reads "page 1 of 1". A `page` above `pages` returns an empty `items` array.
+- Sorting: `sort` (whitelisted column, see each endpoint) and `order` (`asc`|`desc`). Any other value → 400. Enumerated columns (priority, criticality, status) sort in business order (e.g. `LOW` < `NORMAL` < `HIGH` < `URGENT`), not alphabetically. Ties are broken by `id` in the same direction, so pages stay stable.
 - List items are **complete records**, identical to the `GET /:id` response (D7).
 - Error body (all errors except version conflicts): `{ "statusCode": number, "error": string, "message": string, "details"?: object }`. `details` holds per-field validation errors or the violated business rule (e.g. `{ "rule": "BR-W4" }`).
 - Status codes: `400` invalid input, `401` missing/invalid/expired token, `403` role or field not allowed, `404` not found, `409` version conflict or record locked by a conflict, `422` business rule violated (status transition, required field, invalid reference), `429` rate limit.
-- Unknown body fields are rejected (400). The input is validated with zod.
+- Unknown body fields **and unknown query parameters** are rejected (400), which catches typos such as `pagesize`. The input is validated with zod. Route ids must be plain positive integers (400 otherwise).
+- Without a valid token, every `/api` path except the public ones answers 401, including paths that don't exist, so the API doesn't reveal its routes.
 
 ## Permission matrix (D23)
 
@@ -66,10 +67,11 @@ Page<T>     { total, page, pages, items: T[] }
 ## Authentication
 
 ### POST /api/auth/login
-- Public, rate limited (10 attempts per 15 min per IP).
+- Public, rate limited: 10 attempts per 15 min per IP, successful ones included. Rate-limit headers follow the IETF draft (`RateLimit-Policy`, `RateLimit`).
 - Body: `{ "username": string, "password": string }`
 - `200 { "token": string, "expires_in": number, "user": { id, last_name, first_name, role, power_user } }`
-- Errors: 400; 401 invalid credentials; 429.
+- Username is case-insensitive and trimmed (BR-U1).
+- Errors: 400; 401 invalid credentials (same message for an unknown user and a wrong password); 429.
 
 ### POST /api/auth/logout
 - `204`. JWTs are stateless: the server keeps no session, and the client deletes its token and local data (D22).
@@ -84,8 +86,8 @@ Page<T>     { total, page, pages, items: T[] }
 - `200 Page<Asset>`
 
 ### GET /api/assets/search
-- Query: `q` (matches `code`, `name`, `brand`, `model`, `serial_number`; case-insensitive), `site?`, `category?`, `status?`, `criticality?`, `limit` (default 50, max 200).
-- `200 { "items": Asset[], "total": number }` (`total` = number of matches before `limit`).
+- Query: `q` (substring of `code`, `name`, `brand`, `model` or `serial_number`; case-insensitive for unaccented letters; `%` and `_` match literally), `site?`, `category?`, `status?`, `criticality?`, `limit` (default 50, max 200).
+- `200 { "items": Asset[], "total": number }` (`total` = number of matches before `limit`), ordered by `code`.
 - Declared before `/:id` in the router.
 
 ### GET /api/assets/:id
@@ -116,7 +118,7 @@ Page<T>     { total, page, pages, items: T[] }
 - `200 Page<WorkOrder>`
 
 ### GET /api/work-orders/stats
-- Query: `period` (days, default 30, max 365).
+- Query: `period` (days, default 30, max 365). Counts work orders whose `created_on` falls in the last `period` days, today included.
 - `200`:
   ```
   { "period": 30,
@@ -124,6 +126,7 @@ Page<T>     { total, page, pages, items: T[] }
     "by_status":   [{ "status": "OPEN", "count": 18 }, ...],
     "by_type":     [{ "type": "CORRECTIVE", "count": 120 }, ...] }
   ```
+- Every enum value is listed in enum order, with zero counts included, so a chart always has the same bars. `UNSPECIFIED` is added at the end of `by_category` only when some work orders have no category.
 - Declared before `/:id` in the router.
 
 ### POST /api/work-orders

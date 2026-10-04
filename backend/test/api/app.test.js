@@ -4,6 +4,7 @@ import path from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
+import { TEST_CONFIG } from '../helpers/app.js';
 import { createTestDb } from '../helpers/db.js';
 
 let ctx;
@@ -17,7 +18,7 @@ beforeAll(() => {
   fs.mkdirSync(path.join(frontendDir, 'assets', 'css'), { recursive: true });
   fs.writeFileSync(path.join(frontendDir, 'index.html'), '<!doctype html><title>shell</title>');
   fs.writeFileSync(path.join(frontendDir, 'assets', 'css', 'base.css'), 'body{}');
-  app = createApp({ db: ctx.db, frontendDir });
+  app = createApp({ db: ctx.db, config: TEST_CONFIG, frontendDir });
 });
 
 afterAll(() => {
@@ -34,12 +35,13 @@ describe('GET /api/health', () => {
 });
 
 describe('API errors', () => {
-  it('answers 404 with the uniform error body for unknown API routes', async () => {
-    const res = await request(app).get('/api/nothing-here').expect(404);
+  it('answers 401 with the uniform error body when no token is sent', async () => {
+    // Unknown API routes also answer 401 without a token: the API doesn't reveal its routes.
+    const res = await request(app).get('/api/nothing-here').expect(401);
     expect(res.body).toEqual({
-      statusCode: 404,
-      error: 'Not Found',
-      message: 'No route for GET /api/nothing-here',
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'Missing bearer token',
     });
   });
 
