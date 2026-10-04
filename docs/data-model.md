@@ -55,6 +55,8 @@ assets / work_orders 1───* conflicts (entity_type + entity_id)
 | site | TEXT | yes | | |
 | specialty | TEXT | yes | CHECK Category | |
 | power_user | INTEGER | no | default 0 | enables auto-save mode (D21) |
+| is_active | INTEGER | no | default 1, CHECK 0/1 | inactive users cannot log in **(added, D39)** |
+| credentials_changed_at | TEXT | yes | | last password change; older tokens are refused **(added, D39)** |
 | created_at / updated_at | TEXT | no | default now | **(added)** |
 
 ### assets
@@ -176,7 +178,12 @@ Rules:
 ### Users and authentication
 - BR-U1: `username` is unique and case-insensitive (stored lowercase).
 - BR-U2: Passwords are hashed with argon2; minimum length 10.
-- BR-U3: Users are created by the seed only in the MVP (no user management screen; see backlog).
+- BR-U3: Administrators create and edit users (D39). The `username` never changes; users are deactivated, never deleted.
+- BR-U4: At least one active administrator always remains: the last one cannot be deactivated or given another role (409).
+- BR-U5: A user with unfinished work orders (`OPEN`, `IN_PROGRESS`, `ON_HOLD`) assigned to them cannot be deactivated; reassign them first (409). Only active users can be assigned work (BR-W3).
+- BR-U6: Administrators cannot deactivate their own account (409).
+- BR-U7: An inactive user cannot log in (same answer as wrong credentials) and their existing tokens are refused at once (401).
+- BR-U8: Setting a password (admin reset or own change) sets `credentials_changed_at`: tokens issued before it are refused (401). Changing one's own password requires the current one and returns a new token for the current session.
 
 ### Versioning and conflicts (both entities)
 - BR-V1: Every update request carries the `version` the client edited from. A missing `version` is rejected (400).
@@ -195,7 +202,7 @@ Rules:
 ### Work orders
 - BR-W1: `number` is unique and immutable; format `WO-YYYY-NNNNN` (see BR-W10).
 - BR-W2: If `asset_id` is set, it must reference an existing asset, and `site` takes the asset's site. Sending a different `site` together with an asset is refused (422).
-- BR-W3: `assignee_id` must reference a user with role `TECHNICIAN` or `SUPERVISOR`; `supervisor_id` a user with role `SUPERVISOR` or `ADMIN`.
+- BR-W3: `assignee_id` must reference an active user with role `TECHNICIAN` or `SUPERVISOR`; `supervisor_id` a user with role `SUPERVISOR` or `ADMIN`.
 - BR-W4: Allowed status transitions (any other is rejected with 422):
 
 | From | To |

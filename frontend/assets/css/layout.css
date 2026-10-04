@@ -72,6 +72,15 @@ body:not(.is-logged-out) {
   margin-bottom: var(--space-2);
 }
 
+.user-account {
+  font-size: var(--font-size-small);
+  margin-bottom: var(--space-2);
+}
+
+.user-account[aria-current='page'] {
+  font-weight: 600;
+}
+
 /* Main area: top bar, content, status bar */
 #app-main {
   display: grid;

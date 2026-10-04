@@ -193,3 +193,32 @@
     padding-top: 0;
   }
 }
+
+/* User administration (D39) and "Change my password". */
+.user-meta {
+  margin-bottom: var(--space-3);
+}
+
+.password-reset {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.password-reset h3 {
+  font-size: var(--font-size-base);
+}
+
+.account-page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 40rem;
+}
+
+/* Full-page form: no sticky action bar (it is for the scrolling side panel). */
+.account-page .form-actions {
+  position: static;
+  border-top: 0;
+  box-shadow: none;
+  background: none;
+}

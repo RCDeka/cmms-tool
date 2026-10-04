@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="/assets/css/components.css" />
     <script type="module" src="/assets/js/app.js"></script>
     <!-- Fetch the whole module graph in parallel instead of level by level. -->
+    <link rel="modulepreload" href="/assets/js/account.js" />
+    <link rel="modulepreload" href="/assets/js/admin-users.js" />
     <link rel="modulepreload" href="/assets/js/api.js" />
     <link rel="modulepreload" href="/assets/js/auth.js" />
     <link rel="modulepreload" href="/assets/js/config.js" />
@@ -60,10 +62,14 @@
         <li data-roles="SUPERVISOR ADMIN" hidden>
           <a href="/audit-log" data-link data-nav="audit">Audit log</a>
         </li>
+        <li data-roles="ADMIN" hidden>
+          <a href="/admin/users" data-link data-nav="users">Users</a>
+        </li>
       </ul>
       <div class="user-box">
         <p class="user-name" id="user-name"></p>
         <p class="user-role" id="user-role"></p>
+        <a href="/account" class="user-account" data-link data-nav="account">Change my password</a>
         <button type="button" class="button button-secondary" id="logout-button">Log out</button>
       </div>
     </nav>

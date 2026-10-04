@@ -98,6 +98,7 @@ describe('token checks', () => {
       site: 'Paris La Défense Headquarters',
       specialty: null,
       power_user: true,
+      is_active: true,
     });
     expectNoSecrets(res.body);
   });

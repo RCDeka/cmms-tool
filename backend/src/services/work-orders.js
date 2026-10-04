@@ -170,7 +170,8 @@ export function createWorkOrderService(db) {
     `${SELECT} WHERE w.assignee_id = ? AND w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')`,
   );
   const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
-  const roleOf = db.prepare('SELECT role FROM users WHERE id = ?').pluck();
+  // Only active people can be assigned or supervise (BR-W3, BR-U7).
+  const roleOf = db.prepare('SELECT role FROM users WHERE id = ? AND is_active = 1').pluck();
   const idByClientId = db.prepare('SELECT id FROM work_orders WHERE client_id = ?').pluck();
   const highestNumber = db
     .prepare("SELECT max(number) FROM work_orders WHERE number LIKE 'WO-' || ? || '-%'")

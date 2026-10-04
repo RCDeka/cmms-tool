@@ -4,6 +4,11 @@ import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
 import { validate } from '../middleware/validate.js';
 
+const changePasswordBody = z.strictObject({
+  current_password: z.string().min(1).max(200),
+  new_password: z.string().max(200),
+});
+
 const loginBody = z.strictObject({
   username: z.string().trim().min(1).max(100),
   password: z.string().min(1).max(200),
@@ -16,7 +21,7 @@ const loginBody = z.strictObject({
  * @param {import('express').RequestHandler} deps.authenticate
  * @param {{ windowMs: number, limit: number }} deps.loginRateLimit
  */
-export function authRouter({ auth, authenticate, loginRateLimit }) {
+export function authRouter({ auth, authenticate, loginRateLimit, now = () => new Date() }) {
   const router = Router();
 
   const limiter = rateLimit({
@@ -40,6 +45,16 @@ export function authRouter({ auth, authenticate, loginRateLimit }) {
   router.get('/me', authenticate, (req, res) => {
     res.json(req.user);
   });
+
+  router.post(
+    '/change-password',
+    authenticate,
+    validate({ body: changePasswordBody }),
+    async (req, res) => {
+      const { current_password: current, new_password: next } = req.valid.body;
+      res.json(await auth.changePassword(req.user, current, next, { now: now() }));
+    },
+  );
 
   return router;
 }

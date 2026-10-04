@@ -30,7 +30,10 @@ export function historyHandler(audit, entityType, getById) {
   ];
 }
 
-/** GET /api/audit-log: the global log (supervisors and admins). */
+/**
+ * GET /api/audit-log: the global log (supervisors and admins). Changes to user accounts are
+ * for administrators only (D39).
+ */
 export function auditRouter({ audit }) {
   const router = Router();
   router.get(
@@ -38,7 +41,11 @@ export function auditRouter({ audit }) {
     requireRole('SUPERVISOR', 'ADMIN'),
     validate({ query: listQuery }),
     (req, res) => {
-      res.json(audit.list(req.valid.query));
+      const isAdmin = req.user.role === 'ADMIN';
+      if (req.valid.query.entity_type === 'users' && !isAdmin) {
+        throw new HttpError(403, 'Only administrators can see changes to user accounts');
+      }
+      res.json(audit.list({ ...req.valid.query, includeUsers: isAdmin }));
     },
   );
   return router;

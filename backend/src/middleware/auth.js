@@ -1,9 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { HttpError } from '../lib/http-error.js';
+import { isTokenCurrent } from '../rules/users.js';
 
 /**
  * Requires a valid `Authorization: Bearer <jwt>` header. The user is reloaded from the
- * database on every request, so a token for a deleted user stops working at once.
+ * database on every request, so a deactivated user, or a token issued before the last
+ * password change, stops working at once (BR-U7, BR-U8).
  * Sets `req.user` (public user shape).
  * @param {{ jwtSecret: string }} config
  * @param {ReturnType<import('../services/users.js').createUserService>} users
@@ -21,9 +23,13 @@ export function authenticate(config, users) {
       return next(new HttpError(401, message));
     }
 
-    const user = /^\d+$/.test(String(payload.sub)) ? users.getById(Number(payload.sub)) : null;
-    if (!user) return next(new HttpError(401, 'Invalid token'));
-    req.user = user;
+    const session = /^\d+$/.test(String(payload.sub)) ? users.session(Number(payload.sub)) : null;
+    if (!session) return next(new HttpError(401, 'Invalid token'));
+    if (!session.isActive) return next(new HttpError(401, 'This account is deactivated'));
+    if (!isTokenCurrent(payload.iat, session.credentialsChangedAt)) {
+      return next(new HttpError(401, 'Your password changed: log in again'));
+    }
+    req.user = session.user;
     next();
   };
 }

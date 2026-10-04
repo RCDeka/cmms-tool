@@ -26,6 +26,9 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `POST /work-orders` (create) | yes, assigned to themselves only (BR-W12) | yes | yes |
 | `PUT /work-orders/:id` | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
 | `GET /users` | no | yes | yes |
+| `GET /audit-log` | no | yes, without user accounts | yes |
+| `/admin/users` (user administration) | no | no | yes |
+| `POST /auth/change-password` (own password) | yes | yes | yes |
 | Conflict console and resolution | no | yes | yes |
 
 Editable fields:
@@ -37,7 +40,7 @@ Sending a field the role may not edit → 403 with `details.fields`.
 ## Shared shapes
 
 ```
-User        { id, last_name, first_name, username, role, site, specialty, power_user }
+User        { id, last_name, first_name, username, role, site, specialty, power_user, is_active }
 UserRef     { id, last_name, first_name }
 Asset       { id, code, name, site, building, floor, category, subcategory, criticality,
               status, brand, model, serial_number, commissioned_on, last_serviced_on,
@@ -79,6 +82,13 @@ Page<T>     { total, page, pages, items: T[] }
 
 ### GET /api/auth/me (added)
 - `200 User`. Errors: 401.
+
+Every authenticated request also answers 401 when the account was deactivated (BR-U7) or the token was issued before the last password change (BR-U8).
+
+### POST /api/auth/change-password (added, D39)
+- Every role. Body: `{ "current_password": string, "new_password": string }` (new password: at least 10 characters).
+- `200 { "token": string, "expires_in": number }`: a new token for this session; earlier tokens stop working (BR-U8).
+- Errors: 400 invalid body, or wrong current password (`details.fields.current_password`; 400, not 401, so the user stays logged in).
 
 ## Assets
 
@@ -196,6 +206,7 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 
 ### GET /api/audit-log
 - Roles: SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `entity_type?` (`assets` | `work_orders` | `users`).
+- Changes to user accounts (`users`) are for administrators: supervisors don't get them in the list, and asking for `entity_type=users` answers 403 (D39). Password entries carry only `note: { password_reset: true }` or `{ password_changed: true }`.
 - `200 { total, page, pages, items: [AuditEntry], people }`, newest first. Errors: 400; 403.
 
 ## Reference data and users (added)
@@ -205,7 +216,29 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 
 ### GET /api/users
 - Roles: SUPERVISOR, ADMIN. Returns the users that can be assigned to a work order (for dropdowns).
-- `200 [{ id, last_name, first_name, role, site, specialty }]`
+- `200 [{ id, last_name, first_name, role, site, specialty }]` (active users only).
+
+## User administration (added, D39)
+
+All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model.md`.
+
+### GET /api/admin/users
+- Query: `page`, `size` (max 100), `q?` (part of the username, first or last name), `role?`, `is_active?` (`true` | `false`).
+- `200 { total, page, pages, items: [User] }`: active users first, then by name.
+
+### POST /api/admin/users
+- Body: `{ username, password, first_name, last_name, role, site?, specialty?, power_user? }`. `username`: 3 to 50 of `a-z 0-9 . _ -`, stored lowercase. `power_user` defaults to `true` for supervisors and admins, `false` for technicians.
+- `201 { "created": true, "item": User }`. Errors: 400; 409 username taken (`details.fields.username`).
+
+### GET /api/admin/users/:id
+- `200 User`. Errors: 404.
+
+### PUT /api/admin/users/:id
+- Body: any of `first_name`, `last_name`, `role`, `site`, `specialty`, `power_user`, `is_active` (the username cannot change: unknown field, 400).
+- `200 { "updated": boolean, "item": User }` (`updated: false` when nothing changed). Errors: 400; 404; 409 with `details.rule` `BR-U4` (last active admin), `BR-U5` (unfinished work orders), `BR-U6` (own account).
+
+### POST /api/admin/users/:id/password
+- Body: `{ "password": string }` (at least 10 characters). `204`; the user's sessions end (BR-U8). Errors: 400; 404.
 
 ## Dashboard (added)
 

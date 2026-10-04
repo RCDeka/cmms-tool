@@ -15,6 +15,8 @@ const SHELL_FILES = [
   '/assets/css/layout.css',
   '/assets/css/table.css',
   '/assets/img/logo.svg',
+  '/assets/js/account.js',
+  '/assets/js/admin-users.js',
   '/assets/js/api.js',
   '/assets/js/app.js',
   '/assets/js/auth.js',

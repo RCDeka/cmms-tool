@@ -3,6 +3,7 @@ import {
   changedFields,
   entryTitle,
   historySection,
+  renderAuditLog,
   renderTimeline,
   withPeople,
 } from '../assets/js/history.js';
@@ -141,5 +142,52 @@ describe('audit log route', () => {
       page: 1,
       entityType: null,
     });
+  });
+});
+
+describe('user accounts in the audit log (admins, D39)', () => {
+  const data = (items) => ({ items, total: items.length, page: 1, pages: 1 });
+  const account = entry({
+    entity_type: 'users',
+    entity_id: 9,
+    label: 'Eve Tester (e2e.tech)',
+    changes: {
+      role: { from: 'TECHNICIAN', to: 'SUPERVISOR' },
+      is_active: { from: true, to: false },
+    },
+  });
+
+  it('shows user fields with labels, links to the account, titles password changes', () => {
+    const container = document.createElement('div');
+    renderAuditLog(container, {
+      data: data([
+        account,
+        entry({ entity_type: 'users', entity_id: 9, label: 'x', note: { password_reset: true } }),
+      ]),
+      entityType: null,
+      lookups,
+      withUsers: true,
+      onFilter: () => {},
+      pagination: null,
+    });
+    const text = container.textContent;
+    expect(text).toContain('Role: Technician → Supervisor');
+    expect(text).toContain('Account active: Yes → No');
+    expect(text).toContain('Password reset by an administrator');
+    expect(container.querySelector('a[href="/admin/users/9"]')).not.toBeNull();
+    expect(container.querySelector('option[value="users"]')).not.toBeNull();
+  });
+
+  it('offers the "User accounts" filter to admins only', () => {
+    const container = document.createElement('div');
+    renderAuditLog(container, {
+      data: data([]),
+      entityType: null,
+      lookups,
+      onFilter: () => {},
+      pagination: null,
+    });
+    expect(container.querySelector('option[value="users"]')).toBeNull();
+    expect(parseRoute('/audit-log', '?type=users').entityType).toBe('users');
   });
 });

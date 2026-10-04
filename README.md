@@ -47,7 +47,7 @@ npm run db:reset                     # (re)create the database, migrate and seed
 npm run dev                          # API + frontend on http://localhost:3000, restarts on changes
 ```
 
-Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`.
+Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`. Administrators manage accounts under **Users** (`/admin/users`); everyone can change their password with **Change my password** under their name in the sidebar.
 
 | URL | |
 |---|---|

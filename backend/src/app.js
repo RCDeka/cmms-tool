@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { REPO_ROOT } from './config/index.js';
 import { authenticate } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
+import { adminUsersRouter } from './routes/admin-users.js';
 import { assetsRouter } from './routes/assets.js';
 import { auditRouter, historyHandler } from './routes/audit.js';
 import { authRouter } from './routes/auth.js';
@@ -92,7 +93,7 @@ export function createApp({
 
   // API: public routes first, then everything else requires a valid token.
   app.use('/api/health', healthRouter(db));
-  app.use('/api/auth', authRouter({ auth, authenticate: requireAuth, loginRateLimit }));
+  app.use('/api/auth', authRouter({ auth, authenticate: requireAuth, loginRateLimit, now }));
   app.use('/api', requireAuth);
   // History routes first: /:id/history must not be read as an id.
   app.get('/api/assets/:id/history', ...historyHandler(audit, 'assets', assets.getById));
@@ -101,6 +102,7 @@ export function createApp({
     ...historyHandler(audit, 'work_orders', workOrders.getById),
   );
   app.use('/api/audit-log', auditRouter({ audit }));
+  app.use('/api/admin/users', adminUsersRouter({ users, now }));
   app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api/conflicts', conflictsRouter({ conflicts }));

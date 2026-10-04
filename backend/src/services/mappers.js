@@ -27,5 +27,6 @@ export function toUser(row) {
     site: row.site,
     specialty: row.specialty,
     power_user: toBool(row.power_user),
+    ...(row.is_active !== undefined && { is_active: toBool(row.is_active) }),
   };
 }

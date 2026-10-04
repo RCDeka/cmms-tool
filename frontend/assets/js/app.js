@@ -1,6 +1,15 @@
 // Entry point: wires the shell, the router and the views (docs/architecture.md).
 // Data flow: IndexedDB first, then quiet revalidation from the server (stale-while-revalidate).
 // Writes go through the sync queue (queue.js); editing and creation live in editor.js.
+import { renderAccount } from './account.js';
+import {
+  apiFieldErrors,
+  renderUserCreate,
+  renderUserList,
+  renderUserPanel,
+  showErrors,
+  usersUrl,
+} from './admin-users.js';
 import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
@@ -63,7 +72,7 @@ import {
   startRouter,
 } from './router.js';
 import { canManageAssets } from './rules.js';
-import { clearSession } from './session.js';
+import { clearSession, saveSession, saveUser } from './session.js';
 import {
   fetchFilteredPage,
   fetchAndStorePage,
@@ -155,6 +164,14 @@ async function render(route) {
       return route.name === 'conflicts'
         ? showConflictList(isCurrent)
         : showConflict(route, isCurrent);
+    case 'users':
+    case 'user':
+    case 'userCreate':
+      return hasRole('ADMIN')
+        ? showUsers(route, isCurrent)
+        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+    case 'account':
+      return showAccount();
     default:
       return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
   }
@@ -290,6 +307,7 @@ async function showAuditLog(route, isCurrent) {
     data,
     entityType: route.entityType,
     lookups: withPeople({ users: (await getRefs()).users, assets: new Map() }, data.people),
+    withUsers: hasRole('ADMIN'),
     onFilter: (type) => navigate(auditUrl(type, 1)),
     pagination: renderPagination(data, (page, control) => {
       pendingFocus = { type: 'pager', control };
@@ -297,6 +315,161 @@ async function showAuditLog(route, isCurrent) {
     }),
   });
   restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+}
+
+// --- User administration (admins, online only, D39) -----------------------------------------
+
+/** Usernames are unique; sites are suggested from the users already known. */
+async function showUsers(route, isCurrent) {
+  leaveRecordViews('users', 'Users');
+  const filters = route.filters ?? {};
+  if (!tableContainer.querySelector('.users-table, .filter-bar')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading users…'));
+  }
+  const query = new URLSearchParams({ page: String(route.page), size: '50' });
+  if (filters.q) query.set('q', filters.q);
+  if (filters.role) query.set('role', filters.role);
+  if (filters.active) query.set('is_active', filters.active);
+  let data;
+  let user = null;
+  try {
+    [data, user] = await Promise.all([
+      apiFetch(`/admin/users?${query}`),
+      route.name === 'user' ? apiFetch(`/admin/users/${route.id}`) : null,
+    ]);
+  } catch (err) {
+    if (!isCurrent()) return;
+    if (err.status === 404) {
+      return showPlaceholder('users', 'User not found', 'This user does not exist.');
+    }
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'User administration needs a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+
+  const listUrlFor = (page) => usersUrl({ ...filters, page });
+  const close = () => navigate(listUrlFor(route.page));
+  const refs = { sites: [...new Set(data.items.map((u) => u.site).filter(Boolean))].sort() };
+  renderUserList(tableContainer, {
+    data,
+    filters,
+    selectedId: user?.id ?? null,
+    onFilter: (next) => navigate(usersUrl({ ...next, page: 1 })),
+    pagination: renderPagination(data, (page, control) => {
+      pendingFocus = { type: 'pager', control };
+      navigate(listUrlFor(page));
+    }),
+  });
+
+  if (route.name === 'users') {
+    setSplitView(false);
+    replaceChildren(detailContainer);
+    restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+    return;
+  }
+  setSplitView(true);
+  if (route.name === 'userCreate') {
+    setTitle('New user');
+    renderUserCreate(detailContainer, {
+      refs,
+      onClose: close,
+      onCreate: async (values, form) => {
+        try {
+          const { item } = await apiFetch('/admin/users', { method: 'POST', body: values });
+          announce(`User ${item.username} created.`);
+          navigate(usersUrl({ ...filters, page: route.page, id: item.id }), { force: true });
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+    });
+  } else {
+    setTitle(`${user.first_name} ${user.last_name}`);
+    const isSelf = user.id === currentUser().id;
+    renderUserPanel(detailContainer, {
+      user,
+      refs,
+      isSelf,
+      onClose: close,
+      onSave: async (values, form) => {
+        try {
+          const { updated, item } = await apiFetch(`/admin/users/${user.id}`, {
+            method: 'PUT',
+            body: values,
+          });
+          if (isSelf) {
+            saveUser({ ...currentUser(), ...item });
+            showLoggedIn(currentUser());
+          }
+          announce(updated ? 'Changes saved.' : 'Nothing to save.');
+          render(currentRoute());
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+      onResetPassword: async (password, form) => {
+        const answer = await confirmDialog({
+          title: 'Set a new password?',
+          message: `${user.first_name} ${user.last_name} will have to log in again with the new password.`,
+          actions: [
+            { value: 'set', label: 'Set password', primary: true },
+            { value: 'cancel', label: 'Cancel' },
+          ],
+        });
+        if (answer !== 'set') return;
+        try {
+          await apiFetch(`/admin/users/${user.id}/password`, {
+            method: 'POST',
+            body: { password },
+          });
+          form.reset();
+          showErrors(form, {}, '');
+          announce('New password set. Give it to the user privately.');
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+    });
+  }
+  detailContainer.querySelector('.detail-title')?.focus();
+}
+
+/** "Change my password" (every role). */
+function showAccount() {
+  leaveRecordViews(null, 'Change my password');
+  renderPage();
+  renderAccount(tableContainer, {
+    username: currentUser().username,
+    onChange: async (current, next, form) => {
+      try {
+        const { token } = await apiFetch('/auth/change-password', {
+          method: 'POST',
+          body: { current_password: current, new_password: next },
+        });
+        // Earlier tokens stop working (BR-U8): keep this session with the new one.
+        saveSession(token, currentUser());
+        form.reset();
+        showErrors(form, {}, '');
+        announce('Your password has been changed.');
+        form.querySelector('.form-help').textContent =
+          'Password changed. Your other sessions have ended.';
+      } catch (err) {
+        // The server checks the new password under the name `password`.
+        const { password, ...fields } = apiFieldErrors(err);
+        if (password) fields.new_password = password;
+        showErrors(
+          form,
+          fields,
+          err.status === 0 ? 'You are offline: try again once connected.' : err.message,
+        );
+      }
+    },
+  });
+  tableContainer.querySelector('.placeholder-title')?.focus();
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------

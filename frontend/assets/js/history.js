@@ -5,6 +5,7 @@ import { displayValue } from './conflicts.js';
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDateTime, personName } from './format.js';
+import { valueLabel } from './labels.js';
 
 const ACTION_LABELS = {
   CREATE: 'Created',
@@ -15,7 +16,29 @@ const ACTION_LABELS = {
 };
 const CHOICE_LABELS = { A: 'kept version A', B: 'applied version B', MERGE: 'merged' };
 /** Fields shown in the summary of a creation (the full list would drown the timeline). */
-const CREATION_SUMMARY = ['code', 'number', 'status', 'assignee_id'];
+const CREATION_SUMMARY = ['code', 'number', 'status', 'assignee_id', 'username', 'role'];
+/** User accounts are not a table entity: their labels live here (admins only, D39). */
+const USER_FIELD_LABELS = {
+  username: 'Username',
+  first_name: 'First name',
+  last_name: 'Last name',
+  role: 'Role',
+  site: 'Site',
+  specialty: 'Specialty',
+  power_user: 'Auto-save',
+  is_active: 'Account active',
+};
+
+/** Value of a user-account field, as text. Pure. */
+export function userFieldValue(field, value) {
+  if (value === null || value === undefined || value === '') {
+    return h('span', { class: 'no-value' }, 'No value');
+  }
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (field === 'role') return valueLabel('role', value);
+  if (field === 'specialty') return valueLabel('category', value);
+  return String(value);
+}
 
 /** Adds the people named by the server to the lookups (names instead of "User #id"). */
 export function withPeople(lookups, people = {}) {
@@ -28,6 +51,8 @@ export function withPeople(lookups, people = {}) {
 
 /** Title of an entry, e.g. "Conflict resolved: merged". Pure. */
 export function entryTitle(entry) {
+  if (entry.note?.password_reset) return 'Password reset by an administrator';
+  if (entry.note?.password_changed) return 'Password changed by the user';
   const base = ACTION_LABELS[entry.action] ?? entry.action;
   return entry.action === 'RESOLVE' && entry.note?.choice
     ? `${base}: ${CHOICE_LABELS[entry.note.choice]}`
@@ -50,18 +75,20 @@ function changeList(entityKey, entry, lookups) {
     { class: 'change-list' },
     fields.map((field) => {
       const { from, to } = entry.changes[field];
-      const label = fieldForApi(entityKey, field)?.def.label ?? field;
+      const isUser = entityKey === 'users';
+      const label = isUser
+        ? (USER_FIELD_LABELS[field] ?? field)
+        : (fieldForApi(entityKey, field)?.def.label ?? field);
+      const show = (value) =>
+        isUser ? userFieldValue(field, value) : displayValue(entityKey, field, value, lookups);
       return h(
         'li',
         {},
         h('span', { class: 'change-field' }, `${label}: `),
         entry.action === 'CREATE'
           ? null
-          : [
-              displayValue(entityKey, field, from, lookups),
-              h('span', { class: 'change-arrow' }, ' → '),
-            ],
-        displayValue(entityKey, field, to, lookups),
+          : [show(from), h('span', { class: 'change-arrow' }, ' → ')],
+        show(to),
       );
     }),
   );
@@ -134,27 +161,28 @@ export function historySection(entityKey, id, getLookups) {
 /** URL of a record in the log (deleted records have none). */
 function recordLink(entry) {
   const label = entry.label;
-  if (entry.action === 'DELETE' || entry.entity_type === 'users') return label;
-  return h(
-    'a',
-    { href: `${ENTITIES[entry.entity_type].ui}/${entry.entity_id}`, 'data-link': true },
-    label,
-  );
+  if (entry.action === 'DELETE') return label;
+  const base = entry.entity_type === 'users' ? '/admin/users' : ENTITIES[entry.entity_type].ui;
+  return h('a', { href: `${base}/${entry.entity_id}`, 'data-link': true }, label);
 }
 
 /**
  * Global audit log page: type filter, table, pagination.
  * @param {HTMLElement} container
  * @param {{ data: object, entityType: string | null, lookups: object,
- *   onFilter: (type: string | null) => void, pagination: HTMLElement }} options
+ *   withUsers?: boolean, onFilter: (type: string | null) => void, pagination: HTMLElement }} options
  */
-export function renderAuditLog(container, { data, entityType, lookups, onFilter, pagination }) {
+export function renderAuditLog(
+  container,
+  { data, entityType, lookups, withUsers = false, onFilter, pagination },
+) {
   const filter = h(
     'select',
     { id: 'audit-type', onChange: (event) => onFilter(event.target.value || null) },
     h('option', { value: '' }, 'All records'),
     h('option', { value: 'assets' }, 'Assets'),
     h('option', { value: 'work_orders' }, 'Work orders'),
+    withUsers ? h('option', { value: 'users' }, 'User accounts') : null,
   );
   filter.value = entityType ?? '';
   const rows = data.items.map((entry) =>

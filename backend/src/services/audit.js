@@ -75,9 +75,13 @@ export function createAuditService(db) {
       return { items, people: peopleOf(items) };
     },
 
-    /** Global log, newest first, optionally for one entity type. */
-    list({ page, size, entity_type: entityType }) {
-      const where = entityType ? 'WHERE l.entity_type = @entityType' : '';
+    /** Global log, newest first, optionally for one entity type; user accounts on request. */
+    list({ page, size, entity_type: entityType, includeUsers = false }) {
+      const where = entityType
+        ? 'WHERE l.entity_type = @entityType'
+        : includeUsers
+          ? ''
+          : "WHERE l.entity_type <> 'users'";
       const total = db
         .prepare(`SELECT count(*) FROM audit_log l ${where}`)
         .pluck()

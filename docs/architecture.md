@@ -97,6 +97,10 @@ export const ENTITIES = {
 | `/work-orders/:id` | table + work order detail (`:id` may be a temporary `tmp-<uuid>` id, see Work order creation) |
 | `/conflicts` | supervisor console: list of open conflicts (SUPERVISOR, ADMIN) |
 | `/conflicts/:id` | side-by-side arbitration |
+| `/audit-log?type=…` | global audit log (SUPERVISOR, ADMIN; `users` for ADMIN) |
+| `/admin/users?q=…&role=…&active=…` | user administration (ADMIN, online only, D39) |
+| `/admin/users/new`, `/admin/users/:id` | list + creation form or user panel (split view) |
+| `/account` | change my password (every role) |
 
 All navigation goes through `router.navigate(url)` → `history.pushState` → render. `popstate` re-renders from the URL. On load, the router parses `location` and shows the matching view. The servers return `index.html` for any non-API path without a file extension (SPA fallback). The static folder `frontend/assets/` shares the `/assets` prefix with the asset routes, so the servers must never redirect a directory path: Express uses `express.static(..., { redirect: false })`, and Nginx must use `try_files $uri /index.html` (without `$uri/`).
 

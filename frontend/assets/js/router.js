@@ -1,4 +1,5 @@
 // Client router: URL ↔ route, history.pushState / popstate (docs/architecture.md → Client routes).
+import { parseUserFilters } from './admin-users.js';
 import { ENTITIES, entityForSegment } from './entities.js';
 import { filtersQuery, hasFilters, parseFilters } from './filters.js';
 
@@ -8,7 +9,8 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 /**
  * @typedef {object} Route
- * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'notFound'} name
+ * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
+ *   |'users'|'user'|'userCreate'|'account'|'notFound'} name
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
  * @property {number} [assetId] creation form: asset to pre-fill
@@ -35,7 +37,18 @@ export function parseRoute(pathname, search = '') {
   const [first, second, ...rest] = path.split('/').filter(Boolean);
 
   if (!first) return { name: 'root', page };
+  if (first === 'admin' && second === 'users' && rest.length <= 1) {
+    const filters = parseUserFilters(query);
+    const extra = Object.keys(filters).length ? { filters } : {};
+    const [third] = rest;
+    if (!third) return { name: 'users', page, ...extra };
+    if (third === 'new') return { name: 'userCreate', page, ...extra };
+    return ID.test(third)
+      ? { name: 'user', id: Number(third), page, ...extra }
+      : { name: 'notFound', page };
+  }
   if (rest.length) return { name: 'notFound', page };
+  if (first === 'account' && !second) return { name: 'account', page };
   if (first === 'login' && !second)
     return { name: 'login', page, next: safeNext(query.get('next')) };
   if (first === 'dashboard' && !second) return { name: 'dashboard', page };
@@ -44,7 +57,7 @@ export function parseRoute(pathname, search = '') {
     return {
       name: 'audit',
       page,
-      entityType: ['assets', 'work_orders'].includes(type) ? type : null,
+      entityType: ['assets', 'work_orders', 'users'].includes(type) ? type : null,
     };
   }
   if (first === 'conflicts') {
