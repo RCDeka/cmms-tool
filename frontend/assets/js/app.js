@@ -21,6 +21,7 @@ import {
   setRefs,
   setRerender,
   showCreate,
+  showCreateAsset,
   showPendingCreation,
   showRecord,
   withPending,
@@ -59,6 +60,7 @@ import {
   setNavigationGuard,
   startRouter,
 } from './router.js';
+import { canManageAssets } from './rules.js';
 import { clearSession } from './session.js';
 import {
   fetchAndStorePage,
@@ -388,21 +390,32 @@ function displayPage(route, data, pinned = shownPage?.pinned ?? []) {
       pendingFocus = { type: 'pager', control };
       navigate(listUrl(route.entity, page));
     },
-    actions:
-      route.entity === 'work_orders'
-        ? [
-            h(
-              'a',
-              {
-                href: `/work-orders/new${route.page > 1 ? `?page=${route.page}` : ''}`,
-                'data-link': true,
-                class: 'button button-primary',
-              },
-              '+ New work order',
-            ),
-          ]
-        : [],
+    actions: tableActions(route),
   });
+}
+
+/** "New …" button above a table: work orders for everyone, assets for supervisors and admins. */
+function tableActions(route) {
+  const page = route.page > 1 ? `?page=${route.page}` : '';
+  if (route.entity === 'work_orders') {
+    return [
+      h(
+        'a',
+        { href: `/work-orders/new${page}`, 'data-link': true, class: 'button button-primary' },
+        '+ New work order',
+      ),
+    ];
+  }
+  if (route.entity === 'assets' && canManageAssets(currentUser())) {
+    return [
+      h(
+        'a',
+        { href: `/assets/new${page}`, 'data-link': true, class: 'button button-primary' },
+        '+ New asset',
+      ),
+    ];
+  }
+  return [];
 }
 
 /** Re-renders the table, keeping keyboard focus where it was. */
@@ -467,7 +480,21 @@ async function showEntity(route, isCurrent) {
   }
 
   const onClose = () => navigate(listUrl(route.entity, route.page));
-  if (route.name === 'create') {
+  if (route.name === 'create' && route.entity === 'assets') {
+    setSplitView(true);
+    openDetail = { entity: route.entity, id: 'new' };
+    if (canManageAssets(currentUser())) {
+      await showCreateAsset({ route, onClose });
+      if (isCurrent()) restoreFocus(() => detailContainer.querySelector('#f-code')?.focus());
+    } else {
+      clearEditor();
+      renderDetailMessage(detailContainer, {
+        title: 'New asset',
+        message: 'Only supervisors and administrators can create assets.',
+        onClose,
+      });
+    }
+  } else if (route.name === 'create') {
     setSplitView(true);
     openDetail = { entity: route.entity, id: 'new' };
     await showCreate({ route, onClose });

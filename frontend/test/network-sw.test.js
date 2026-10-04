@@ -28,6 +28,17 @@ describe('network state on the page', () => {
     expect(document.getElementById('network-status').textContent).toBe('Online');
     expect(button.disabled).toBe(false);
   });
+
+  it('disables actions that need the server while offline', () => {
+    document.body.innerHTML = '<button class="online-only">Delete asset</button>';
+    const button = document.querySelector('.online-only');
+    reportOffline();
+    applyToPage();
+    expect(button.disabled).toBe(true);
+    expect(button.title).toMatch(/needs a connection/);
+    reportOnline();
+    expect(button.disabled).toBe(false);
+  });
 });
 
 describe('service worker', () => {

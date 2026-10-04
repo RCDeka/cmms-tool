@@ -1,4 +1,14 @@
+import { z } from 'zod';
+import { HttpError } from '../lib/http-error.js';
+import { fieldErrors } from '../middleware/validate.js';
+import {
+  ASSET_CODE,
+  deletionBlocker,
+  nextAssetCode,
+  normalizeAssetCode,
+} from '../rules/asset-creation.js';
 import { ASSET_STATUSES, CRITICALITIES } from '../rules/enums.js';
+import { ASSET_FIELDS } from '../rules/fields.js';
 import {
   likePattern,
   orderByClause,
@@ -7,7 +17,29 @@ import {
   rankExpression,
 } from '../lib/pagination.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
-import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
+import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writes.js';
+
+/** POST /api/assets body: required fields as in the table, the rest optional (BR-A4). */
+const createSchema = z.strictObject({
+  code: z
+    .string()
+    .transform(normalizeAssetCode)
+    .pipe(z.string().regex(ASSET_CODE, 'Capitals, digits and hyphens only, 2 to 50 characters'))
+    .optional(),
+  ...ASSET_FIELDS,
+  status: ASSET_FIELDS.status.default('IN_SERVICE'),
+  maintenance_contract: ASSET_FIELDS.maintenance_contract.default(false),
+  ...Object.fromEntries(
+    Object.entries(ASSET_FIELDS)
+      .filter(
+        ([f]) =>
+          !['name', 'site', 'category', 'criticality', 'status', 'maintenance_contract'].includes(
+            f,
+          ),
+      )
+      .map(([f, schema]) => [f, schema.optional()]),
+  ),
+});
 
 const FIELDS = [
   'id',
@@ -70,6 +102,14 @@ export function createAssetService(db) {
     return row ? toAsset(row) : null;
   };
 
+  const codeExists = db.prepare('SELECT 1 FROM assets WHERE code = ?').pluck();
+  const highestNumber = db
+    .prepare(
+      "SELECT max(CAST(substr(code, 5) AS INTEGER)) FROM assets WHERE code GLOB 'AST-[0-9]*'",
+    )
+    .pluck();
+  const workOrderCount = db.prepare('SELECT count(*) FROM work_orders WHERE asset_id = ?').pluck();
+
   return {
     /** Paginated list, complete records (D7). */
     list({ page, size, sort, order }) {
@@ -98,6 +138,58 @@ export function createAssetService(db) {
         now: now.toISOString(),
       });
       return { ...result, item: getById(id), changes, version };
+    },
+
+    /**
+     * POST /api/assets (BR-A4): the code is generated when left out, refused when taken.
+     * @returns {object} the new asset
+     */
+    create(body, user, { now }) {
+      const parsed = createSchema.safeParse(body ?? {});
+      if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
+      const { code, ...fields } = parsed.data;
+      const id = db
+        .transaction(() => {
+          if (code && codeExists.get(code)) {
+            throw new HttpError(409, `The code ${code} is already used`, {
+              rule: 'BR-A1',
+              fields: { code: 'Already used' },
+            });
+          }
+          const row = {
+            code: code ?? nextAssetCode(highestNumber.get()),
+            ...toColumns('assets', fields),
+            updated_by: user.id,
+            created_at: now.toISOString(),
+            updated_at: now.toISOString(),
+          };
+          const columns = Object.keys(row);
+          // Column names come from the schema above, never from the request as is.
+          return Number(
+            db
+              .prepare(
+                `INSERT INTO assets (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`,
+              )
+              .run(row).lastInsertRowid,
+          );
+        })
+        .immediate();
+      return getById(id);
+    },
+
+    /**
+     * DELETE /api/assets/:id?version=N (BR-A3): only assets without work orders, at the
+     * version the user saw. Resolved conflicts of the asset go with it.
+     */
+    remove(id, version) {
+      db.transaction(() => {
+        const row = db.prepare('SELECT id, version, has_conflict FROM assets WHERE id = ?').get(id);
+        if (!row) throw new HttpError(404, 'Asset not found');
+        const blocker = deletionBlocker(row, { version, workOrders: workOrderCount.get(id) });
+        if (blocker) throw new HttpError(409, blocker.message, { rule: blocker.rule });
+        db.prepare("DELETE FROM conflicts WHERE entity_type = 'assets' AND entity_id = ?").run(id);
+        db.prepare('DELETE FROM assets WHERE id = ?').run(id);
+      }).immediate();
     },
 
     /** PUT /api/assets/:id/resolve-conflict (BR-V5). */

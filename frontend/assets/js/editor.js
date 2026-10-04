@@ -8,11 +8,20 @@ import { h } from './dom.js';
 import { formatDateTime } from './format.js';
 import { buildCreateForm, buildEditForm } from './form.js';
 import { announce, confirmDialog } from './layout.js';
-import { isOnline } from './network.js';
+import { apiFetch } from './api.js';
+import { applyToPage, isOnline } from './network.js';
 import { enqueue, discard, listEntries, pendingChanges } from './queue.js';
 import { findAssetById, findAssetByCode } from './refs.js';
 import { detailUrl, listUrl, navigate, parseRoute } from './router.js';
-import { checkBeforeCreate, checkBeforeSave, CREATION_FIELDS, editableFields } from './rules.js';
+import {
+  ASSET_CREATION_FIELDS,
+  canManageAssets,
+  checkBeforeCreate,
+  checkBeforeCreateAsset,
+  checkBeforeSave,
+  CREATION_FIELDS,
+  editableFields,
+} from './rules.js';
 import {
   DRAFT_DELAY_MS,
   debounce,
@@ -201,25 +210,39 @@ export async function showRecord({ route, record, onClose }) {
       ),
     );
   }
-  const actions =
-    entity === 'assets'
-      ? [
-          h(
-            'a',
-            {
-              href: `/work-orders/new?asset_id=${record.id}`,
-              'data-link': true,
-              class: 'button button-secondary',
-            },
-            '+ New work order for this asset',
-          ),
-        ]
-      : [];
+  const actions = [];
+  if (entity === 'assets') {
+    actions.push(
+      h(
+        'a',
+        {
+          href: `/work-orders/new?asset_id=${record.id}`,
+          'data-link': true,
+          class: 'button button-secondary',
+        },
+        '+ New work order for this asset',
+      ),
+    );
+    if (canManageAssets(user)) {
+      actions.push(
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'button button-danger online-only',
+            onClick: () => deleteAsset(route, record),
+          },
+          'Delete asset',
+        ),
+      );
+    }
+  }
 
   const consoleLink = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (!editable.length) {
     editor = null;
     renderDetail(detailContainer, { entity, record, onClose, notices, actions, consoleLink });
+    applyToPage(detailContainer);
     return;
   }
 
@@ -263,6 +286,7 @@ export async function showRecord({ route, record, onClose }) {
     actions,
     body: ed.handle.form,
   });
+  applyToPage(detailContainer);
   if (draft?.error && editable.length) {
     await ed.handle.setValues(draft.changes);
     ed.handle.setErrors(mapErrorFields(draft.error.fields), '');
@@ -310,6 +334,127 @@ export async function saveRecord() {
   );
   if (editor === ed) rerender();
   return true;
+}
+
+// --- Assets: creation and deletion (online only, D34–D36) ---------------------------------
+
+/**
+ * Deletes an asset after confirmation (BR-A3). The server refuses assets with work orders,
+ * a stale version or an open conflict, and says why.
+ */
+async function deleteAsset(route, record) {
+  const choice = await confirmDialog({
+    title: 'Delete this asset?',
+    message: `${record.code} — ${record.name} will be deleted for good. Only assets without any work order can be deleted; otherwise set the status to Out of service.`,
+    actions: [
+      { value: 'delete', label: 'Delete', primary: true },
+      { value: 'cancel', label: 'Cancel' },
+    ],
+  });
+  if (choice !== 'delete') return;
+  try {
+    await apiFetch(`/assets/${record.id}?version=${record.version}`, { method: 'DELETE' });
+  } catch (err) {
+    await confirmDialog({
+      title: 'The asset was not deleted',
+      message: err.status === 0 ? 'The server cannot be reached.' : err.message,
+      actions: [{ value: 'ok', label: 'OK', primary: true }],
+    });
+    return;
+  }
+  editor = null;
+  await DB.remove(storesOf('assets').records, record.id);
+  await deleteDraft('assets', record.id);
+  await DB.evict(storesOf('assets').pages, []); // page contents changed: fetch them again
+  announce(`${record.code} was deleted.`);
+  navigate(listUrl('assets', route.page), { force: true });
+}
+
+/** Asset creation form (/assets/new): supervisors and admins, online. */
+export async function showCreateAsset({ route, onClose }) {
+  const draft = await getDraft('assets', 'new');
+  const ed = { kind: 'create', entity: 'assets', id: 'new', record: null, dirty: false, route };
+  ed.handle = buildCreateForm({
+    entity: 'assets',
+    fields: ASSET_CREATION_FIELDS,
+    values: {},
+    ctx: await formCtx(),
+    submitLabel: 'Create asset',
+    onlineOnly: true,
+    onSubmit: () => submitCreateAsset(),
+  });
+  ed.initial = JSON.stringify(ed.handle.getValues().values);
+  ed.draftLater = persistDraftOf(ed);
+
+  const notices = [];
+  if (!isOnline()) {
+    notices.push(
+      notice('warning', 'Creating an asset needs a connection. Your entries are kept as a draft.'),
+    );
+  }
+  if (draft && Object.keys(draft.changes ?? {}).length) {
+    notices.push(
+      draftNotice(
+        draft,
+        async () => {
+          await ed.handle.setValues(draft.changes);
+          onInput();
+          detailContainer.querySelector('.banner-info')?.remove();
+          detailContainer.querySelector('#f-name')?.focus();
+        },
+        async () => {
+          await deleteDraft('assets', 'new');
+          detailContainer.querySelector('.banner-info')?.remove();
+        },
+      ),
+    );
+  }
+  editor = ed;
+  renderDetail(detailContainer, {
+    entity: 'assets',
+    record: {},
+    title: 'New asset',
+    onClose,
+    notices,
+    body: ed.handle.form,
+  });
+  applyToPage(detailContainer);
+}
+
+async function submitCreateAsset() {
+  const ed = editor;
+  if (!ed || ed.kind !== 'create' || ed.entity !== 'assets') return;
+  const { values } = ed.handle.getValues();
+  const errors = checkBeforeCreateAsset(values);
+  if (Object.keys(errors).length) {
+    ed.handle.setErrors(errors, 'Check the highlighted fields.');
+    ed.handle.focusFirstError();
+    return;
+  }
+  let item;
+  try {
+    ({ item } = await apiFetch('/assets', { method: 'POST', body: values }));
+  } catch (err) {
+    const fields = err.body?.details?.fields;
+    ed.handle.setErrors(
+      fields && !Array.isArray(fields) ? fields : {},
+      err.status === 0
+        ? 'The server cannot be reached. Your entries are kept as a draft.'
+        : err.message,
+    );
+    ed.handle.focusFirstError();
+    return;
+  }
+  ed.draftLater.cancel();
+  await deleteDraft('assets', 'new');
+  await DB.saveRecord(storesOf('assets').records, item.id, {
+    ...item,
+    _fetched_at: new Date().toISOString(),
+  });
+  await DB.evict(storesOf('assets').pages, []); // the new asset changes the page contents
+  editor = null;
+  announce(`Asset ${item.code} created.`);
+  navigate(detailUrl('assets', item.id, ed.route.page), { replace: true, force: true });
 }
 
 // --- Creation -----------------------------------------------------------------------------

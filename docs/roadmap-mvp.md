@@ -101,11 +101,18 @@ Tasks:
 
 Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; initial load < 2 s on the VPS; a clean clone deploys by following the README alone.
 
+## Post-MVP phases (product owner order, 2026-10-04)
+
+- **Phase 8: create and delete assets** — done (D34–D36). Acceptance: a supervisor creates an asset (automatic or typed code, new site), a duplicate code is refused on its field, an asset created by mistake is deleted, an asset with work orders cannot be deleted and the reason is shown, technicians see neither action, and both actions are disabled offline.
+- **Phase 9: work order status history and audit log.**
+- **Phase 10: filters and search on lists; full-text search (SQLite FTS5).**
+- **Phase 11: user administration screen.**
+
 ## Post-MVP backlog (not scheduled)
 
-1. Create assets; delete records (D15). Work orders are withdrawn with `CANCELLED`.
-2. User administration screen.
-3. Work order status history and audit log.
-4. Filters and search on work order lists; full-text search (SQLite FTS5).
+1. ~~Create assets; delete records~~ → Phase 8.
+2. ~~User administration screen~~ → Phase 11.
+3. ~~Work order status history and audit log~~ → Phase 9.
+4. ~~Filters and search on lists; full-text search~~ → Phase 10.
 5. AI assistant endpoints (`format-report`, `find-work-order`) and the detail panel "AI assistant" area.
 6. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).

@@ -78,14 +78,20 @@ export function applyToPage(root = document) {
     status.textContent = online ? 'Online' : 'Offline mode — local data';
     status.classList.toggle('is-offline', !online);
   }
-  for (const button of root.querySelectorAll('.ai-only')) {
-    button.disabled = !online;
-    if (online) {
-      button.removeAttribute('aria-disabled');
-      button.removeAttribute('title');
-    } else {
-      button.setAttribute('aria-disabled', 'true');
-      button.title = 'Not available offline: AI features need a connection.';
+  const needsServer = [
+    ['.ai-only', 'Not available offline: AI features need a connection.'],
+    ['.online-only', 'Not available offline: this action needs a connection.'],
+  ];
+  for (const [selector, reason] of needsServer) {
+    for (const button of root.querySelectorAll(selector)) {
+      button.disabled = !online;
+      if (online) {
+        button.removeAttribute('aria-disabled');
+        button.removeAttribute('title');
+      } else {
+        button.setAttribute('aria-disabled', 'true');
+        button.title = reason;
+      }
     }
   }
 }

@@ -22,6 +22,12 @@ function defForApiField(entity, apiField) {
   return { field, def: fields[field] };
 }
 
+/** Fields marked * (the API refuses them empty). */
+const REQUIRED_FIELDS = {
+  assets: ['name', 'site', 'category', 'criticality', 'status'],
+  work_orders: ['title', 'type'],
+};
+
 /** Empty strings and blank text become null, as the API expects. */
 const textValue = (raw) => (raw.trim() === '' ? null : raw);
 
@@ -56,14 +62,43 @@ function buildControl(entity, apiField, value, ctx) {
   }
   if (def.type === 'enum') {
     const nullable = entity === 'work_orders' && apiField === 'category';
+    // Creation forms never pre-select a required value silently: "— Choose —" first.
+    const choose = !nullable && ctx.mode === 'create' && (value === null || value === undefined);
     const el = select(
       ENUMS[def.enum].map((code) => [code, valueLabel(def.enum, code)]),
-      { allowBlank: nullable },
+      { allowBlank: nullable || choose, blankLabel: nullable ? '— None —' : '— Choose —' },
     );
     return {
       el,
       input: el,
       read: () => (el.value === '' ? null : el.value),
+      write: (v) => (el.value = v ?? ''),
+    };
+  }
+  if (apiField === 'site' && entity === 'assets') {
+    // Assets may be on a new site: free text, with the known sites as suggestions.
+    const listId = `${id}-options`;
+    const el = h('input', {
+      ...common,
+      type: 'text',
+      maxlength: 200,
+      list: listId,
+      autocomplete: 'off',
+    });
+    el.value = value ?? '';
+    return {
+      el: h(
+        'div',
+        {},
+        el,
+        h(
+          'datalist',
+          { id: listId },
+          (ctx.refs.sites ?? []).map((s) => h('option', { value: s })),
+        ),
+      ),
+      input: el,
+      read: () => textValue(el.value),
       write: (v) => (el.value = v ?? ''),
     };
   }
@@ -219,11 +254,17 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
         ctx,
       );
       controls.set(apiField, control);
-      control.input.addEventListener('input', () => ctx.onChange?.());
+      control.input.addEventListener('input', () => {
+        // The user is fixing this field: its error message no longer applies.
+        control.input.removeAttribute('aria-invalid');
+        const error = control.input.closest('.form-control')?.querySelector('.field-error');
+        if (error) error.textContent = '';
+        ctx.onChange?.();
+      });
       control.input.addEventListener('change', () => ctx.onChange?.());
       const required =
-        ['title', 'name', 'type'].includes(apiField) ||
-        (apiField === 'site' && ctx.mode !== 'create');
+        REQUIRED_FIELDS[entity].includes(apiField) ||
+        (entity === 'work_orders' && apiField === 'site' && ctx.mode !== 'create');
       rows.push(
         h(
           'div',
@@ -348,7 +389,28 @@ export function buildEditForm({ entity, record, editable, ctx, onSave, onDiscard
   };
 }
 
-/** Field order of the creation form. */
+/** Field order of the creation forms. */
+export const ASSET_CREATION_ORDER = [
+  'code',
+  'name',
+  'site',
+  'building',
+  'floor',
+  'exact_location',
+  'category',
+  'subcategory',
+  'criticality',
+  'status',
+  'brand',
+  'model',
+  'serial_number',
+  'commissioned_on',
+  'last_serviced_on',
+  'supplier',
+  'maintenance_contract',
+  'responsible_technician',
+  'comment',
+];
 const CREATION_ORDER = [
   'title',
   'type',
@@ -363,16 +425,41 @@ const CREATION_ORDER = [
   'estimated_hours',
 ];
 
+const CREATION = {
+  work_orders: {
+    order: CREATION_ORDER,
+    defaults: { type: 'CORRECTIVE', priority: 'NORMAL' },
+    help: 'Fields marked * are required. Choose an asset, or a site if the work is not about one asset.',
+  },
+  assets: {
+    order: ASSET_CREATION_ORDER,
+    defaults: { status: 'IN_SERVICE' },
+    help: 'Fields marked * are required. Leave the asset code empty to number the asset automatically (AST-0501, …).',
+  },
+};
+
 /**
- * Work order creation form (D15, D26). `fields`: API fields the user may set.
+ * Creation form: work orders (D15, D26) or assets. `fields`: API fields the user may set.
+ * @param {object} options
+ * @param {'work_orders' | 'assets'} [options.entity]
+ * @param {boolean} [options.onlineOnly] submit needs a connection (disabled offline)
  * @returns {object} handle: form, getValues, setValues, setErrors, focusFirstError
  */
-export function buildCreateForm({ fields, values, ctx, submitLabel, onSubmit }) {
+export function buildCreateForm({
+  entity = 'work_orders',
+  fields,
+  values,
+  ctx,
+  submitLabel,
+  onSubmit,
+  onlineOnly = false,
+}) {
+  const spec = CREATION[entity];
   const fullCtx = { ...ctx, record: null, mode: 'create' };
-  const display = { type: 'CORRECTIVE', priority: 'NORMAL', ...values };
+  const display = { ...spec.defaults, ...values };
   // buildRows reads detail field names; the asset row needs the asset reference object.
-  display.asset = values.asset ?? null;
-  const { rows, controls } = buildRows('work_orders', CREATION_ORDER, fields, display, fullCtx);
+  if (entity === 'work_orders') display.asset = values.asset ?? null;
+  const { rows, controls } = buildRows(entity, spec.order, fields, display, fullCtx);
   const summary = h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' });
   const form = h(
     'form',
@@ -385,16 +472,16 @@ export function buildCreateForm({ fields, values, ctx, submitLabel, onSubmit }) 
       },
     },
     summary,
-    h(
-      'p',
-      { class: 'form-help' },
-      'Fields marked * are required. Choose an asset, or a site if the work is not about one asset.',
-    ),
+    h('p', { class: 'form-help' }, spec.help),
     rows,
     h(
       'div',
       { class: 'form-actions' },
-      h('button', { type: 'submit', class: 'button button-primary' }, submitLabel),
+      h(
+        'button',
+        { type: 'submit', class: `button button-primary${onlineOnly ? ' online-only' : ''}` },
+        submitLabel,
+      ),
     ),
   );
   return {

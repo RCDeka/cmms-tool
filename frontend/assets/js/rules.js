@@ -94,6 +94,30 @@ export const CREATION_FIELDS = {
 };
 CREATION_FIELDS.ADMIN = CREATION_FIELDS.SUPERVISOR;
 
+/** Asset creation and deletion (BR-A4, BR-A3): supervisors and admins, online. */
+export const ASSET_CREATION_FIELDS = [
+  'code',
+  'name',
+  'site',
+  'building',
+  'floor',
+  'exact_location',
+  'category',
+  'subcategory',
+  'criticality',
+  'status',
+  'brand',
+  'model',
+  'serial_number',
+  'commissioned_on',
+  'last_serviced_on',
+  'supplier',
+  'maintenance_contract',
+  'responsible_technician',
+  'comment',
+];
+export const canManageAssets = (user) => ['SUPERVISOR', 'ADMIN'].includes(user?.role);
+
 export const isTerminal = (status) => TERMINAL_WORK_ORDER_STATUSES.includes(status);
 
 /** Statuses to offer for a work order: the current one and its allowed next ones. */
@@ -136,6 +160,18 @@ export function checkBeforeSave(entity, record, changes) {
     if (after.closed_on && after.started_on && after.closed_on < after.started_on) {
       errors.closed_on = 'The closing date cannot be earlier than the start date.';
     }
+  }
+  return errors;
+}
+
+/** Checks of the asset creation form, before asking the server. */
+export function checkBeforeCreateAsset(values) {
+  const errors = {};
+  for (const field of ['name', 'site', 'category', 'criticality']) {
+    if (!String(values[field] ?? '').trim()) errors[field] = 'Required';
+  }
+  if (values.code && !/^[A-Z0-9][A-Z0-9-]{1,49}$/.test(values.code.trim().toUpperCase())) {
+    errors.code = 'Capitals, digits and hyphens only, 2 to 50 characters';
   }
   return errors;
 }

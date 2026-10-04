@@ -13,6 +13,13 @@ describe('parseRoute', () => {
     ['/work-orders', '', { name: 'list', entity: 'work_orders', page: 1 }],
     ['/work-orders/456', '', { name: 'detail', entity: 'work_orders', id: 456, page: 1 }],
     ['/work-orders/new', '', { name: 'create', entity: 'work_orders', page: 1 }],
+    [
+      '/work-orders/new',
+      '?asset_id=42',
+      { name: 'create', entity: 'work_orders', page: 1, assetId: 42 },
+    ],
+    ['/assets/new', '', { name: 'create', entity: 'assets', page: 1 }],
+    ['/assets/new', '?asset_id=42', { name: 'create', entity: 'assets', page: 1 }],
     ['/conflicts', '', { name: 'conflicts', page: 1 }],
     ['/conflicts/7', '', { name: 'conflict', id: 7, page: 1 }],
   ])('%s%s', (path, search, route) => {
@@ -21,7 +28,6 @@ describe('parseRoute', () => {
 
   it.each([
     '/nowhere',
-    '/assets/new', // creation exists for work orders only (D15)
     '/assets/abc',
     '/assets/0',
     '/assets/1.5',

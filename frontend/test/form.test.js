@@ -143,6 +143,22 @@ describe('buildEditForm', () => {
     expect($('#f-work_report').hasAttribute('aria-invalid')).toBe(false);
   });
 
+  it('clears a field error as soon as the user edits the field', () => {
+    const form = buildEditForm({
+      entity: 'work_orders',
+      record: workOrder,
+      editable: ['work_report'],
+      ctx: ctx(),
+      onSave() {},
+      onDiscard() {},
+    });
+    host.append(form.form);
+    form.setErrors({ work_report: 'Required' });
+    type($('#f-work_report'), 'Fixed');
+    expect($('#f-work_report').hasAttribute('aria-invalid')).toBe(false);
+    expect($('#f-work_report-error').textContent).toBe('');
+  });
+
   it('turns a booleans into a checkbox for assets', () => {
     const form = buildEditForm({
       entity: 'assets',
@@ -233,5 +249,66 @@ describe('sameValue', () => {
     expect(sameValue(undefined, null)).toBe(true);
     expect(sameValue(0, null)).toBe(false);
     expect(sameValue('a', 'a')).toBe(true);
+  });
+});
+
+describe('asset creation form', () => {
+  const fields = [
+    'code',
+    'name',
+    'site',
+    'category',
+    'criticality',
+    'status',
+    'maintenance_contract',
+  ];
+
+  it('offers known sites as suggestions but accepts a new one', () => {
+    const form = buildCreateForm({
+      entity: 'assets',
+      fields,
+      values: {},
+      ctx: ctx(),
+      submitLabel: 'Create asset',
+      onSubmit() {},
+      onlineOnly: true,
+    });
+    host.append(form.form);
+    expect($('#f-site').tagName).toBe('INPUT');
+    expect([...$('#f-site-options').options].map((o) => o.value)).toEqual(refs.sites);
+    type($('#f-site'), 'Nantes Branch');
+    expect(form.getValues().values.site).toBe('Nantes Branch');
+  });
+
+  it('starts required lists on "— Choose —" and keeps the default status', () => {
+    const form = buildCreateForm({
+      entity: 'assets',
+      fields,
+      values: {},
+      ctx: ctx(),
+      submitLabel: 'Create asset',
+      onSubmit() {},
+    });
+    host.append(form.form);
+    expect($('#f-category').value).toBe('');
+    expect($('#f-category').options[0].textContent).toBe('— Choose —');
+    expect($('#f-status').value).toBe('IN_SERVICE');
+    expect(form.getValues().values).toEqual({ status: 'IN_SERVICE', maintenance_contract: false });
+    expect(host.querySelector('label[for="f-criticality"] .required')).not.toBeNull();
+  });
+
+  it('marks the submit button as needing a connection', () => {
+    const form = buildCreateForm({
+      entity: 'assets',
+      fields,
+      values: {},
+      ctx: ctx(),
+      submitLabel: 'Create asset',
+      onSubmit() {},
+      onlineOnly: true,
+    });
+    expect(form.form.querySelector('button[type="submit"]').classList.contains('online-only')).toBe(
+      true,
+    );
   });
 });

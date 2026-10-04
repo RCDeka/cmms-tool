@@ -22,6 +22,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 |---|---|---|---|
 | Read assets, work orders, reference data, dashboard | yes | yes | yes |
 | `PUT /assets/:id` | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
+| `POST /assets`, `DELETE /assets/:id` | no | yes | yes |
 | `POST /work-orders` (create) | yes, assigned to themselves only (BR-W12) | yes | yes |
 | `PUT /work-orders/:id` | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
 | `GET /users` | no | yes | yes |
@@ -92,6 +93,16 @@ Page<T>     { total, page, pages, items: T[] }
 
 ### GET /api/assets/:id
 - `200 Asset`. Errors: 404.
+
+### POST /api/assets (added, D34)
+- Roles: SUPERVISOR, ADMIN. Online only in the interface.
+- Body: `{ "code"?: string, "name": string, "site": string, "category": Category, "criticality": Criticality, "status"?: AssetStatus, ...any other editable asset field }` (BR-A4). Unknown or server-set fields (`id`, `version`, …) → 400.
+- `201 { "created": true, "item": Asset }`
+- Errors: 400; 403; 409 code already used (`details: { rule: "BR-A1", fields: { code } }`).
+
+### DELETE /api/assets/:id?version=N (added, D35)
+- Roles: SUPERVISOR, ADMIN. `version` (required) is the version the user saw.
+- `204`. Errors: 400 missing `version`; 403; 404; 409 with `details.rule`: `BR-V1` (changed since), `BR-V4` (open conflict) or `BR-A3` (the asset has work orders: set it Out of service instead).
 
 ### PUT /api/assets/:id
 - Body: `{ ...changed fields..., "version": number, "edited_at"?: ISO }`. `edited_at` is when the user made the edit (used for queued offline edits); it defaults to now.
@@ -199,7 +210,7 @@ Page<T>     { total, page, pages, items: T[] }
 |---|---|
 | Ops | `GET /api/health` |
 | Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
-| Assets | `GET /api/assets`, `GET /api/assets/search`, `GET/PUT /api/assets/:id`, `PUT /api/assets/:id/resolve-conflict` |
+| Assets | `GET/POST /api/assets`, `GET /api/assets/search`, `GET/PUT/DELETE /api/assets/:id`, `PUT /api/assets/:id/resolve-conflict` |
 | Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |

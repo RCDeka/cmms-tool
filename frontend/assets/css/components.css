@@ -505,3 +505,14 @@ a.button {
     padding: var(--space-4);
   }
 }
+
+/* Destructive actions: outlined in danger color, with explicit text ("Delete asset"). */
+.button-danger {
+  background: var(--color-surface);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--color-danger-bg);
+}

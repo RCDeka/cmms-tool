@@ -3,6 +3,8 @@ import * as backendPermissions from '../../backend/src/rules/permissions.js';
 import * as backendStatus from '../../backend/src/rules/work-order-status.js';
 import { WORK_ORDER_FIELDS } from '../../backend/src/rules/fields.js';
 import {
+  canManageAssets,
+  checkBeforeCreateAsset,
   CREATION_FIELDS,
   EDITABLE_BY_ROLE,
   TRANSITIONS,
@@ -81,5 +83,26 @@ describe('checks before saving', () => {
       site: 'Choose an asset or a site',
     });
     expect(checkBeforeCreate({ title: 'x', type: 'CORRECTIVE', asset_id: 3 })).toEqual({});
+  });
+});
+
+describe('asset creation', () => {
+  it('lets supervisors and admins manage assets', () => {
+    expect(canManageAssets({ role: 'SUPERVISOR' })).toBe(true);
+    expect(canManageAssets({ role: 'ADMIN' })).toBe(true);
+    expect(canManageAssets({ role: 'TECHNICIAN' })).toBe(false);
+    expect(canManageAssets(null)).toBe(false);
+  });
+
+  it('checks required fields and the code format', () => {
+    expect(checkBeforeCreateAsset({})).toEqual({
+      name: 'Required',
+      site: 'Required',
+      category: 'Required',
+      criticality: 'Required',
+    });
+    const ok = { name: 'Chiller', site: 'Lyon', category: 'HVAC', criticality: 'LOW' };
+    expect(checkBeforeCreateAsset({ ...ok, code: 'cta-01' })).toEqual({});
+    expect(checkBeforeCreateAsset({ ...ok, code: 'AST 01' })).toHaveProperty('code');
   });
 });

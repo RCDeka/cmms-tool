@@ -164,6 +164,8 @@ Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'O
 ### Assets
 - BR-A1: `code` is unique and immutable.
 - BR-A2: Fields editable per role are listed in `docs/api-design.md` (permission matrix).
+- BR-A3: Deleting an asset is for records created by mistake: only assets without any work order (open or closed) can be deleted, at the version the user saw, and without an open conflict. Otherwise 409: an asset with maintenance history is set `OUT_OF_SERVICE` instead. Resolved conflicts of a deleted asset are deleted with it.
+- BR-A4: At creation, `code` is optional. When left out, the server gives `AST-` + the next number after the highest existing `AST-<digits>` code (at least 4 digits). A typed code is stored in capitals, must match `[A-Z0-9][A-Z0-9-]{1,49}`, and must be unused (409). Required: `name`, `site`, `category`, `criticality`; `status` defaults to `IN_SERVICE`.
 
 ### Work orders
 - BR-W1: `number` is unique and immutable; format `WO-YYYY-NNNNN` (see BR-W10).

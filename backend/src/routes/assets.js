@@ -22,6 +22,9 @@ const searchQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+/** DELETE needs the version the user saw (BR-V1). */
+const deleteQuery = z.strictObject({ version: z.coerce.number().int().min(1) });
+
 /**
  * @param {object} deps
  * @param {ReturnType<import('../services/assets.js').createAssetService>} deps.assets
@@ -32,6 +35,12 @@ export function assetsRouter({ assets, now }) {
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
     res.json(assets.list(req.valid.query));
+  });
+
+  router.post('/', requireRole('SUPERVISOR', 'ADMIN'), (req, res) => {
+    res
+      .status(201)
+      .json({ created: true, item: assets.create(req.body, req.user, { now: now() }) });
   });
 
   // Declared before /:id so "search" is not taken for an id.
@@ -48,6 +57,16 @@ export function assetsRouter({ assets, now }) {
   router.put('/:id', validate({ params: idParams }), (req, res) => {
     sendUpdateResult(res, assets.update(req.valid.params.id, req.body, req.user, { now: now() }));
   });
+
+  router.delete(
+    '/:id',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ params: idParams, query: deleteQuery }),
+    (req, res) => {
+      assets.remove(req.valid.params.id, req.valid.query.version);
+      res.status(204).end();
+    },
+  );
 
   router.put(
     '/:id/resolve-conflict',

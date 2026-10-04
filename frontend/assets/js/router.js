@@ -47,8 +47,8 @@ export function parseRoute(pathname, search = '') {
   const entity = entityForSegment(first);
   if (!entity) return { name: 'notFound', page };
   if (!second) return { name: 'list', entity: entity.key, page };
-  if (second === 'new' && entity.key === 'work_orders') {
-    const assetId = positiveInt(query.get('asset_id'), null);
+  if (second === 'new') {
+    const assetId = entity.key === 'work_orders' ? positiveInt(query.get('asset_id'), null) : null;
     return { name: 'create', entity: entity.key, page, ...(assetId && { assetId }) };
   }
   if (ID.test(second)) return { name: 'detail', entity: entity.key, id: Number(second), page };
