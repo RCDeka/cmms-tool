@@ -1,6 +1,7 @@
 // Client router: URL ↔ route, history.pushState / popstate (docs/architecture.md → Client routes).
 import { parseUserFilters } from './admin-users.js';
 import { ENTITIES, entityForSegment } from './entities.js';
+import { parseFeedbackFilters } from './feedback.js';
 import { filtersQuery, hasFilters, parseFilters } from './filters.js';
 
 const ID = /^[1-9]\d{0,15}$/;
@@ -10,7 +11,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /**
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
- *   |'users'|'user'|'userCreate'|'account'|'notFound'} name
+ *   |'users'|'user'|'userCreate'|'account'|'feedback'|'notFound'} name
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
  * @property {number} [assetId] creation form: asset to pre-fill
@@ -46,6 +47,10 @@ export function parseRoute(pathname, search = '') {
     return ID.test(third)
       ? { name: 'user', id: Number(third), page, ...extra }
       : { name: 'notFound', page };
+  }
+  if (first === 'admin' && second === 'feedback' && !rest.length) {
+    const filters = parseFeedbackFilters(query);
+    return { name: 'feedback', page, ...(filters.status && { filters }) };
   }
   if (rest.length) return { name: 'notFound', page };
   if (first === 'account' && !second) return { name: 'account', page };

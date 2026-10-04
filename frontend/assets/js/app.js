@@ -14,6 +14,7 @@ import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import { drawCategoryChart, renderDashboard } from './dashboard.js';
+import { feedbackUrl, openFeedbackDialog, renderFeedbackLog } from './feedback.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
@@ -172,6 +173,10 @@ async function render(route) {
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
     case 'account':
       return showAccount();
+    case 'feedback':
+      return hasRole('ADMIN')
+        ? showFeedbackLog(route, isCurrent)
+        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
     default:
       return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
   }
@@ -470,6 +475,72 @@ function showAccount() {
     },
   });
   tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+// --- Suggestions (every user sends, admins read; D40) ---------------------------------------
+
+/** Title of what is on screen: the page, and the record open in the side panel if any. */
+function screenTitle() {
+  const page = document.getElementById('page-title').textContent;
+  const record = detailContainer.classList.contains('hidden')
+    ? null
+    : detailContainer.querySelector('.detail-title')?.textContent;
+  return record && record !== page ? `${page} — ${record}` : page;
+}
+
+function openFeedback() {
+  openFeedbackDialog(document.getElementById('feedback-dialog'), {
+    pageTitle: screenTitle(),
+    send: (payload) => apiFetch('/feedback', { method: 'POST', body: payload }),
+    onSent: () => {
+      announce('Thank you: your suggestion has been saved.');
+      document.getElementById('feedback-button').focus();
+    },
+  });
+}
+
+async function showFeedbackLog(route, isCurrent) {
+  leaveRecordViews('feedback', 'Suggestions');
+  const filters = route.filters ?? {};
+  if (!tableContainer.querySelector('.feedback-table, .filter-row')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading suggestions…'));
+  }
+  const query = new URLSearchParams({ page: String(route.page), size: '50' });
+  if (filters.status) query.set('status', filters.status);
+  let data;
+  try {
+    data = await apiFetch(`/feedback?${query}`);
+  } catch (err) {
+    if (!isCurrent()) return;
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The suggestions need a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  renderPage();
+  renderFeedbackLog(tableContainer, {
+    data,
+    filters,
+    onFilter: (status) => navigate(feedbackUrl({ status })),
+    onStatus: async (id, status, select) => {
+      try {
+        await apiFetch(`/feedback/${id}`, { method: 'PUT', body: { status } });
+        announce('Status saved.');
+        render(currentRoute());
+      } catch (err) {
+        select.value = data.items.find((i) => i.id === id).status;
+        announce(err.status === 0 ? 'You are offline: the status was not changed.' : err.message);
+      }
+    },
+    pagination: renderPagination(data, (page, control) => {
+      pendingFocus = { type: 'pager', control };
+      navigate(feedbackUrl({ ...filters, page }));
+    }),
+  });
+  restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------
@@ -1054,6 +1125,7 @@ async function onLogout() {
 function init() {
   initNetwork();
   initLayout({ onLogout });
+  document.getElementById('feedback-button').addEventListener('click', openFeedback);
   setRerender(() => render(currentRoute()));
   setNavigationGuard(leaveGuard);
   handleQueueResults();

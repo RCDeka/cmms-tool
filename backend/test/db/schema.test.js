@@ -110,6 +110,21 @@ describe('CHECK constraints match src/rules/enums.js', () => {
       (v) => insert('work_orders', workOrder(insert('users', user()), { priority: v })),
     ],
     [
+      'feedback.status',
+      enums.FEEDBACK_STATUSES,
+      (v) =>
+        insert('feedback', {
+          message: 'Idea',
+          page_path: '/dashboard',
+          page_title: 'Dashboard',
+          user_id: insert('users', user()),
+          user_role: 'TECHNICIAN',
+          status: v,
+          created_at: '2026-10-04T12:00:00.000Z',
+          updated_at: '2026-10-04T12:00:00.000Z',
+        }),
+    ],
+    [
       'conflicts.entity_type',
       enums.CONFLICT_ENTITY_TYPES,
       (v) =>

@@ -1,4 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Fast-CMMS">
-  <rect width="32" height="32" rx="7" fill="#1f5fad"/>
-  <path d="M18.5 5 9 18h6l-1.5 9L23 14h-6l1.5-9z" fill="#ffffff"/>
+  <!-- Fast-CMMS: gear and wrench on black (D41). Not the Société Générale logo. -->
+  <defs>
+    <mask id="wrench-cut">
+      <rect width="32" height="32" fill="#fff"/>
+      <g transform="rotate(-45 16 16)" fill="#000">
+        <rect x="3.6" y="12.7" width="19" height="6.6" rx="3.3"/>
+        <circle cx="23.6" cy="16" r="6.4"/>
+      </g>
+    </mask>
+    <mask id="jaw">
+      <rect width="32" height="32" fill="#fff"/>
+      <rect x="22.6" y="14.2" width="8" height="3.6" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#000"/>
+  <path d="M24.17 14.04 L27.09 14.42 L27.09 17.58 L24.17 17.96 L23.16 20.39 L24.96 22.72 L22.72 24.96 L20.39 23.16 L17.96 24.17 L17.58 27.09 L14.42 27.09 L14.04 24.17 L11.61 23.16 L9.28 24.96 L7.04 22.72 L8.84 20.39 L7.83 17.96 L4.91 17.58 L4.91 14.42 L7.83 14.04 L8.84 11.61 L7.04 9.28 L9.28 7.04 L11.61 8.84 L14.04 7.83 L14.42 4.91 L17.58 4.91 L17.96 7.83 L20.39 8.84 L22.72 7.04 L24.96 9.28 L23.16 11.61 Z" fill="#e9041e" mask="url(#wrench-cut)"/>
+  <circle cx="16" cy="16" r="3.1" fill="#000"/>
+  <g transform="rotate(-45 16 16)" fill="#fff" mask="url(#jaw)">
+    <rect x="5" y="14.1" width="17" height="3.8" rx="1.9"/>
+    <circle cx="23.6" cy="16" r="4.9"/>
+  </g>
 </svg>

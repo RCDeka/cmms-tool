@@ -1,6 +1,6 @@
 # UI Guidelines
 
-Neutral, accessible baseline (Q3). Colors and fonts are **design tokens** (CSS custom properties) in `frontend/assets/css/base.css`. Changing the brand means editing tokens only, never component styles.
+Black, red and white brand after Société Générale (D41), on an accessible baseline (Q3). Colors and fonts are **design tokens** (CSS custom properties) in `frontend/assets/css/base.css`. Changing the brand means editing tokens only, never component styles.
 
 ## Language
 
@@ -14,16 +14,22 @@ The interface is in English (D16). Field and value labels come from `assets/js/l
 - In split view the table keeps only its key columns (`splitColumns` in `entities.js`: code, name, status for assets; number, title, priority, status for work orders); the detail panel shows everything else.
 - Mobile (< 768 px): sidebar hidden behind a burger button. In split view, the table is hidden and the detail panel is full screen with a "Back to list" button.
 
-## Design tokens (starting values)
+## Design tokens
+
+Brand (D41): **black** for actions and the sidebar, **red** as an accent (logo, current page in the sidebar, red line under the top bar, selected row, hover), **white** surfaces. Primary buttons are black, not red, so an action never looks like an error; errors keep `--color-danger` with text. Contrast: red `#e9041e` on white 4.7:1; hover red `#c00319` with white text 5.9:1; sidebar text on black ≥ 9:1. The logo (`assets/img/logo.svg`) is a red gear and a white wrench on a black tile; it is not the Société Générale logo.
 
 ```css
 :root {
-  /* Neutrals */
-  --color-bg: #f6f7f9;          --color-surface: #ffffff;
-  --color-border: #d9dde3;      --color-text: #1c2330;      --color-text-muted: #5a6475;
+  /* Neutrals: pure grays */
+  --color-bg: #f5f5f5;          --color-surface: #ffffff;
+  --color-border: #d4d4d4;      --color-text: #1a1a1a;      --color-text-muted: #595959;
   /* Brand */
-  --color-primary: #1f5fad;     --color-primary-contrast: #ffffff;
-  --color-row-selected: #e3edf9;
+  --color-brand-red: #e9041e;   --color-brand-black: #000000;
+  --color-primary: #1a1a1a;     --color-primary-contrast: #ffffff;  --color-primary-hover: #c00319;
+  --color-link: #1a1a1a;        --color-link-hover: #c00319;
+  --color-row-selected: #fdeced;
+  --color-chart-bar: #3d3d3d;   --color-chart-bar-hover: #c00319;
+  --color-sidebar-bg: #000000;  --color-sidebar-text: #f2f2f2;      --color-sidebar-muted: #b3b3b3;
   /* Semantic */
   --color-success: #1e7b4a;     --color-success-bg: #e4f4ea;
   --color-danger: #b42318;      --color-danger-bg: #fdecea;
@@ -46,7 +52,7 @@ Every text/background pair must reach WCAG AA contrast (4.5:1 for normal text). 
 
 | State | Style | Non-color cue |
 |---|---|---|
-| Selected | `--color-row-selected` background | `aria-current="true"` (`aria-selected` is only valid in grid widgets), left border in primary color |
+| Selected | `--color-row-selected` background | `aria-current="true"` (`aria-selected` is only valid in grid widgets), left border in brand red |
 | Conflict | `--color-warning-highlight` background | ⚠ icon + badge "Conflict" |
 | Asset `BROKEN_DOWN` | thin left border in `--color-danger` | status badge with the text "Broken down" |
 | Pending sync | — | small "Pending" badge |
@@ -66,7 +72,7 @@ Badges always show text. Badge class names come from the field and the code in k
 ## Dashboard
 
 - **KPI tiles** (stat tiles): sentence-case label, value in the same sans with proportional figures, the whole tile is a link to the matching list. Tiles whose count needs attention (overdue work orders, broken-down assets, conflicts) add an amber edge and a "⚠ Needs attention" badge with text when the count is above zero. Technicians get no conflict tile.
-- **Chart** (Chart.js, loaded on demand): one series, so **one color for every bar** (`--color-primary`, validated ≥ 3:1 on the card with the data-viz palette validator), never a darker-is-bigger ramp on these nominal categories. Horizontal bars ≤ 24 px with a 4 px rounded end, sorted by count with "Unspecified" last, value at the bar tip in text color, no legend (the title names the series), solid hairline grid (`--color-grid`), tooltip on hover.
+- **Chart** (Chart.js, loaded on demand): one series, so **one color for every bar** (`--color-chart-bar`, dark gray, 10.8:1 on the card; brand red on hover), never a darker-is-bigger ramp on these nominal categories. Horizontal bars ≤ 24 px with a 4 px rounded end, sorted by count with "Unspecified" last, value at the bar tip in text color, no legend (the title names the series), solid hairline grid (`--color-grid`), tooltip on hover.
 - Every chart has a text equivalent (`aria-label` summary on the canvas) and a "Show as a table" view; if the chart library is unavailable, the table opens instead.
 - The frame grows with the number of bars (no nested scroll). A refresh keeps the previous render, dimmed, until the new figures arrive (no skeleton flash).
 - Offline, the last saved figures are shown with "Offline: figures saved on this device on <date>".

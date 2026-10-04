@@ -298,8 +298,8 @@ export function renderDashboard(container, { data, stats, fromCache, fetchedAt }
 }
 
 /**
- * Draws the horizontal bar chart. Single series: one color for every bar (brand primary,
- * validated ≥ 3:1 on the card), ≤ 24 px bars with a 4 px rounded end, value at the bar tip
+ * Draws the horizontal bar chart. Single series: one color for every bar (dark gray,
+ * ≥ 3:1 on the card; brand red on hover), ≤ 24 px bars with a 4 px rounded end, value at the bar tip
  * in text color, hairline solid grid, tooltip on hover.
  * @returns {Promise<object>} the Chart instance
  */
@@ -334,8 +334,8 @@ export async function drawCategoryChart(canvas, rows) {
         {
           label: 'Work orders',
           data: values,
-          backgroundColor: token('--color-primary'),
-          hoverBackgroundColor: token('--color-primary-hover'),
+          backgroundColor: token('--color-chart-bar'),
+          hoverBackgroundColor: token('--color-chart-bar-hover'),
           borderRadius: { topRight: 4, bottomRight: 4 },
           borderSkipped: 'start',
           maxBarThickness: 24,

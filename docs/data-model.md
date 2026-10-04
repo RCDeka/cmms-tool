@@ -167,6 +167,24 @@ Rules:
 ### Full-text indexes (added, D38)
 `assets_fts` and `work_orders_fts` (migration `003_search.sql`): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
 
+### feedback (added, D40)
+Improvement ideas sent from the pages of the tool (migration `005_feedback.sql`).
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| message | TEXT | no | 1 to 2000 characters | |
+| page_path | TEXT | no | starts with `/`, ≤ 500 | path and query of the page |
+| page_title | TEXT | no | ≤ 200 | page title, and the record open in the side panel |
+| viewport_width | INTEGER | yes | 1 to 20000 | screen width in CSS pixels |
+| user_id | INTEGER | no | FK → users.id | author |
+| user_role | TEXT | no | CHECK Role | role when sent |
+| status | TEXT | no | CHECK FeedbackStatus, default `NEW` | `NEW`, `PLANNED`, `DONE`, `DECLINED` |
+| created_at / updated_at | TEXT | no | | |
+| updated_by | INTEGER | yes | FK → users.id | last status change |
+
+Indexes: `created_at`, (`status`, `created_at`).
+
 ### schema_migrations
 | Column | Type | Notes |
 |---|---|---|

@@ -19,6 +19,10 @@
   color: var(--color-primary-contrast);
 }
 
+.button-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
 .button-secondary,
 .button-pager {
   background: var(--color-surface);
@@ -73,8 +77,8 @@
 }
 
 .badge-tone-primary {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .badge-tone-info {
@@ -117,8 +121,9 @@
   padding: var(--space-6);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-brand-red);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgb(28 35 48 / 8%);
+  box-shadow: 0 8px 24px rgb(var(--shadow-color) / 8%);
 }
 
 .login-logo {
@@ -221,11 +226,11 @@ body.is-offline .ai-only {
   border: 1px solid var(--color-border);
   border-radius: 10px;
   color: var(--color-text);
-  box-shadow: 0 16px 48px rgb(28 35 48 / 25%);
+  box-shadow: 0 16px 48px rgb(var(--shadow-color) / 25%);
 }
 
 .dialog::backdrop {
-  background: rgb(28 35 48 / 45%);
+  background: rgb(var(--shadow-color) / 45%);
 }
 
 .dialog-title {
@@ -361,7 +366,7 @@ a.button {
 }
 
 .kpi-tile:hover {
-  border-color: var(--color-primary);
+  border-color: var(--color-brand-red);
 }
 
 .kpi-tile.is-flagged {
@@ -609,4 +614,57 @@ a.button {
 
 .audit-table td {
   vertical-align: top;
+}
+
+/* Suggest an improvement (D40) */
+.feedback-dialog {
+  width: min(92vw, 560px);
+}
+
+.feedback-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.feedback-form textarea {
+  width: 100%;
+  min-height: 8rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.feedback-form textarea[aria-invalid] {
+  border-color: var(--color-danger);
+}
+
+.feedback-page {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-left: 3px solid var(--color-brand-red);
+  overflow-wrap: anywhere;
+}
+
+.feedback-page code {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.feedback-form .field-label {
+  font-weight: 600;
+}
+
+.feedback-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 16rem;
+}
+
+.feedback-status-control {
+  margin-top: var(--space-1);
+}
+
+.feedback-status-select {
+  min-height: 36px;
 }

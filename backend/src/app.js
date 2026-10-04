@@ -12,6 +12,7 @@ import { auditRouter, historyHandler } from './routes/audit.js';
 import { authRouter } from './routes/auth.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { feedbackRouter } from './routes/feedback.js';
 import { healthRouter } from './routes/health.js';
 import { referenceRouter } from './routes/reference.js';
 import { workOrdersRouter } from './routes/work-orders.js';
@@ -20,6 +21,7 @@ import { createAuditService } from './services/audit.js';
 import { createAuthService } from './services/auth.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
+import { createFeedbackService } from './services/feedback.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createUserService } from './services/users.js';
 import { createWorkOrderService } from './services/work-orders.js';
@@ -29,6 +31,9 @@ export const FRONTEND_DIR = path.join(REPO_ROOT, 'frontend');
 /** 10 login attempts per 15 minutes per IP address (docs/api-design.md). */
 export const LOGIN_RATE_LIMIT = { windowMs: 15 * 60 * 1000, limit: 10 };
 
+/** 30 improvement ideas per hour per user (D40). */
+export const FEEDBACK_RATE_LIMIT = { windowMs: 60 * 60 * 1000, limit: 30 };
+
 /**
  * Builds the Express application. It does not listen, so tests can use it with Supertest.
  * @param {object} deps
@@ -37,6 +42,7 @@ export const LOGIN_RATE_LIMIT = { windowMs: 15 * 60 * 1000, limit: 10 };
  * @param {string} [deps.frontendDir] static files served in development (Nginx in production)
  * @param {() => Date} [deps.now] clock, replaceable in tests
  * @param {{ windowMs: number, limit: number }} [deps.loginRateLimit]
+ * @param {{ windowMs: number, limit: number }} [deps.feedbackRateLimit]
  */
 export function createApp({
   db,
@@ -44,6 +50,7 @@ export function createApp({
   frontendDir = FRONTEND_DIR,
   now = () => new Date(),
   loginRateLimit = LOGIN_RATE_LIMIT,
+  feedbackRateLimit = FEEDBACK_RATE_LIMIT,
 }) {
   const app = express();
   // In production Nginx runs on the same host: trust it for the client IP (rate limiting).
@@ -57,6 +64,7 @@ export function createApp({
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
   const audit = createAuditService(db);
+  const feedback = createFeedbackService(db);
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -103,6 +111,7 @@ export function createApp({
   );
   app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
+  app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
   app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api/conflicts', conflictsRouter({ conflicts }));

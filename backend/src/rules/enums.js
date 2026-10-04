@@ -29,3 +29,5 @@ export const CONFLICT_STATUSES = ['OPEN', 'RESOLVED'];
 export const CONFLICT_RESOLUTIONS = ['A', 'B', 'MERGE'];
 
 export const CONFLICT_ENTITY_TYPES = ['assets', 'work_orders'];
+
+export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];

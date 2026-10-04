@@ -108,6 +108,8 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 - **Phase 10: filters and search on lists; full-text search (SQLite FTS5)** — done (D38). Acceptance: accent-insensitive prefix search, filters combined and kept in the URL (open/close a record, back/forward), "Clear filters", dashboard tiles open the matching list, technicians filter their own work, and a filtered list offline explains that search needs a connection.
 - **Phase 11: user administration screen** — done (D39, BR-U3 to BR-U8). Acceptance: an admin lists and searches users, creates one who can then log in, edits role and profile; deactivating a user or resetting their password ends their session at once and the old password or inactive account is refused; the last admin, one's own account and users with unfinished work cannot be deactivated; every user changes their own password and stays logged in; technicians and supervisors have no access; account changes appear in the audit log for admins only.
 
+- **Phase 12: suggestions from any page; Société Générale colors and a new logo** — done (D40, D41). Acceptance: from any page, every user opens "Suggest an improvement", sees the page it refers to, and sends an idea (empty text refused, unsent text kept, Send disabled offline); admins list, filter and triage the ideas and open the page they refer to; `npm run feedback:export` lists the open ideas; the tool uses black, red and white with a maintenance logo, at AA contrast.
+
 ## Post-MVP backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.

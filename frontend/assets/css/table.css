@@ -72,7 +72,7 @@
 }
 
 .table-row.is-selected td:first-child {
-  box-shadow: inset 4px 0 0 var(--color-primary);
+  box-shadow: inset 4px 0 0 var(--color-brand-red);
 }
 
 /* Outlines are unreliable on table rows: draw the focus ring with a shadow. */

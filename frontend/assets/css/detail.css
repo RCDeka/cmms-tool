@@ -180,7 +180,7 @@
   background: var(--color-surface);
   /* Stays visible while the fields scroll underneath it. */
   border-top: 1px solid var(--color-border);
-  box-shadow: 0 -6px 12px -8px rgb(28 35 48 / 20%);
+  box-shadow: 0 -6px 12px -8px rgb(var(--shadow-color) / 20%);
 }
 
 @media (max-width: 767px) {

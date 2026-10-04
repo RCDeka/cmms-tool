@@ -1,22 +1,36 @@
 /* Reset, design tokens and typography (docs/ui-guidelines.md). Change the brand here only. */
 
 :root {
-  /* Neutrals */
-  --color-bg: #f6f7f9;
+  /* Neutrals: pure grays (no blue tint) to sit with the black and red brand. */
+  --color-bg: #f5f5f5;
   --color-surface: #ffffff;
-  --color-border: #d9dde3;
-  --color-text: #1c2330;
-  --color-text-muted: #5a6475;
-  --color-hover: #eef2f7;
-  --color-neutral-bg: #eceff3;
+  --color-border: #d4d4d4;
+  --color-text: #1a1a1a;
+  --color-text-muted: #595959;
+  --color-hover: #f0f0f0;
+  --color-neutral-bg: #ebebeb;
   /* Chart gridlines: hairline, one step off the surface, recessive. */
-  --color-grid: #e6e9ed;
-  /* Brand */
-  --color-primary: #1f5fad;
+  --color-grid: #e5e5e5;
+  /* Brand (D41): black, red and white, after Société Générale. The red is an accent
+     (logo, current page, selection, hover); actions are black so they never read as errors. */
+  --color-brand-red: #e9041e;
+  --color-brand-black: #000000;
+  --color-primary: #1a1a1a;
   --color-primary-contrast: #ffffff;
-  --color-primary-hover: #174a87;
-  --color-primary-bg: #e3edf9;
-  --color-row-selected: #e3edf9;
+  --color-primary-hover: #c00319; /* white text: 5.9:1 */
+  --color-primary-bg: #ebebeb;
+  --color-row-selected: #fdeced;
+  --color-link: #1a1a1a;
+  --color-link-hover: #c00319;
+  /* Single-series chart bars: dark gray, the brand red on hover. */
+  --color-chart-bar: #3d3d3d;
+  --color-chart-bar-hover: #c00319;
+  /* Dark sidebar */
+  --color-sidebar-bg: #000000;
+  --color-sidebar-text: #f2f2f2;
+  --color-sidebar-muted: #b3b3b3;
+  --color-sidebar-hover: #1f1f1f;
+  --color-sidebar-border: #333333;
   /* Semantic */
   --color-success: #1e7b4a;
   --color-success-bg: #e4f4ea;
@@ -38,8 +52,9 @@
   --space-4: 16px;
   --space-6: 24px;
   --radius: 6px;
-  --focus-ring: 0 0 0 3px rgb(31 95 173 / 45%);
-  --focus-color: rgb(31 95 173 / 70%);
+  --focus-ring: 0 0 0 3px rgb(26 26 26 / 35%);
+  --focus-color: #1a1a1a;
+  --shadow-color: 0 0 0; /* rgb() channels of shadows and overlays */
   --sidebar-width: 250px;
   --touch-target: 44px;
 }
@@ -83,7 +98,11 @@ h2 {
 }
 
 a {
-  color: var(--color-primary);
+  color: var(--color-link);
+}
+
+a:hover {
+  color: var(--color-link-hover);
 }
 
 button,

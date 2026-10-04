@@ -29,6 +29,8 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `GET /audit-log` | no | yes, without user accounts | yes |
 | `/admin/users` (user administration) | no | no | yes |
 | `POST /auth/change-password` (own password) | yes | yes | yes |
+| `POST /feedback` (suggest an improvement) | yes | yes | yes |
+| `GET /feedback`, `PUT /feedback/:id` | no | no | yes |
 | Conflict console and resolution | no | yes | yes |
 
 Editable fields:
@@ -217,6 +219,25 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 ### GET /api/users
 - Roles: SUPERVISOR, ADMIN. Returns the users that can be assigned to a work order (for dropdowns).
 - `200 [{ id, last_name, first_name, role, site, specialty }]` (active users only).
+
+## Suggestions (added, D40)
+
+### POST /api/feedback
+- Every role. Rate limited: 30 per hour per user (429).
+- Body: `{ "message": string (1–2000, trimmed), "page_path": string ("/…", ≤ 500), "page_title": string (≤ 200), "viewport_width"?: integer | null }`.
+- `201 { "created": true, "item": Feedback }`. Errors: 400; 401; 429.
+
+### GET /api/feedback
+- ADMIN. Query: `page`, `size` (max 100), `status?` (`NEW` | `PLANNED` | `DONE` | `DECLINED`), `role?`.
+- `200 { total, page, pages, items: [Feedback] }`, newest first.
+
+### PUT /api/feedback/:id
+- ADMIN. Body: `{ "status": FeedbackStatus }`. `200 { "updated": true, "item": Feedback }`. Errors: 400; 404.
+
+```
+Feedback    { id, message, page_path, page_title, viewport_width, user: UserRef, user_role,
+              status, created_at, updated_at }
+```
 
 ## User administration (added, D39)
 

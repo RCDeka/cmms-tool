@@ -47,7 +47,7 @@ npm run db:reset                     # (re)create the database, migrate and seed
 npm run dev                          # API + frontend on http://localhost:3000, restarts on changes
 ```
 
-Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`. Administrators manage accounts under **Users** (`/admin/users`); everyone can change their password with **Change my password** under their name in the sidebar.
+Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`. Administrators manage accounts under **Users** (`/admin/users`); everyone can change their password with **Change my password** under their name in the sidebar. The **Suggest an improvement** button in the top bar saves ideas about the page on screen; administrators read them under **Suggestions**.
 
 | URL | |
 |---|---|
@@ -62,6 +62,7 @@ cd backend  && npm run lint          # ESLint + Prettier check (npm run format t
 cd backend  && npm run db:migrate    # apply new migrations (also done at server start)
 cd backend  && npm run db:reset -- --with-conflicts   # reseed with 3 demo conflicts
 cd backend  && npm run db:backup                       # backup into BACKUP_DIR (keeps 14 days)
+cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
 cd frontend && npm install && npm test               # frontend logic tests
 ```
 
