@@ -86,3 +86,23 @@ export function renderDetailMessage(container, { title, message, onClose, onRetr
     ),
   );
 }
+
+/**
+ * Shows a discreet "Update available" button under the header (brief → Silent revalidation).
+ * The panel keeps the version on screen until the user asks for the new one.
+ * @param {HTMLElement} container
+ * @param {() => void} onReload
+ */
+export function showUpdateAvailable(container, onReload) {
+  if (container.querySelector('.update-available')) return;
+  const header = container.querySelector('.detail-header');
+  if (!header) return;
+  header.after(
+    h(
+      'button',
+      { type: 'button', class: 'button button-secondary update-available', onClick: onReload },
+      h('span', { 'aria-hidden': 'true' }, '↻'),
+      'Update available — show the latest version',
+    ),
+  );
+}

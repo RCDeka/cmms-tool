@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 
 This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
-> **Status:** Phases 0–2 done: database and mock data, login and read API, and the web interface for browsing assets and work orders (table + detail split view, online). Next: local-first cache and offline mode (Phase 3, `docs/roadmap-mvp.md`).
+> **Status:** Phases 0–3 done: database and mock data, login and read API, the web interface for browsing assets and work orders (table + detail split view), and local-first browsing (IndexedDB cache, prefetch, silent revalidation, offline mode). Next: editing, work order creation and the sync queue (Phase 4, `docs/roadmap-mvp.md`).
 
 ## Tech stack
 

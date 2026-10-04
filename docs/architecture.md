@@ -6,7 +6,7 @@
 Browser                                        VPS
 ┌─────────────────────────────────┐   HTTPS   ┌─────────────────────────────────┐
 │ index.html (shell)              │ ────────► │ Nginx                           │
-│ Service worker (shell cache)    │           │  /          → frontend/ (static) │
+│ Service worker (shell, D28)     │           │  /          → frontend/ (static) │
 │ Vanilla JS modules              │           │  /api/*     → Express :3000      │
 │ IndexedDB (pages, records,      │ ◄──────── │ Express (Node 24)               │
 │   drafts, sync_queue, config)   │   JSON    │ better-sqlite3 → cmms.sqlite    │
@@ -125,10 +125,16 @@ Prefetching runs after the visible content is rendered, one request at a time, a
 
 ## Revalidation (stale-while-revalidate)
 
-- Triggers: showing a cached page or record; the window regaining focus; the network coming back.
+- Triggers: showing a cached page or record; the window regaining focus (at most every 10 s); the network coming back. A page fetched from the server in the same navigation is not revalidated again.
 - Fetch the page (or record), then compare each row's `updated_at` with the local copy, and update only what changed. If `total`/`pages` changed, update the pagination.
 - If the record shown in the detail panel changed: show the discreet badge **"Update available"** (an action that reloads the record). If the user has unsaved edits on that record, keep the badge and their edits. The server will detect a conflict when they save, if there is one.
 - Rows with `has_conflict = true` get the conflict styling right after revalidation.
+
+## Service worker (D9, D28)
+
+- `frontend/sw.js` precaches the shell (HTML, CSS, JS, `idb`) on install and takes over at once.
+- Navigations (any client route) and `/assets/*` files: network first with a 4 s timeout; a successful answer refreshes the cache, a failure or timeout answers from the cache. Navigations are cached under `/index.html`.
+- `/api/*` is never handled by the service worker: API data is cached in IndexedDB only.
 
 ## Network state
 

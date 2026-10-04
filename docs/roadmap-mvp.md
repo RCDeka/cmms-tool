@@ -48,7 +48,7 @@ Acceptance: from `/assets?page=3`, clicking a row opens `/assets/:id` in split v
 Tasks:
 - `db.js` (brief API + stores in `docs/architecture.md`), `preload.js` (keep-set, eviction), `sync.js` (stale-while-revalidate, "Update available" badge), in-memory current-page map.
 - `network.js`: offline detection, status bar message, `.ai-only` toggling, health ping.
-- Service worker: shell precache, SPA fallback offline, update notice.
+- Service worker: shell precache, SPA fallback offline, network-first strategy (D28).
 - Tests (Vitest + fake-indexeddb): keep-set computation (first/last/middle/1-page cases), eviction keeps the current page and protected records, revalidation updates only rows with a newer `updated_at`.
 
 Acceptance: opening a cached record from the table measures < 20 ms; IndexedDB never holds more than 5 pages per entity; with the network cut (DevTools offline), a reload still shows cached pages and records with the offline message.

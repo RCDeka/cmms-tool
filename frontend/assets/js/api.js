@@ -1,5 +1,6 @@
 // All HTTP calls go through apiFetch (AGENTS.md → Frontend).
 import { API_BASE, REQUEST_TIMEOUT_MS } from './config.js';
+import { reportOffline, reportOnline } from './network.js';
 import { getToken } from './session.js';
 
 /** API failure. `status` is 0 when the server could not be reached or timed out. */
@@ -51,8 +52,10 @@ export async function apiFetch(path, { method = 'GET', body, signal } = {}) {
   } catch (err) {
     // A caller's own abort is not a network failure: let it propagate.
     if (signal?.aborted) throw err;
+    reportOffline();
     throw new ApiError(0, null, 'The server cannot be reached.');
   }
+  reportOnline();
 
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const data = response.status === 204 || !isJson ? null : await response.json();
