@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 
 This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
-> **Status:** specifications only. Implementation follows `docs/roadmap-mvp.md`, starting with Phase 0. The commands below become valid once Phase 0 is done.
+> **Status:** Phase 0 done (project setup, database schema, mock data, health endpoint). The application screens come in the next phases of `docs/roadmap-mvp.md`; for now `http://localhost:3000` shows a placeholder page.
 
 ## Tech stack
 
@@ -40,8 +40,8 @@ Prerequisites: Node.js 24 LTS and npm.
 cp .env.example .env                 # then set JWT_SECRET and SEED_PASSWORD
 cd backend
 npm install
-npm run db:reset                     # create the database, migrate and seed mock data
-npm run dev                          # API + frontend on http://localhost:3000
+npm run db:reset                     # (re)create the database, migrate and seed mock data
+npm run dev                          # API + frontend on http://localhost:3000, restarts on changes
 ```
 
 Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`.
@@ -54,10 +54,10 @@ Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, 
 ### Useful commands
 
 ```bash
-cd backend  && npm test              # backend unit + API tests
-cd backend  && npm run lint
-cd backend  && npm run db:migrate    # apply new migrations
-cd backend  && npm run db:seed -- --with-conflicts   # also create demo conflicts
+cd backend  && npm test              # backend tests (unit, database, API)
+cd backend  && npm run lint          # ESLint + Prettier check (npm run format to fix)
+cd backend  && npm run db:migrate    # apply new migrations (also done at server start)
+cd backend  && npm run db:reset -- --with-conflicts   # reseed with 3 demo conflicts
 cd frontend && npm install && npm test               # frontend logic tests
 ```
 
@@ -67,7 +67,7 @@ cd frontend && npm install && npm test               # frontend logic tests
 |---|---|
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | API port (default 3000) |
-| `DATABASE_PATH` | SQLite file path |
+| `DATABASE_PATH` | SQLite file path, relative to the repository root (default `./data/cmms.sqlite`) |
 | `JWT_SECRET`, `JWT_EXPIRES_IN` | token signing secret and lifetime |
 | `APP_TIMEZONE` | timezone for "today" and "this month" in KPIs |
 | `SEED_PASSWORD` | password given to every mock user by the seed |
@@ -100,7 +100,7 @@ Nginx serves `frontend/` and proxies `/api` to the Node service run by systemd, 
 │   │   ├── services/         SQL and transactions
 │   │   ├── rules/            pure business rules
 │   │   └── lib/              helpers (dates, pagination)
-│   └── test/                 unit/ and api/
+│   └── test/                 unit/ (pure logic), db/ (schema, seed), api/ (HTTP)
 ├── frontend/
 │   ├── index.html            app shell
 │   ├── sw.js                 service worker

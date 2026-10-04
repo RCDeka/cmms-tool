@@ -89,7 +89,7 @@ export const ENTITIES = {
 | `/conflicts` | supervisor console: list of open conflicts (SUPERVISOR, ADMIN) |
 | `/conflicts/:id` | side-by-side arbitration |
 
-All navigation goes through `router.navigate(url)` → `history.pushState` → render. `popstate` re-renders from the URL. On load, the router parses `location` and shows the matching view. The servers return `index.html` for any non-API path (SPA fallback).
+All navigation goes through `router.navigate(url)` → `history.pushState` → render. `popstate` re-renders from the URL. On load, the router parses `location` and shows the matching view. The servers return `index.html` for any non-API path without a file extension (SPA fallback). The static folder `frontend/assets/` shares the `/assets` prefix with the asset routes, so the servers must never redirect a directory path: Express uses `express.static(..., { redirect: false })`, and Nginx must use `try_files $uri /index.html` (without `$uri/`).
 
 ## IndexedDB
 
