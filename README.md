@@ -1,8 +1,8 @@
-# Mini-GMAO
+# Small-CMMS
 
-Maintenance management (GMAO / CMMS) MVP for a bank's real estate: head offices, branches and data centers. It focuses on user experience: very fast browsing of équipements and bons de travaux from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
+Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: head offices, branches and data centers. It focuses on user experience: very fast browsing of assets and work orders from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
 
-"Mini-GMAO" is a working title. This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_GMAO.md`).
+"Small-CMMS" is a working title. This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
 > **Status:** specifications only. Implementation follows `docs/roadmap-mvp.md`, starting with Phase 0. The commands below become valid once Phase 0 is done.
 
@@ -22,12 +22,12 @@ Maintenance management (GMAO / CMMS) MVP for a bank's real estate: head offices,
 
 ## MVP features
 
-- **Équipements and bons de travaux**: paginated tables (50 rows), table + fiche split view, search, editing with per-role permissions and BT status workflow.
+- **Assets and work orders**: paginated tables (50 rows), table + detail split view, search, editing with per-role permissions and work order status workflow.
 - **Local-first**: IndexedDB cache with prefetch of adjacent pages, silent revalidation, offline browsing and editing, sync queue.
-- **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a fiche).
+- **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a record).
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).
-- **Dashboard**: KPI tiles, BT per technical domain over 30 days, recent activity, "my interventions of the day".
-- **Roles**: `operateur`, `superviseur`, `admin`.
+- **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today".
+- **Roles**: `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
 Out of scope for the MVP: creating/deleting records, user administration, AI features, preventive maintenance, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`).
 
@@ -43,7 +43,7 @@ npm run db:reset                     # create the database, migrate and seed moc
 npm run dev                          # API + frontend on http://localhost:3000
 ```
 
-Mock users (password = `SEED_PASSWORD`): `admin`, `superviseur1`, `superviseur2`, `operateur1`, `operateur2`.
+Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`.
 
 | URL | |
 |---|---|
@@ -82,8 +82,8 @@ Nginx serves `frontend/` and proxies `/api` to the Node service run by systemd, 
 ├── README.md
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
 ├── docs/
-│   ├── SPEC_MVP_GMAO.md      original product brief (French)
-│   ├── decisions.md          answers to open questions, deviations from the brief
+│   ├── SPEC_MVP_CMMS.md      product brief (English translation of the French original)
+│   ├── decisions.md          open questions, glossary FR→EN, deviations from the brief
 │   ├── data-model.md
 │   ├── api-design.md
 │   ├── architecture.md       client/server, IndexedDB, sync, offline, conflicts

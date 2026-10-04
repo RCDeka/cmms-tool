@@ -2,11 +2,11 @@
 
 Instructions for the coding agent implementing this project.
 
-Before writing code, read `docs/decisions.md` (reference hierarchy and deviations from the brief), then the documents relevant to the task: `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md`, `docs/ui-guidelines.md`, `docs/roadmap-mvp.md`. The original product brief is `docs/SPEC_MVP_GMAO.md` (French). If you must deviate from these documents, update them and `docs/decisions.md` in the same commit and state why.
+Before writing code, read `docs/decisions.md` (reference hierarchy and deviations from the brief), then the documents relevant to the task: `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md`, `docs/ui-guidelines.md`, `docs/roadmap-mvp.md`. The product brief is `docs/SPEC_MVP_CMMS.md`. If you must deviate from these documents, update them and `docs/decisions.md` in the same commit and state why.
 
 ## Project summary
 
-Mini-GMAO: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of équipements and bons de travaux, offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
+Small-CMMS: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
 
 Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML + CSS + vanilla JavaScript (ES modules) + IndexedDB (`idb`) + Chart.js on the frontend; Nginx + systemd on a Linux VPS. Keep it simple.
 
@@ -20,28 +20,28 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is French only), record creation/deletion, user administration UI, AI features (only the `.ai-only` mechanism), preventive-maintenance scheduling, inventory, file uploads. See the backlog in `docs/roadmap-mvp.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), record creation/deletion, user administration UI, AI features (only the `.ai-only` mechanism), preventive-maintenance scheduling, inventory, file uploads. See the backlog in `docs/roadmap-mvp.md`.
 
 ## Code conventions
 
 ### General
 - JavaScript ES modules everywhere (`"type": "module"`), `const`/`let`, `async`/`await`. JSDoc types on exported functions.
 - ESLint + Prettier are mandatory; code must pass `npm run lint` in each package before commit.
-- **Language (D16)**: code identifiers, comments, docs and commits in English. Domain names from the brief stay in French: tables, columns, JSON fields, enum values, URLs, UI text.
+- **Language (D16)**: everything in English: code, comments, table/column/JSON names, URLs, UI text, docs and commits. Enumerated values are stored as `UPPER_SNAKE_CASE` codes; the UI shows labels from `labels.js`. The French terms of the original brief map to English through the glossary in `docs/decisions.md`.
 - Small, pure functions for business rules; thin routes.
 
 ### Naming
 - Files: `kebab-case.js`. Variables/functions: `camelCase`. Classes: `PascalCase`. Constants: `UPPER_SNAKE_CASE`.
 - Database and JSON fields: `snake_case` as in `docs/data-model.md`.
-- API paths as in `docs/api-design.md` (`/api/equipements`, `/api/bons_travaux`). UI paths as in `docs/architecture.md` (`/bons-travaux`).
+- API paths as in `docs/api-design.md` (`/api/assets`, `/api/work-orders`). UI paths as in `docs/architecture.md` (`/assets`, `/work-orders`).
 - CSS: classes `kebab-case`; badge classes `badge-<field>-<slug>`; IDs only for the layout regions named in the brief.
 
 ### Backend
 - Structure and request flow: see `docs/architecture.md` → Backend layout.
 - Routes: parse and validate input (zod), check roles, call a service, send the response. No SQL and no business rules in routes.
 - Services: SQL with **prepared statements only**; never build SQL from user input (sort columns come from a whitelist). Multi-step writes in `db.transaction(...)`.
-- Pure rules in `src/rules/` (permissions, BT status transitions, versioning decision, conflict diff, KPI), unit-tested without a database.
-- Errors: throw `HttpError(status, message, details)`; the error handler formats `{ statusCode, error, message, details? }`. Version conflicts use the brief's 409 body.
+- Pure rules in `src/rules/` (permissions, work order status transitions, versioning decision, conflict diff, KPI), unit-tested without a database.
+- Errors: throw `HttpError(status, message, details)`; the error handler formats `{ statusCode, error, message, details? }`. Version conflicts use the 409 body defined in `docs/api-design.md`.
 - Never return `password_hash`; select explicit columns.
 - Datetimes: ISO 8601 UTC set by the application; "today"/"this month" through the date helper in `APP_TIMEZONE`.
 
@@ -61,7 +61,7 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 ## Testing guidelines
 
 - Tool: **Vitest** in both packages; **Supertest** for API tests; **jsdom + fake-indexeddb** for frontend modules.
-- **Unit tests (required)** on pure rules: BT status transitions (every allowed and forbidden pair), permission matrix, version decision, conflict diff, KPI math, pagination and keep-set logic.
+- **Unit tests (required)** on pure rules: work order status transitions (every allowed and forbidden pair), permission matrix, version decision, conflict diff, KPI math, pagination and keep-set logic.
 - **API tests**: each test file gets a fresh SQLite database (temporary file, migrated and seeded with a small fixture). Per endpoint: success shape, 400, 401/403, 404, plus the specific rule codes (409 conflict/locked, 422 rule). Do not mock the database in API tests.
 - **Frontend tests**: only critical logic (router parsing, escaping, db/preload/eviction, queue merging and response handling, save-mode decisions). No snapshot tests and no E2E in the MVP.
 - Every bug fix includes a regression test.

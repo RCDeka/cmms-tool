@@ -4,14 +4,14 @@ Neutral, accessible baseline (Q3). Colors and fonts are **design tokens** (CSS c
 
 ## Language
 
-The interface is in French; labels come from `assets/js/labels.js`. The app name comes from `APP_NAME` (working title "Mini-GMAO", Q6).
+The interface is in English (D16). Field and value labels come from `assets/js/labels.js`. The app name comes from `APP_NAME` (working title "Small-CMMS", Q6).
 
 ## Layout (brief)
 
 - `<body>`: CSS Grid, `100dvh`. Sidebar of 250 px on the left, fixed and vertical (`<nav>`), then `#main-content` (`<main>`).
 - Status bar at the bottom of `#main-content`: online/offline state, pending sync count, current user.
-- `#main-content` default: `grid-template-columns: 1fr` (table only). With `.split-view`: `1fr 1fr` (table + fiche). `#fiche-container` is `.hidden` by default.
-- Mobile (< 768 px): sidebar hidden behind a burger button. In split view, the table is hidden and the fiche is full screen with a "Retour à la liste" button.
+- `#main-content` default: `grid-template-columns: 1fr` (table only). With `.split-view`: `1fr 1fr` (table + detail panel). `#detail-container` is `.hidden` by default.
+- Mobile (< 768 px): sidebar hidden behind a burger button. In split view, the table is hidden and the detail panel is full screen with a "Back to list" button.
 
 ## Design tokens (starting values)
 
@@ -46,22 +46,22 @@ Every text/background pair must reach WCAG AA contrast (4.5:1 for normal text). 
 | State | Style | Non-color cue |
 |---|---|---|
 | Selected | `--color-row-selected` background | `aria-selected="true"`, left border in primary color |
-| Conflict | `--color-warning-highlight` background | ⚠ icon + badge "Conflit" |
-| Équipement `En panne` | thin left border in `--color-danger` | status badge with the text "En panne" |
-| Pending sync | — | small "En attente" badge |
+| Conflict | `--color-warning-highlight` background | ⚠ icon + badge "Conflict" |
+| Asset `BROKEN_DOWN` | thin left border in `--color-danger` | status badge with the text "Broken down" |
+| Pending sync | — | small "Pending" badge |
 
-Badges always show text. Badge class names come from the value with accents removed and spaces turned into hyphens: `badge-statut-en-service`, `badge-criticite-haute`, `badge-famille-cvc`.
+Badges always show text. Badge class names come from the field and the code in kebab-case: `badge-status-in-service`, `badge-criticality-high`, `badge-category-hvac`.
 
 ## Accessibility (brief, mandatory)
 
-- Semantic HTML: `<nav>`, `<main>`, `<table>` with `<caption>` and `<th scope="col">`, `<dl>` for fiche fields, `<button>` for actions (never a clickable `<div>`).
+- Semantic HTML: `<nav>`, `<main>`, `<table>` with `<caption>` and `<th scope="col">`, `<dl>` for detail fields, `<button>` for actions (never a clickable `<div>`).
 - Conflicts and states: color + icon + text, never color alone.
 - Touch targets ≥ 44 × 44 px.
-- Full keyboard use: rows are focusable, `Enter` opens the fiche, `Escape` closes it and returns focus to the row. Arrow keys move between rows. Focus is always visible (`--focus-ring`).
-- Icon-only buttons have an `aria-label` (e.g. `✕` → "Fermer la fiche").
+- Full keyboard use: rows are focusable, `Enter` opens the detail panel, `Escape` closes it and returns focus to the row. Arrow keys move between rows. Focus is always visible (`--focus-ring`).
+- Icon-only buttons have an `aria-label` (e.g. `✕` → "Close details").
 - Dynamic messages (saved, offline, update available, conflict) are announced through an `aria-live="polite"` region.
 - Respect `prefers-reduced-motion`.
 
 ## Pagination (brief)
 
-`◀◀ Première` · `◀ Précédente` · `Page X / Y` · `Suivante ▶` · `Dernière ▶▶`. Buttons are disabled at the bounds. 50 rows per page.
+`◀◀ First` · `◀ Previous` · `Page X / Y` · `Next ▶` · `Last ▶▶`. Buttons are disabled at the bounds. 50 rows per page.
