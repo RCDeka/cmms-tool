@@ -1,0 +1,56 @@
+/* Detail panel (brief → Detail panel rendering). */
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.detail-title {
+  flex: 1;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  padding-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* "Back to list" only on small screens, where the detail panel replaces the table.
+   Qualified by .detail-header to win over the generic .button display rule. */
+.detail-header .back-to-list {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .detail-header {
+    flex-wrap: wrap;
+  }
+
+  .detail-header .back-to-list {
+    display: inline-flex;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.detail-fields {
+  display: grid;
+  grid-template-columns: minmax(9rem, 35%) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+.detail-fields dt {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: var(--font-size-small);
+  padding-top: 2px;
+}
+
+.detail-fields dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail-message {
+  color: var(--color-text-muted);
+}

@@ -4,11 +4,61 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Fast-CMMS</title>
+    <link rel="icon" href="/assets/img/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/assets/css/base.css" />
+    <link rel="stylesheet" href="/assets/css/layout.css" />
+    <link rel="stylesheet" href="/assets/css/table.css" />
+    <link rel="stylesheet" href="/assets/css/detail.css" />
+    <link rel="stylesheet" href="/assets/css/components.css" />
+    <script type="module" src="/assets/js/app.js"></script>
   </head>
-  <body>
-    <main>
-      <h1>Fast-CMMS</h1>
-      <p>The application shell is built in Phase 2 (see docs/roadmap-mvp.md).</p>
-    </main>
+  <body class="is-logged-out">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <nav id="sidebar" aria-label="Main navigation" hidden>
+      <div class="brand">
+        <img src="/assets/img/logo.svg" alt="" width="32" height="32" />
+        <span class="brand-name" data-app-name>Fast-CMMS</span>
+      </div>
+      <ul class="nav-list">
+        <li><a href="/dashboard" data-link data-nav="dashboard">Dashboard</a></li>
+        <li><a href="/assets" data-link data-nav="assets">Assets</a></li>
+        <li><a href="/work-orders" data-link data-nav="work_orders">Work orders</a></li>
+        <li data-roles="SUPERVISOR ADMIN" hidden>
+          <a href="/conflicts" data-link data-nav="conflicts">Conflicts</a>
+        </li>
+      </ul>
+      <div class="user-box">
+        <p class="user-name" id="user-name"></p>
+        <p class="user-role" id="user-role"></p>
+        <button type="button" class="button button-secondary" id="logout-button">Log out</button>
+      </div>
+    </nav>
+
+    <div id="app-main" hidden>
+      <header class="topbar">
+        <button
+          type="button"
+          id="menu-button"
+          class="icon-button"
+          aria-label="Open menu"
+          aria-expanded="false"
+          aria-controls="sidebar"
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+        <h1 id="page-title" data-app-name>Fast-CMMS</h1>
+      </header>
+      <main id="main-content" tabindex="-1">
+        <section id="table-container" aria-labelledby="page-title"></section>
+        <section id="detail-container" class="hidden" aria-label="Details"></section>
+      </main>
+      <footer id="status-bar">
+        <span id="session-status"></span>
+      </footer>
+    </div>
+
+    <div id="login-container"></div>
+    <div id="live-region" class="visually-hidden" aria-live="polite"></div>
   </body>
 </html>

@@ -43,10 +43,13 @@ frontend/
   assets/css/                 base, layout, table, detail, components (brief) + dashboard, conflicts
   assets/js/
     app.js                    entry point: init DB, auth, router, network, queue flush
-    entities.js               entity config map (D18)
+    config.js                 APP_NAME, API base, timeout, page size
+    entities.js               entity config map (D18), table columns, detail fields
     enums.js, labels.js       enum codes, UI labels for fields and values
     api.js                    fetch wrapper: base URL, token, timeout, error mapping
-    auth.js                   login/logout, token storage, current user
+    session.js                token and user in localStorage, token expiry
+    auth.js                   login/logout, current user, roles
+    login.js                  login page
     db.js                     IndexedDB access (brief API + drafts/queue helpers)
     sync.js                   revalidation server → IndexedDB
     preload.js                prefetch of adjacent pages and eviction
@@ -55,6 +58,8 @@ frontend/
     save-modes.js             standard vs power-user behavior, drafts, unsaved-changes guard
     router.js                 pushState / popstate, URL parsing
     table.js, detail.js       list and detail panel rendering
+    format.js                 value formatting (dates, enums as badges, users)
+    layout.js                 shell: sidebar, menu, title, status bar, live region, split view
     conflicts.js              conflict badges, banner, supervisor console
     dashboard.js              KPI tiles, chart, lists
     dom.js                    escapeHtml, element helpers
@@ -82,7 +87,7 @@ export const ENTITIES = {
 | `/login` | login form |
 | `/dashboard` | home dashboard |
 | `/assets?page=N` | assets table |
-| `/assets/:id` | table + asset detail (split view) |
+| `/assets/:id?page=N` | table page N + asset detail (split view); `page` is optional and keeps the table where the user opened the record |
 | `/work-orders?page=N` | work orders table |
 | `/work-orders/new` | table + creation form in the detail panel; `?asset_id=N` pre-fills the asset ("New work order" button in an asset's detail panel) |
 | `/work-orders/:id` | table + work order detail (`:id` may be a temporary `tmp-<uuid>` id, see Work order creation) |

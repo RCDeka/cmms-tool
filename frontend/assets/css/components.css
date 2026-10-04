@@ -1,0 +1,192 @@
+/* Buttons, badges, banners, forms and view states. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.button-secondary,
+.button-pager {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.button-secondary:hover:not(:disabled),
+.button-pager:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--color-hover);
+}
+
+/* Badges always carry text; the tone is an extra cue, never the only one. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-tone-neutral {
+  background: var(--color-neutral-bg);
+  color: var(--color-text-muted);
+}
+
+.badge-tone-primary {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.badge-tone-info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.badge-tone-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-tone-warning {
+  background: var(--color-warning-highlight);
+  color: var(--color-warning);
+  border: 1px solid currentcolor;
+}
+
+.badge-tone-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.banner {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.banner-warning {
+  background: var(--color-warning-highlight);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Login */
+.login-card {
+  width: min(100%, 380px);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(28 35 48 / 8%);
+}
+
+.login-logo {
+  margin-bottom: var(--space-3);
+}
+
+.login-title {
+  font-size: 1.5rem;
+}
+
+.login-subtitle {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.login-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.form-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.form-field label {
+  font-weight: 600;
+}
+
+.form-field input {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.form-error {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.form-error:empty {
+  display: none;
+}
+
+/* View states */
+.placeholder,
+.loading-state,
+.empty-state,
+.error-state {
+  padding: var(--space-6) 0;
+}
+
+.placeholder {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 40rem;
+}
+
+.loading-state,
+.empty-state {
+  color: var(--color-text-muted);
+}
+
+.error-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  color: var(--color-danger);
+}

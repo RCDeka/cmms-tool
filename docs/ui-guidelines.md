@@ -9,8 +9,9 @@ The interface is in English (D16). Field and value labels come from `assets/js/l
 ## Layout (brief)
 
 - `<body>`: CSS Grid, `100dvh`. Sidebar of 250 px on the left, fixed and vertical (`<nav>`), then `#main-content` (`<main>`).
-- Status bar at the bottom of `#main-content`: online/offline state, pending sync count, current user.
+- Main area (`#app-main`): top bar with the page heading (and the menu button on small screens), then `#main-content`, then the status bar (`#status-bar`): online/offline state, pending sync count, current user.
 - `#main-content` default: `grid-template-columns: 1fr` (table only). With `.split-view`: `1fr 1fr` (table + detail panel). `#detail-container` is `.hidden` by default.
+- In split view the table keeps only its key columns (`splitColumns` in `entities.js`: code, name, status for assets; number, title, priority, status for work orders); the detail panel shows everything else.
 - Mobile (< 768 px): sidebar hidden behind a burger button. In split view, the table is hidden and the detail panel is full screen with a "Back to list" button.
 
 ## Design tokens (starting values)
@@ -45,7 +46,7 @@ Every text/background pair must reach WCAG AA contrast (4.5:1 for normal text). 
 
 | State | Style | Non-color cue |
 |---|---|---|
-| Selected | `--color-row-selected` background | `aria-selected="true"`, left border in primary color |
+| Selected | `--color-row-selected` background | `aria-current="true"` (`aria-selected` is only valid in grid widgets), left border in primary color |
 | Conflict | `--color-warning-highlight` background | ⚠ icon + badge "Conflict" |
 | Asset `BROKEN_DOWN` | thin left border in `--color-danger` | status badge with the text "Broken down" |
 | Pending sync | — | small "Pending" badge |
@@ -57,7 +58,7 @@ Badges always show text. Badge class names come from the field and the code in k
 - Semantic HTML: `<nav>`, `<main>`, `<table>` with `<caption>` and `<th scope="col">`, `<dl>` for detail fields, `<button>` for actions (never a clickable `<div>`).
 - Conflicts and states: color + icon + text, never color alone.
 - Touch targets ≥ 44 × 44 px.
-- Full keyboard use: rows are focusable, `Enter` opens the detail panel, `Escape` closes it and returns focus to the row. Arrow keys move between rows. Focus is always visible (`--focus-ring`).
+- Full keyboard use: one row at a time is in the tab order (roving `tabindex`); arrow keys, `Home` and `End` move between rows; `Enter` opens the detail panel and focuses its title; `Escape` closes it and returns focus to the row. After a page change, focus stays on the pagination button used. Focus is always visible on interactive elements; headings focused by code after navigation get no ring.
 - Icon-only buttons have an `aria-label` (e.g. `✕` → "Close details").
 - Dynamic messages (saved, offline, update available, conflict) are announced through an `aria-live="polite"` region.
 - Respect `prefers-reduced-motion`.

@@ -1,0 +1,110 @@
+// Client router: URL ↔ route, history.pushState / popstate (docs/architecture.md → Client routes).
+import { ENTITIES, entityForSegment } from './entities.js';
+
+const ID = /^[1-9]\d{0,15}$/;
+
+/**
+ * @typedef {object} Route
+ * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'notFound'} name
+ * @property {string} [entity] 'assets' | 'work_orders'
+ * @property {number} [id]
+ * @property {number} page table page (1 when absent or invalid)
+ * @property {string} [next] login: where to go after logging in
+ */
+
+/** Positive integer from a query value, or the fallback. */
+function positiveInt(value, fallback) {
+  return value && ID.test(value) ? Number(value) : fallback;
+}
+
+/**
+ * Parses a path and query string into a route. Pure function.
+ * @param {string} pathname
+ * @param {string} [search]
+ * @returns {Route}
+ */
+export function parseRoute(pathname, search = '') {
+  const query = new URLSearchParams(search);
+  const page = positiveInt(query.get('page'), 1);
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  const [first, second, ...rest] = path.split('/').filter(Boolean);
+
+  if (!first) return { name: 'root', page };
+  if (rest.length) return { name: 'notFound', page };
+  if (first === 'login' && !second)
+    return { name: 'login', page, next: safeNext(query.get('next')) };
+  if (first === 'dashboard' && !second) return { name: 'dashboard', page };
+  if (first === 'conflicts') {
+    if (!second) return { name: 'conflicts', page };
+    return ID.test(second)
+      ? { name: 'conflict', id: Number(second), page }
+      : { name: 'notFound', page };
+  }
+
+  const entity = entityForSegment(first);
+  if (!entity) return { name: 'notFound', page };
+  if (!second) return { name: 'list', entity: entity.key, page };
+  if (second === 'new' && entity.key === 'work_orders')
+    return { name: 'create', entity: entity.key, page };
+  if (ID.test(second)) return { name: 'detail', entity: entity.key, id: Number(second), page };
+  return { name: 'notFound', page };
+}
+
+/**
+ * Post-login destination: only same-site paths, never the login page itself
+ * (prevents redirects to other sites through ?next=).
+ */
+export function safeNext(value) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
+    return '/dashboard';
+  }
+  if (value === '/login' || value.startsWith('/login?')) return '/dashboard';
+  return value;
+}
+
+/** URL of an entity table page. Page 1 is implicit. */
+export function listUrl(entity, page = 1) {
+  return `${ENTITIES[entity].ui}${page > 1 ? `?page=${page}` : ''}`;
+}
+
+/** URL of a record in split view, keeping the table page. */
+export function detailUrl(entity, id, page = 1) {
+  return `${ENTITIES[entity].ui}/${id}${page > 1 ? `?page=${page}` : ''}`;
+}
+
+let listener = () => {};
+
+/** Current route from the browser location. */
+export function currentRoute() {
+  return parseRoute(location.pathname, location.search);
+}
+
+/**
+ * Goes to a URL without reloading: pushState (or replaceState) then render.
+ * @param {string} url
+ * @param {{ replace?: boolean }} [options]
+ */
+export function navigate(url, { replace = false } = {}) {
+  if (url === location.pathname + location.search && !replace) return;
+  history[replace ? 'replaceState' : 'pushState'](null, '', url);
+  listener(currentRoute());
+}
+
+/**
+ * Starts routing: renders on back/forward, and turns clicks on internal links
+ * (`<a data-link>` and the sidebar links) into navigate() calls.
+ * @param {(route: Route) => void} onRoute
+ */
+export function startRouter(onRoute) {
+  listener = onRoute;
+  window.addEventListener('popstate', () => listener(currentRoute()));
+  document.addEventListener('click', (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a[data-link]') : null;
+    if (!link) return;
+    // Let the browser handle new-tab and download gestures.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    navigate(link.getAttribute('href'));
+  });
+}
