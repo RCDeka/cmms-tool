@@ -199,7 +199,7 @@
 /* Several values per filter: a dropdown of checkboxes. */
 .multi-select {
   position: relative;
-  max-width: 14rem;
+  width: 11rem; /* fixed, so the bar does not shift when the summary text changes */
 }
 
 .multi-select summary {
@@ -251,7 +251,7 @@
 }
 
 .filter-search {
-  flex: 1 1 16rem;
+  flex: 0 1 12rem;
 }
 
 .filter-search input[type='search'] {
@@ -285,6 +285,7 @@
 @media (max-width: 767px) {
   .filter-field select,
   .multi-select {
+    width: auto;
     max-width: none;
   }
 
