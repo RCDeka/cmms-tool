@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
+import { listFilter } from '../lib/list-filter.js';
 import {
   flagFilter,
   idParams,
@@ -24,17 +25,13 @@ const listQuery = z.strictObject({
   ...pageQueryFields,
   ...sortQueryFields(WORK_ORDER_SORTS, 'created_on', 'desc'),
   q: textFilter,
-  // One status or several, comma-separated: status=OPEN,IN_PROGRESS,ON_HOLD
-  status: z
-    .string()
-    .optional()
-    .transform((v) => (v ? v.split(',') : undefined))
-    .pipe(z.array(z.enum(WORK_ORDER_STATUSES)).min(1).max(5).optional()),
-  priority: z.enum(WORK_ORDER_PRIORITIES).optional(),
-  type: z.enum(WORK_ORDER_TYPES).optional(),
-  category: z.enum(CATEGORIES).optional(),
-  site: z.string().max(200).optional(),
-  assignee_id: z.coerce.number().int().positive().optional(),
+  // One value or several: status=OPEN,IN_PROGRESS (site names may hold commas, so those use "|").
+  status: listFilter(z.enum(WORK_ORDER_STATUSES)),
+  priority: listFilter(z.enum(WORK_ORDER_PRIORITIES)),
+  type: listFilter(z.enum(WORK_ORDER_TYPES)),
+  category: listFilter(z.enum(CATEGORIES)),
+  site: listFilter(z.string().max(200), { separator: '|' }),
+  assignee_id: listFilter(z.coerce.number().int().positive()),
   mine: flagFilter,
   overdue: flagFilter,
 });

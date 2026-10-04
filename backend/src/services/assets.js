@@ -14,12 +14,13 @@ import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/
 import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges } from '../rules/audit.js';
 import { snapshotToApi } from '../rules/conflict-diff.js';
+import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writes.js';
 
 /**
  * WHERE clause of the asset filters: full-text `q` and exact site, category, status and
- * criticality. Fixed SQL fragments only; values are bound parameters.
+ * criticality (each one value or a list). Fixed SQL fragments only; values are bound parameters.
  * @returns {{ clause: string, params: object }}
  */
 export function assetFilters({ q, site, category, status, criticality }) {
@@ -34,12 +35,10 @@ export function assetFilters({ q, site, category, status, criticality }) {
       params.fts = fts;
     }
   }
-  for (const [key, value] of Object.entries({ site, category, status, criticality })) {
-    if (value !== undefined) {
-      where.push(`a.${key} = @${key}`);
-      params[key] = value;
-    }
-  }
+  addInFilter(where, params, 'a.site', 'site', site);
+  addInFilter(where, params, 'a.category', 'category', category);
+  addInFilter(where, params, 'a.status', 'status', status);
+  addInFilter(where, params, 'a.criticality', 'criticality', criticality);
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 

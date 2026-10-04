@@ -30,9 +30,26 @@ describe('parseFilters', () => {
     ).toEqual({
       status: NOT_FINISHED,
       mine: true,
-      assignee_id: 4,
+      assignee_id: '4',
     });
     expect(parseFilters('work_orders', q('status=OPEN,DONE&assignee_id=x'))).toEqual({});
+  });
+
+  it('reads several values per filter, in a stable order, and drops lists with a bad value', () => {
+    expect(
+      parseFilters(
+        'work_orders',
+        q(
+          'status=ON_HOLD,OPEN,OPEN&priority=URGENT,LOW&assignee_id=5,4&site=Lyon%20A%7CParis,%20B',
+        ),
+      ),
+    ).toEqual({
+      status: 'OPEN,ON_HOLD',
+      priority: 'LOW,URGENT',
+      assignee_id: '5,4',
+      site: 'Lyon A|Paris, B',
+    });
+    expect(parseFilters('assets', q('category=HVAC,NOPE&criticality=,'))).toEqual({});
   });
 
   it('writes filters in a stable order and knows when there are none', () => {
@@ -198,8 +215,10 @@ describe('renderFilterBar', () => {
     });
     document.body.replaceChildren(element);
     const status = element.querySelector('#filter-status');
-    status.value = 'BROKEN_DOWN';
-    status.dispatchEvent(new Event('change'));
+    status.querySelector('input[value="BROKEN_DOWN"]').checked = true;
+    status
+      .querySelector('input[value="BROKEN_DOWN"]')
+      .dispatchEvent(new Event('change', { bubbles: true }));
     expect(onChange).toHaveBeenLastCalledWith({ status: 'BROKEN_DOWN' }, { typing: false });
     const search = element.querySelector('#filter-q');
     search.value = 'chil';
@@ -224,8 +243,10 @@ describe('renderFilterBar', () => {
     document.body.replaceChildren(element);
     expect(element.querySelector('#filter-mine').checked).toBe(true);
     expect(element.querySelector('#filter-site').value).toBe('Lyon Part-Dieu Branch');
+    expect(element.querySelector('#filter-site summary').textContent).toBe('Lyon Part-Dieu Branch');
     for (const control of element.querySelectorAll('input, select')) {
-      expect(element.querySelector(`label[for="${control.id}"]`), control.id).not.toBeNull();
+      const label = control.closest('label') ?? element.querySelector(`label[for="${control.id}"]`);
+      expect(label, control.id || control.value).not.toBeNull();
     }
     const clear = element.querySelector('.filter-clear');
     expect(clear.hidden).toBe(false);
@@ -234,6 +255,35 @@ describe('renderFilterBar', () => {
     setFilters({});
     expect(clear.hidden).toBe(true);
     expect(element.getAttribute('role')).toBe('search');
+  });
+
+  it('lets several values be ticked and summarises them', () => {
+    const onChange = vi.fn();
+    const { element, setFilters } = renderFilterBar({
+      entity: 'work_orders',
+      filters: {},
+      refs,
+      canFilterAssignee: true,
+      onChange,
+    });
+    document.body.replaceChildren(element);
+    const priority = element.querySelector('#filter-priority');
+    const summary = priority.querySelector('summary');
+    expect(summary.textContent).toBe('Any');
+    for (const code of ['URGENT', 'LOW']) {
+      const box = priority.querySelector(`input[value="${code}"]`);
+      box.checked = true;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    expect(onChange).toHaveBeenLastCalledWith({ priority: 'LOW,URGENT' }, { typing: false });
+    expect(summary.textContent).toBe('2 selected');
+    setFilters({ priority: 'URGENT' });
+    expect(summary.textContent).toBe('Urgent');
+    expect(priority.querySelector('input[value="LOW"]').checked).toBe(false);
+    setFilters({ status: NOT_FINISHED });
+    expect(element.querySelector('#filter-status summary').textContent).toBe('Not finished');
+    setFilters({});
+    expect(summary.textContent).toBe('Any');
   });
 
   it('offers the assignee filter to supervisors and admins only', () => {
@@ -253,7 +303,9 @@ describe('renderFilterBar', () => {
       onChange() {},
     });
     expect(
-      [...sup.element.querySelectorAll('#filter-assignee_id option')].map((o) => o.textContent),
-    ).toEqual(['Any', 'Karim Benali']);
+      [...sup.element.querySelectorAll('#filter-assignee_id .multi-option')].map(
+        (o) => o.textContent,
+      ),
+    ).toEqual(['Karim Benali']);
   });
 });

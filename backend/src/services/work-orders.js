@@ -16,6 +16,7 @@ import {
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges } from '../rules/audit.js';
+import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
@@ -131,20 +132,12 @@ export function workOrderFilters(
       params.fts = fts;
     }
   }
-  if (status?.length) {
-    where.push(`w.status IN (${status.map((_, i) => `@status${i}`).join(', ')})`);
-    status.forEach((s, i) => (params[`status${i}`] = s));
-  }
-  for (const [key, value] of Object.entries({ priority, type, category, site })) {
-    if (value !== undefined) {
-      where.push(`w.${key} = @${key}`);
-      params[key] = value;
-    }
-  }
-  if (assigneeId !== undefined) {
-    where.push('w.assignee_id = @assigneeId');
-    params.assigneeId = assigneeId;
-  }
+  addInFilter(where, params, 'w.status', 'status', status);
+  addInFilter(where, params, 'w.priority', 'priority', priority);
+  addInFilter(where, params, 'w.type', 'type', type);
+  addInFilter(where, params, 'w.category', 'category', category);
+  addInFilter(where, params, 'w.site', 'site', site);
+  addInFilter(where, params, 'w.assignee_id', 'assignee', assigneeId);
   if (mine) {
     where.push('w.assignee_id = @me');
     params.me = userId;

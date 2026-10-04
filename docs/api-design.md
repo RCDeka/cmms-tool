@@ -97,10 +97,11 @@ Every authenticated request also answers 401 when the account was deactivated (B
 ### Search and filters (D38)
 - `q`: full-text search (SQLite FTS5). Each word is a required prefix (`chil lyon` finds records containing a word starting with "chil" **and** one starting with "lyon"), case and accents are ignored (`defense` finds "Défense"), search syntax typed by users is treated as plain words. A `q` without any letter or digit matches nothing. Max 100 characters.
 - Indexed text: assets → code, name, site, building, subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report. Database triggers keep the indexes in sync.
+- Every enum filter, `site` and `assignee_id` take one value or several (D45): `status=OPEN,ON_HOLD`, `assignee_id=4,5`. Values of one filter are alternatives (OR); different filters combine with `q` and each other (AND). `site` values are separated by `|` instead of `,` because site names can contain commas. An invalid value, or more than 50 values, → 400.
 - Filters combine with `q`, with each other (AND), with `sort` and with pagination: `total` and `pages` count the matching records.
 
 ### GET /api/assets
-- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`), and the filters `q?`, `site?`, `category?`, `status?`, `criticality?`.
+- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`), and the filters `q?`, `site?`, `category?`, `status?`, `criticality?` (several values allowed).
 - `200 Page<Asset>`
 
 ### GET /api/assets/search
@@ -146,7 +147,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### GET /api/work-orders
 - Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
-  - `q?` (full text), `status?` (one status or several comma-separated, e.g. `OPEN,IN_PROGRESS,ON_HOLD`), `priority?`, `type?`, `category?`, `site?`, `assignee_id?`;
+  - `q?` (full text), `status?`, `priority?`, `type?`, `category?`, `site?`, `assignee_id?` (each one value or several, e.g. `status=OPEN,IN_PROGRESS,ON_HOLD`);
   - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
 - `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.

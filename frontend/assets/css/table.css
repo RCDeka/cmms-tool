@@ -179,7 +179,8 @@
   min-width: 0;
 }
 
-.filter-field label {
+.filter-field label,
+.filter-label {
   font-size: var(--font-size-small);
   font-weight: 600;
   color: var(--color-text-muted);
@@ -193,6 +194,60 @@
   border-radius: var(--radius);
   background: var(--color-surface);
   max-width: 14rem;
+}
+
+/* Several values per filter: a dropdown of checkboxes. */
+.multi-select {
+  position: relative;
+  max-width: 14rem;
+}
+
+.multi-select summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.multi-options {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  max-height: 20rem;
+  overflow-y: auto;
+  margin-top: 2px;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
+.multi-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+  font-weight: normal;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.multi-option input {
+  width: 20px;
+  height: 20px;
 }
 
 .filter-search {
@@ -228,7 +283,8 @@
 }
 
 @media (max-width: 767px) {
-  .filter-field select {
+  .filter-field select,
+  .multi-select {
     max-width: none;
   }
 

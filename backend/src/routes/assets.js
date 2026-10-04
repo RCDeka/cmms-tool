@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
+import { listFilter } from '../lib/list-filter.js';
 import { idParams, pageQueryFields, sortQueryFields, textFilter } from '../lib/pagination.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -11,10 +12,11 @@ import { sendUpdateResult } from './write-response.js';
 /** Filters shared by the list and /search (docs/api-design.md → Search and filters). */
 const filterFields = {
   q: textFilter,
-  site: z.string().max(200).optional(),
-  category: z.enum(CATEGORIES).optional(),
-  status: z.enum(ASSET_STATUSES).optional(),
-  criticality: z.enum(CRITICALITIES).optional(),
+  // Several values: comma-separated (site names may hold commas, so those use "|").
+  site: listFilter(z.string().max(200), { separator: '|' }),
+  category: listFilter(z.enum(CATEGORIES)),
+  status: listFilter(z.enum(ASSET_STATUSES)),
+  criticality: listFilter(z.enum(CRITICALITIES)),
 };
 
 const listQuery = z.strictObject({

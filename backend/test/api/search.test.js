@@ -103,6 +103,32 @@ describe('GET /api/work-orders with search and filters', () => {
     await ctx.getAs('admin', '/api/work-orders?status=OPEN,DONE').expect(400);
   });
 
+  it('accepts several values for every list filter', async () => {
+    const wo = await get('/api/work-orders?priority=URGENT,HIGH&category=HVAC,PLUMBING&size=100');
+    expect(wo.total).toBe(
+      count(
+        "SELECT count(*) FROM work_orders WHERE priority IN ('URGENT','HIGH') AND category IN ('HVAC','PLUMBING')",
+      ),
+    );
+    expect(wo.total).toBeGreaterThan(0);
+    const people = await get('/api/work-orders?assignee_id=4,5&size=100');
+    expect(people.total).toBe(
+      count('SELECT count(*) FROM work_orders WHERE assignee_id IN (4, 5)'),
+    );
+    const sites = ctx.db.prepare('SELECT DISTINCT site FROM assets ORDER BY site LIMIT 2').all();
+    const joined = encodeURIComponent(sites.map((s) => s.site).join('|'));
+    const assets = await get(`/api/assets?site=${joined}&status=IN_SERVICE,BROKEN_DOWN&size=100`);
+    expect(assets.total).toBe(
+      count(
+        "SELECT count(*) FROM assets WHERE site IN (SELECT DISTINCT site FROM assets ORDER BY site LIMIT 2) AND status IN ('IN_SERVICE','BROKEN_DOWN')",
+      ),
+    );
+    expect(assets.total).toBeGreaterThan(0);
+    await ctx.getAs('admin', '/api/assets?category=HVAC,NOPE').expect(400);
+    await ctx.getAs('admin', '/api/work-orders?priority=URGENT,NOPE').expect(400);
+    await ctx.getAs('admin', '/api/work-orders?assignee_id=4,x').expect(400);
+  });
+
   it("filters the user's own work and overdue work like the dashboard", async () => {
     const mine = await get('/api/work-orders?mine=true&size=100', 'technician1');
     expect(mine.total).toBe(count('SELECT count(*) FROM work_orders WHERE assignee_id = 4'));

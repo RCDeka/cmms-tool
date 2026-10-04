@@ -7,7 +7,7 @@ import { valueLabel } from './labels.js';
 import { debounce } from './save-modes.js';
 
 const SEARCH_DELAY_MS = 350;
-/** "Not finished": the non-terminal statuses, sent as one comma-separated value. */
+/** "Not finished": the non-terminal statuses, sent as one comma-separated value (dashboard links). */
 export const NOT_FINISHED = 'OPEN,IN_PROGRESS,ON_HOLD';
 
 /** Filters of each entity: query name → kind (and enum for selects). */
@@ -32,21 +32,36 @@ export const FILTERS = {
   },
 };
 
+/** Valid distinct values of a list filter, or undefined if one is invalid or none is left. Pure. */
+function parseList(raw, separator, parseOne) {
+  const values = [];
+  for (const part of raw.split(separator)) {
+    const value = parseOne(part);
+    if (value === undefined) return undefined;
+    if (!values.includes(value)) values.push(value);
+  }
+  return values;
+}
+
 /** Valid value of one filter from a raw query value, or undefined. Pure. */
 function parseValue(def, raw) {
   if (raw === null || raw === '') return undefined;
   switch (def.kind) {
     case 'search':
-    case 'site':
-      return raw.trim().slice(0, def.kind === 'search' ? 100 : 200) || undefined;
+      return raw.trim().slice(0, 100) || undefined;
+    case 'site': {
+      const sites = parseList(raw, '|', (v) => v.trim().slice(0, 200) || undefined);
+      return sites?.join('|');
+    }
     case 'enum':
-      return ENUMS[def.enum].includes(raw) ? raw : undefined;
     case 'status': {
-      const values = raw.split(',');
-      return values.every((v) => ENUMS.work_order_status.includes(v)) ? raw : undefined;
+      // Several codes, written in the enum's own order so the same choice gives the same URL.
+      const all = ENUMS[def.kind === 'status' ? 'work_order_status' : def.enum];
+      const codes = parseList(raw, ',', (v) => (all.includes(v) ? v : undefined));
+      return codes && all.filter((code) => codes.includes(code)).join(',');
     }
     case 'user':
-      return /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : undefined;
+      return parseList(raw, ',', (v) => (/^[1-9]\d{0,9}$/.test(v) ? v : undefined))?.join(',');
     case 'flag':
       // `false` only matters to turn off a default filter (technicians' "Assigned to me").
       return raw === 'true' ? true : raw === 'false' ? false : undefined;
@@ -165,6 +180,19 @@ export function sortByColumn(entity, filters, column) {
   return { ...withoutSort(filters), ...sortParams(ENTITIES[entity], { sort: column, order }) };
 }
 
+let closeOnOutsideClick = false;
+
+/** Closes an open multi-select dropdown when the user clicks or tabs away from it. */
+function installDropdownClosing() {
+  if (closeOnOutsideClick) return;
+  closeOnOutsideClick = true;
+  document.addEventListener('click', (event) => {
+    for (const open of document.querySelectorAll('.multi-select[open]')) {
+      if (!open.contains(event.target)) open.open = false;
+    }
+  });
+}
+
 /**
  * Filter bar. Controls are named after the query parameters; changes call `onChange` with
  * the new filters (search text after a short pause).
@@ -185,6 +213,7 @@ export function renderFilterBar({
   defaults = {},
   onChange,
 }) {
+  installDropdownClosing();
   const controls = new Map();
   const read = () => {
     const query = new URLSearchParams();
@@ -197,15 +226,64 @@ export function renderFilterBar({
   const changed = () => onChange(read(), { typing: false });
   const typed = debounce(() => onChange(read(), { typing: true }), SEARCH_DELAY_MS);
 
-  const select = (name, label, options, anyLabel = 'Any') => {
+  // Several values can be ticked: a dropdown of checkboxes that behaves like a form control
+  // (`el.value` is the values joined by the separator, as in the URL).
+  const select = (name, label, options, separator = ',') => {
+    const labelId = `filter-${name}-label`;
+    const summary = h('summary', { 'aria-labelledby': labelId });
+    const boxes = options.map(([value, text]) => {
+      const box = h('input', { type: 'checkbox', value });
+      return { box, text, row: h('label', { class: 'multi-option' }, box, h('span', {}, text)) };
+    });
     const el = h(
-      'select',
-      { id: `filter-${name}`, name, onChange: changed },
-      h('option', { value: '' }, anyLabel),
-      options.map(([value, text]) => h('option', { value }, text)),
+      'details',
+      { id: `filter-${name}`, class: 'multi-select', onChange: changed },
+      summary,
+      h(
+        'div',
+        { class: 'multi-options' },
+        boxes.map(({ row }) => row),
+      ),
     );
+    const chosen = () => boxes.filter(({ box }) => box.checked);
+    const refresh = () => {
+      const picked = chosen();
+      const value = picked.map(({ box }) => box.value).join(separator);
+      summary.textContent =
+        name === 'status' && value === NOT_FINISHED
+          ? 'Not finished'
+          : picked.length === 0
+            ? 'Any'
+            : picked.length === 1
+              ? picked[0].text
+              : `${picked.length} selected`;
+    };
+    el.addEventListener('change', refresh);
+    el.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        el.open = false;
+        summary.focus();
+      }
+    });
+    Object.defineProperty(el, 'value', {
+      get: () =>
+        chosen()
+          .map(({ box }) => box.value)
+          .join(separator),
+      set: (value) => {
+        const wanted = value ? String(value).split(separator) : [];
+        for (const { box } of boxes) box.checked = wanted.includes(box.value);
+        refresh();
+      },
+    });
+    refresh();
     controls.set(name, el);
-    return h('div', { class: 'filter-field' }, h('label', { for: el.id }, label), el);
+    return h(
+      'div',
+      { class: 'filter-field' },
+      h('span', { id: labelId, class: 'filter-label' }, label),
+      el,
+    );
   };
 
   const parts = [];
@@ -237,10 +315,11 @@ export function renderFilterBar({
       );
     } else if (def.kind === 'status') {
       parts.push(
-        select(name, def.label, [
-          [NOT_FINISHED, 'Not finished'],
-          ...ENUMS.work_order_status.map((code) => [code, valueLabel('work_order_status', code)]),
-        ]),
+        select(
+          name,
+          def.label,
+          ENUMS.work_order_status.map((code) => [code, valueLabel('work_order_status', code)]),
+        ),
       );
     } else if (def.kind === 'site') {
       parts.push(
@@ -248,6 +327,7 @@ export function renderFilterBar({
           name,
           'Site',
           (refs.sites ?? []).map((s) => [s, s]),
+          '|',
         ),
       );
     } else if (def.kind === 'user' && canFilterAssignee) {
