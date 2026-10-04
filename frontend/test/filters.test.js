@@ -167,13 +167,13 @@ describe("technicians' default list: assigned to me (D44)", () => {
     });
     const clear = element.querySelector('.filter-clear');
     expect(element.querySelector('#filter-mine').checked).toBe(true);
-    expect(clear.hidden).toBe(true);
+    expect(clear.disabled).toBe(true);
     setFilters({ status: 'OPEN' });
-    expect(clear.hidden).toBe(false);
+    expect(clear.disabled).toBe(false);
     clear.click();
     expect(onChange).toHaveBeenLastCalledWith({ mine: true }, { typing: false });
     setFilters({});
-    expect(clear.hidden).toBe(false); // all work orders: not the default
+    expect(clear.disabled).toBe(false); // all work orders: not the default
   });
 });
 
@@ -249,11 +249,11 @@ describe('renderFilterBar', () => {
       expect(label, control.id || control.value).not.toBeNull();
     }
     const clear = element.querySelector('.filter-clear');
-    expect(clear.hidden).toBe(false);
+    expect(clear.disabled).toBe(false);
     clear.click();
     expect(onChange).toHaveBeenLastCalledWith({}, { typing: false });
     setFilters({});
-    expect(clear.hidden).toBe(true);
+    expect(clear.disabled).toBe(true);
     expect(element.getAttribute('role')).toBe('search');
   });
 

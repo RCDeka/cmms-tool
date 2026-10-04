@@ -382,7 +382,8 @@ export function renderFilterBar({
       if (el.type === 'checkbox') el.checked = value === true;
       else if (document.activeElement !== el) el.value = value === undefined ? '' : String(value);
     }
-    clear.hidden = sameFilters(entity, withoutSort(next), defaults);
+    // Always shown (disabled when there is nothing to clear) so the bar never shifts.
+    clear.disabled = sameFilters(entity, withoutSort(next), defaults);
   };
   setFilters(filters);
   return { element, setFilters };
