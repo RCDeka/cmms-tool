@@ -27,6 +27,7 @@ const SHELL_FILES = [
   '/assets/js/editor.js',
   '/assets/js/entities.js',
   '/assets/js/enums.js',
+  '/assets/js/filters.js',
   '/assets/js/form.js',
   '/assets/js/format.js',
   '/assets/js/history.js',

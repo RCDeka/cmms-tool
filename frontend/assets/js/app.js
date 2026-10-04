@@ -28,6 +28,7 @@ import {
   withPending,
 } from './editor.js';
 import { ENTITIES } from './entities.js';
+import { filtersQuery, hasFilters, renderFilterBar } from './filters.js';
 import {
   announce,
   confirmDialog,
@@ -64,6 +65,7 @@ import {
 import { canManageAssets } from './rules.js';
 import { clearSession } from './session.js';
 import {
+  fetchFilteredPage,
   fetchAndStorePage,
   fetchAndStoreRecord,
   readCachedPage,
@@ -420,29 +422,60 @@ async function showConflict(route, isCurrent, error = '') {
   tableContainer.querySelector('.arbitration-title')?.focus();
 }
 
+/** Filter bar + table area of the list views; the bar survives re-renders (focus kept). */
+let listLayout = null; // { entity, bar, area }
+
+/** Ensures the filter bar and table area are on screen; returns the table area. */
+async function ensureListLayout(route) {
+  const filters = route.filters ?? {};
+  if (listLayout?.entity === route.entity && tableContainer.contains(listLayout.area)) {
+    listLayout.bar.setFilters(filters);
+    return listLayout.area;
+  }
+  const refs = await getRefs();
+  const area = h('div', { class: 'table-area' });
+  const bar = renderFilterBar({
+    entity: route.entity,
+    filters,
+    refs,
+    canFilterAssignee: hasRole('SUPERVISOR', 'ADMIN'),
+    // Typing replaces the history entry (no entry per keystroke); other changes add one.
+    onChange: (next, { typing }) => navigate(listUrl(route.entity, 1, next), { replace: typing }),
+  });
+  setSplitView(Boolean(openDetail));
+  replaceChildren(tableContainer, bar.element, area);
+  listLayout = { entity: route.entity, bar, area };
+  return area;
+}
+
 /** Renders a table page (with pending changes and pending creations) and remembers it. */
 function displayPage(route, data, pinned = shownPage?.pinned ?? []) {
+  if (!listLayout || !tableContainer.contains(listLayout.area)) return;
+  const filters = route.filters ?? {};
   const items = data.items.map((record) => withPending(route.entity, record));
   shownPage = {
     entity: route.entity,
     page: route.page,
+    filterKey: filtersQuery(route.entity, filters),
+    filters,
     pages: data.pages,
     data,
     pinned,
     byId: new Map([...pinned, ...data.items].map((record) => [record.id, record])),
   };
-  renderTable(tableContainer, {
+  renderTable(listLayout.area, {
     entity: route.entity,
     data: { ...data, items },
     pinned,
+    filtered: hasFilters(filters),
     selectedId: route.id ?? null,
     onOpen: (id) => {
       performance.mark('detail-open');
-      navigate(detailUrl(route.entity, id, route.page));
+      navigate(detailUrl(route.entity, id, route.page, filters));
     },
     onPage: (page, control) => {
       pendingFocus = { type: 'pager', control };
-      navigate(listUrl(route.entity, page));
+      navigate(listUrl(route.entity, page, filters));
     },
     actions: tableActions(route),
   });
@@ -490,50 +523,60 @@ async function showEntity(route, isCurrent) {
   setActiveNav(route.entity);
   setTitle(cfg.label);
 
+  const filters = route.filters ?? {};
+  const filtered = hasFilters(filters);
+  const filterKey = filtersQuery(route.entity, filters);
+  const area = await ensureListLayout(route);
+  if (!isCurrent()) return;
   const sameTable =
     shownPage?.entity === route.entity &&
     shownPage.page === route.page &&
-    tableContainer.querySelector('.data-table, .empty-state');
+    shownPage.filterKey === filterKey &&
+    area.querySelector('.data-table, .empty-state');
 
   let fromCache = false;
   if (sameTable) {
     selectRow(tableContainer, route.id ?? null);
   } else {
-    const pinned = route.entity === 'work_orders' ? await loadPendingCreations() : [];
-    const cached = await readCachedPage(route.entity, route.page);
+    // Pending creations appear on the plain list only (they match no search yet).
+    const pinned = route.entity === 'work_orders' && !filtered ? await loadPendingCreations() : [];
+    const cached = filtered ? null : await readCachedPage(route.entity, route.page);
     if (!isCurrent()) return;
     if (cached) {
       fromCache = true;
       displayPage(route, cached, pinned);
     } else {
-      if (shownPage?.entity !== route.entity) {
-        renderPage(
+      if (!area.querySelector('.data-table')) {
+        replaceChildren(
+          area,
           h('p', { class: 'loading-state', role: 'status' }, `Loading ${cfg.label.toLowerCase()}…`),
         );
       }
-      tableContainer.setAttribute('aria-busy', 'true');
-      let result;
+      area.setAttribute('aria-busy', 'true');
+      let data;
       try {
-        result = await fetchAndStorePage(route.entity, route.page);
+        data = filtered
+          ? await fetchFilteredPage(route.entity, route.page, filters)
+          : (await fetchAndStorePage(route.entity, route.page)).data;
       } catch (err) {
-        if (isCurrent()) showTableError(err, cfg, route.page);
+        if (isCurrent()) showTableError(area, err, cfg, route, filtered);
         return;
       } finally {
-        if (isCurrent()) tableContainer.removeAttribute('aria-busy');
+        if (isCurrent()) area.removeAttribute('aria-busy');
       }
       if (!isCurrent()) return;
       // A page past the end (e.g. an old link) goes to the last page.
-      if (route.page > result.data.pages) {
+      if (route.page > data.pages) {
         const url = route.id
-          ? detailUrl(route.entity, route.id, result.data.pages)
-          : listUrl(route.entity, result.data.pages);
+          ? detailUrl(route.entity, route.id, data.pages, filters)
+          : listUrl(route.entity, data.pages, filters);
         return navigate(url, { replace: true, force: true });
       }
-      displayPage(route, result.data, pinned);
+      displayPage(route, data, pinned);
     }
   }
 
-  const onClose = () => navigate(listUrl(route.entity, route.page));
+  const onClose = () => navigate(listUrl(route.entity, route.page, filters));
   if (route.name === 'create' && route.entity === 'assets') {
     setSplitView(true);
     openDetail = { entity: route.entity, id: 'new' };
@@ -566,16 +609,20 @@ async function showEntity(route, isCurrent) {
     clearEditor();
     setSplitView(false);
     replaceChildren(detailContainer);
+    // While the user types in the filter bar, focus stays there.
+    const inFilterBar = Boolean(document.activeElement?.closest?.('.filter-bar'));
     restoreFocus(
-      () => (closedId ? focusRow(tableContainer, closedId) : false) || (!sameTable && focusTitle()),
+      () =>
+        (closedId ? focusRow(tableContainer, closedId) : false) ||
+        (!sameTable && !inFilterBar && focusTitle()),
     );
   }
   if (!isCurrent()) return;
 
   // Background work, after the visible content: revalidate a page shown from the cache,
-  // then prefetch the neighbours and evict the rest.
+  // then prefetch the neighbours and evict the rest (plain lists only).
   if (fromCache) await revalidatePage(route, isCurrent);
-  if (isCurrent() && shownPage) {
+  if (isCurrent() && shownPage && !filtered) {
     prefetchAround(route.entity, route.page, shownPage.pages, {
       openId: typeof route.id === 'number' ? route.id : null,
     }).catch(() => {});
@@ -693,20 +740,39 @@ function restoreFocus(defaultFocus) {
   else defaultFocus();
 }
 
-function showTableError(err, cfg, page) {
-  const message =
-    err.status === 0
-      ? `Page ${page} of ${cfg.label.toLowerCase()} has not been loaded before, so it is not available offline.`
-      : err.message;
-  renderPage(
+/** Error in the table area; the filter bar stays so the user can change or clear it. */
+function showTableError(area, err, cfg, route, filtered) {
+  let message = err.message;
+  if (err.status === 0) {
+    message = filtered
+      ? 'Search and filters need a connection to the server. Without filters, the pages saved on this device are available.'
+      : `Page ${route.page} of ${cfg.label.toLowerCase()} has not been loaded before, so it is not available offline.`;
+  }
+  replaceChildren(
+    area,
     h(
       'div',
       { class: 'error-state', role: 'alert' },
       h('p', {}, message),
       h(
-        'button',
-        { type: 'button', class: 'button button-secondary', onClick: () => render(currentRoute()) },
-        'Retry',
+        'div',
+        { class: 'error-actions' },
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'button button-secondary',
+            onClick: () => render(currentRoute()),
+          },
+          'Retry',
+        ),
+        filtered
+          ? h(
+              'a',
+              { href: listUrl(route.entity), 'data-link': true, class: 'button button-secondary' },
+              'Clear filters',
+            )
+          : null,
       ),
     ),
   );
@@ -715,7 +781,8 @@ function showTableError(err, cfg, page) {
 
 /** Revalidates the view on screen (window focus, network back). */
 function revalidateCurrent({ force = false } = {}) {
-  if (!isLoggedIn() || !isOnline() || !shownPage) return;
+  // Filtered lists are not cached: they are fetched fresh each time.
+  if (!isLoggedIn() || !isOnline() || !shownPage || shownPage.filterKey) return;
   if (!force && Date.now() - lastRevalidation < REVALIDATE_THROTTLE_MS) return;
   const route = currentRoute();
   if (route.entity !== shownPage.entity || route.page !== shownPage.page) return;
@@ -831,7 +898,7 @@ function init() {
   document.getElementById('main-content').addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !openDetail || event.defaultPrevented) return;
     event.preventDefault();
-    navigate(listUrl(openDetail.entity, shownPage?.page ?? 1));
+    navigate(listUrl(openDetail.entity, shownPage?.page ?? 1, shownPage?.filters ?? {}));
   });
 
   // Unsaved work survives closing or reloading the tab.

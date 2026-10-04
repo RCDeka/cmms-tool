@@ -14,16 +14,21 @@ const AXIS_BAND = 36;
 
 /** KPI tiles in display order. `attention`: a count above zero needs someone's attention. */
 export const KPI_TILES = [
-  { key: 'open_work_orders', label: 'Open work orders', href: '/work-orders' },
-  { key: 'in_progress_work_orders', label: 'In progress', href: '/work-orders' },
-  { key: 'closed_this_month', label: 'Closed this month', href: '/work-orders' },
+  { key: 'open_work_orders', label: 'Open work orders', href: '/work-orders?status=OPEN' },
+  { key: 'in_progress_work_orders', label: 'In progress', href: '/work-orders?status=IN_PROGRESS' },
+  { key: 'closed_this_month', label: 'Closed this month', href: '/work-orders?status=CLOSED' },
   {
     key: 'overdue_work_orders',
     label: 'Overdue work orders',
-    href: '/work-orders',
+    href: '/work-orders?overdue=true',
     attention: true,
   },
-  { key: 'assets_broken_down', label: 'Assets broken down', href: '/assets', attention: true },
+  {
+    key: 'assets_broken_down',
+    label: 'Assets broken down',
+    href: '/assets?status=BROKEN_DOWN',
+    attention: true,
+  },
   {
     key: 'pending_conflicts',
     label: 'Conflicts to arbitrate',

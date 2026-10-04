@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
   idParams,
-  likePattern,
   orderByClause,
   pageCount,
   pageOffset,
@@ -73,12 +72,5 @@ describe('sorting', () => {
 
   it('only builds rank expressions from enum codes', () => {
     expect(() => rankExpression('x', ["LOW' OR 1=1 --"])).toThrow();
-  });
-});
-
-describe('likePattern', () => {
-  it('escapes LIKE wildcards and the escape character', () => {
-    expect(likePattern('AST-001')).toBe('%AST-001%');
-    expect(likePattern('100%_\\')).toBe('%100\\%\\_\\\\%');
   });
 });

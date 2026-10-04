@@ -8,19 +8,40 @@ import {
   normalizeAssetCode,
 } from '../rules/asset-creation.js';
 import { ASSET_STATUSES, CRITICALITIES } from '../rules/enums.js';
+import { toFtsQuery } from '../rules/search.js';
 import { ASSET_FIELDS } from '../rules/fields.js';
-import {
-  likePattern,
-  orderByClause,
-  pageOffset,
-  pageResponse,
-  rankExpression,
-} from '../lib/pagination.js';
+import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/pagination.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges } from '../rules/audit.js';
 import { snapshotToApi } from '../rules/conflict-diff.js';
 import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writes.js';
+
+/**
+ * WHERE clause of the asset filters: full-text `q` and exact site, category, status and
+ * criticality. Fixed SQL fragments only; values are bound parameters.
+ * @returns {{ clause: string, params: object }}
+ */
+export function assetFilters({ q, site, category, status, criticality }) {
+  const where = [];
+  const params = {};
+  if (q !== undefined) {
+    const fts = toFtsQuery(q);
+    if (fts === null)
+      where.push('0'); // no letter or digit: nothing can match
+    else {
+      where.push('a.id IN (SELECT rowid FROM assets_fts WHERE assets_fts MATCH @fts)');
+      params.fts = fts;
+    }
+  }
+  for (const [key, value] of Object.entries({ site, category, status, criticality })) {
+    if (value !== undefined) {
+      where.push(`a.${key} = @${key}`);
+      params[key] = value;
+    }
+  }
+  return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
 
 /** POST /api/assets body: required fields as in the table, the rest optional (BR-A4). */
 const createSchema = z.strictObject({
@@ -98,7 +119,6 @@ export function toAsset(row) {
 
 /** @param {import('better-sqlite3').Database} db */
 export function createAssetService(db) {
-  const count = db.prepare('SELECT count(*) FROM assets').pluck();
   const byId = db.prepare(`${SELECT} WHERE a.id = ?`);
   const getById = (id) => {
     const row = byId.get(id);
@@ -115,11 +135,15 @@ export function createAssetService(db) {
 
   return {
     /** Paginated list, complete records (D7). */
-    list({ page, size, sort, order }) {
+    list({ page, size, sort, order, ...filters }) {
+      const { clause, params } = assetFilters(filters);
+      const total = db.prepare(`SELECT count(*) FROM assets a ${clause}`).pluck().get(params);
       const rows = db
-        .prepare(`${SELECT} ${orderByClause(ASSET_SORTS, sort, order, 'a.id')} LIMIT ? OFFSET ?`)
-        .all(size, pageOffset(page, size));
-      return pageResponse({ total: count.get(), page, size, items: rows.map(toAsset) });
+        .prepare(
+          `${SELECT} ${clause} ${orderByClause(ASSET_SORTS, sort, order, 'a.id')} LIMIT @limit OFFSET @offset`,
+        )
+        .all({ ...params, limit: size, offset: pageOffset(page, size) });
+      return pageResponse({ total, page, size, items: rows.map(toAsset) });
     },
 
     /** Asset or null. */
@@ -225,28 +249,9 @@ export function createAssetService(db) {
       return getById(id);
     },
 
-    /**
-     * Text search on code, name, brand, model and serial number (case-insensitive for
-     * unaccented letters), combined with optional exact filters. Ordered by code.
-     */
-    search({ q, site, category, status, criticality, limit }) {
-      // Fixed SQL fragments only; values are bound parameters.
-      const where = [];
-      const params = {};
-      if (q) {
-        where.push(
-          `(a.code LIKE @q ESCAPE '\\' OR a.name LIKE @q ESCAPE '\\' OR a.brand LIKE @q ESCAPE '\\'
-            OR a.model LIKE @q ESCAPE '\\' OR a.serial_number LIKE @q ESCAPE '\\')`,
-        );
-        params.q = likePattern(q);
-      }
-      for (const [key, value] of Object.entries({ site, category, status, criticality })) {
-        if (value !== undefined) {
-          where.push(`a.${key} = @${key}`);
-          params[key] = value;
-        }
-      }
-      const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    /** Search with the list filters (full-text `q`), ordered by code, at most `limit`. */
+    search({ limit, ...filters }) {
+      const { clause, params } = assetFilters(filters);
       const total = db.prepare(`SELECT count(*) FROM assets a ${clause}`).pluck().get(params);
       const rows = db
         .prepare(`${SELECT} ${clause} ORDER BY a.code LIMIT @limit`)

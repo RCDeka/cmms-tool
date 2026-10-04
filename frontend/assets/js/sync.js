@@ -5,6 +5,7 @@ import { PAGE_SIZE } from './config.js';
 import * as DB from './db.js';
 import { pageKey, storesOf } from './db.js';
 import { ENTITIES } from './entities.js';
+import { filtersQuery } from './filters.js';
 
 /** Sort used by the tables; a cached page is only valid for the sort it was fetched with. */
 const DEFAULT_SORT = 'default';
@@ -99,6 +100,24 @@ export async function fetchAndStorePage(entity, page) {
     changedIds,
     structureChanged,
   };
+}
+
+/**
+ * A filtered page, always from the server (only unfiltered pages are cached, docs/
+ * architecture.md → Search and filters). Its records are stored so they open instantly.
+ */
+export async function fetchFilteredPage(entity, page, filters) {
+  const cfg = ENTITIES[entity];
+  const query = new URLSearchParams(filtersQuery(entity, filters));
+  query.set('page', String(page));
+  query.set('size', String(PAGE_SIZE));
+  const data = await apiFetch(`${cfg.api}?${query}`);
+  const now = new Date().toISOString();
+  await DB.saveRecords(
+    storesOf(entity).records,
+    data.items.map((r) => ({ ...r, _fetched_at: now })),
+  );
+  return data;
 }
 
 /** Cached record or undefined. */

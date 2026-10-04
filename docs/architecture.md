@@ -127,6 +127,13 @@ When page N of an entity is shown (P = number of pages):
 
 Prefetching runs after the visible content is rendered, one request at a time, and is skipped while offline.
 
+## Search and filters (D38)
+
+- The filter bar sits above the table; its values live in the URL query (`/assets?status=BROKEN_DOWN`, `/work-orders?q=leak&mine=true`), so they survive reloads and the back button and stay applied when a record is opened and closed. Typing in the search field updates the list 350 ms after the last key and replaces the history entry; other filter changes add one.
+- Only **unfiltered** pages are cached in IndexedDB (prefetch, revalidation, offline). A filtered list is always fetched from the server; its records are stored so they open instantly. Offline, a filtered list says that search needs a connection and offers to clear the filters (the cached pages remain available).
+- Pending creations are listed on the unfiltered work order list only.
+- Dashboard tiles open the matching filtered list (e.g. "Overdue work orders" → `/work-orders?overdue=true`).
+
 ## Revalidation (stale-while-revalidate)
 
 - Triggers: showing a cached page or record; the window regaining focus (at most every 10 s); the network coming back. A page fetched from the server in the same navigation is not revalidated again.

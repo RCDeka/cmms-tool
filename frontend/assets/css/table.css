@@ -117,3 +117,80 @@
 .badge-pending {
   margin-right: var(--space-2);
 }
+
+/* Search and filters: one row above the table, wrapping on small screens. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.filter-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter-field label {
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.filter-field input[type='search'],
+.filter-field select {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  max-width: 14rem;
+}
+
+.filter-search {
+  flex: 1 1 16rem;
+}
+
+.filter-search input[type='search'] {
+  width: 100%;
+  max-width: none;
+}
+
+.filter-flag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+}
+
+.filter-flag input {
+  width: 22px;
+  height: 22px;
+}
+
+.filter-flag label {
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 767px) {
+  .filter-field select {
+    max-width: none;
+  }
+
+  .filter-field {
+    flex: 1 1 45%;
+  }
+}

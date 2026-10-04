@@ -105,7 +105,7 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 
 - **Phase 8: create and delete assets** — done (D34–D36). Acceptance: a supervisor creates an asset (automatic or typed code, new site), a duplicate code is refused on its field, an asset created by mistake is deleted, an asset with work orders cannot be deleted and the reason is shown, technicians see neither action, and both actions are disabled offline.
 - **Phase 9: work order status history and audit log** — done (D37, BR-L1 to BR-L4). Acceptance: the history of a closed work order tells its status story; a change made in the app appears at the top with its author; supervisors and admins browse the global log with a type filter and pages; technicians have no access to the global log.
-- **Phase 10: filters and search on lists; full-text search (SQLite FTS5).**
+- **Phase 10: filters and search on lists; full-text search (SQLite FTS5)** — done (D38). Acceptance: accent-insensitive prefix search, filters combined and kept in the URL (open/close a record, back/forward), "Clear filters", dashboard tiles open the matching list, technicians filter their own work, and a filtered list offline explains that search needs a connection.
 - **Phase 11: user administration screen.**
 
 ## Post-MVP backlog (not scheduled)

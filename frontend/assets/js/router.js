@@ -1,5 +1,6 @@
 // Client router: URL ↔ route, history.pushState / popstate (docs/architecture.md → Client routes).
 import { ENTITIES, entityForSegment } from './entities.js';
+import { filtersQuery, hasFilters, parseFilters } from './filters.js';
 
 const ID = /^[1-9]\d{0,15}$/;
 /** Work orders created offline have a temporary id until the server answers (D26). */
@@ -11,6 +12,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
  * @property {number} [assetId] creation form: asset to pre-fill
+ * @property {object} [filters] search and filters of the table (only when some are set)
  * @property {number} page table page (1 when absent or invalid)
  * @property {string} [next] login: where to go after logging in
  */
@@ -54,14 +56,17 @@ export function parseRoute(pathname, search = '') {
 
   const entity = entityForSegment(first);
   if (!entity) return { name: 'notFound', page };
-  if (!second) return { name: 'list', entity: entity.key, page };
+  const filters = parseFilters(entity.key, query);
+  const extra = hasFilters(filters) ? { filters } : {};
+  if (!second) return { name: 'list', entity: entity.key, page, ...extra };
   if (second === 'new') {
     const assetId = entity.key === 'work_orders' ? positiveInt(query.get('asset_id'), null) : null;
-    return { name: 'create', entity: entity.key, page, ...(assetId && { assetId }) };
+    return { name: 'create', entity: entity.key, page, ...(assetId && { assetId }), ...extra };
   }
-  if (ID.test(second)) return { name: 'detail', entity: entity.key, id: Number(second), page };
+  if (ID.test(second))
+    return { name: 'detail', entity: entity.key, id: Number(second), page, ...extra };
   if (TMP_ID.test(second) && entity.key === 'work_orders') {
-    return { name: 'detail', entity: entity.key, id: second, page };
+    return { name: 'detail', entity: entity.key, id: second, page, ...extra };
   }
   return { name: 'notFound', page };
 }
@@ -78,14 +83,22 @@ export function safeNext(value) {
   return value;
 }
 
-/** URL of an entity table page. Page 1 is implicit. */
-export function listUrl(entity, page = 1) {
-  return `${ENTITIES[entity].ui}${page > 1 ? `?page=${page}` : ''}`;
+/** Path + query of the filters, then the page (page 1 is implicit). */
+function withQuery(path, entity, page, filters) {
+  const query = new URLSearchParams(filtersQuery(entity, filters));
+  if (page > 1) query.set('page', String(page));
+  const text = query.toString();
+  return text ? `${path}?${text}` : path;
 }
 
-/** URL of a record in split view, keeping the table page. */
-export function detailUrl(entity, id, page = 1) {
-  return `${ENTITIES[entity].ui}/${id}${page > 1 ? `?page=${page}` : ''}`;
+/** URL of an entity table page, with its filters. */
+export function listUrl(entity, page = 1, filters = {}) {
+  return withQuery(ENTITIES[entity].ui, entity, page, filters);
+}
+
+/** URL of a record in split view, keeping the table page and filters. */
+export function detailUrl(entity, id, page = 1, filters = {}) {
+  return withQuery(`${ENTITIES[entity].ui}/${id}`, entity, page, filters);
 }
 
 let listener = () => {};

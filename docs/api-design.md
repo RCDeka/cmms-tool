@@ -82,12 +82,17 @@ Page<T>     { total, page, pages, items: T[] }
 
 ## Assets
 
+### Search and filters (D38)
+- `q`: full-text search (SQLite FTS5). Each word is a required prefix (`chil lyon` finds records containing a word starting with "chil" **and** one starting with "lyon"), case and accents are ignored (`defense` finds "Défense"), search syntax typed by users is treated as plain words. A `q` without any letter or digit matches nothing. Max 100 characters.
+- Indexed text: assets → code, name, site, building, subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report. Database triggers keep the indexes in sync.
+- Filters combine with `q`, with each other (AND), with `sort` and with pagination: `total` and `pages` count the matching records.
+
 ### GET /api/assets
-- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`).
+- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`), and the filters `q?`, `site?`, `category?`, `status?`, `criticality?`.
 - `200 Page<Asset>`
 
 ### GET /api/assets/search
-- Query: `q` (substring of `code`, `name`, `brand`, `model` or `serial_number`; case-insensitive for unaccented letters; `%` and `_` match literally), `site?`, `category?`, `status?`, `criticality?`, `limit` (default 50, max 200).
+- Query: the asset filters (`q?`, `site?`, `category?`, `status?`, `criticality?`), `limit` (default 50, max 200).
 - `200 { "items": Asset[], "total": number }` (`total` = number of matches before `limit`), ordered by `code`.
 - Declared before `/:id` in the router.
 
@@ -128,8 +133,10 @@ Page<T>     { total, page, pages, items: T[] }
 ## Work orders
 
 ### GET /api/work-orders
-- Query: `page`, `size`, `sort` (`number`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`).
-- `200 Page<WorkOrder>`
+- Query: `page`, `size`, `sort` (`number`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
+  - `q?` (full text), `status?` (one status or several comma-separated, e.g. `OPEN,IN_PROGRESS,ON_HOLD`), `priority?`, `type?`, `category?`, `site?`, `assignee_id?`;
+  - `mine?=true`: assigned to the current user; `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
+- `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
 
 ### GET /api/work-orders/stats
 - Query: `period` (days, default 30, max 365). Counts work orders whose `created_on` falls in the last `period` days, today included.

@@ -2,7 +2,19 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
-import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
+import {
+  flagFilter,
+  idParams,
+  pageQueryFields,
+  sortQueryFields,
+  textFilter,
+} from '../lib/pagination.js';
+import {
+  CATEGORIES,
+  WORK_ORDER_PRIORITIES,
+  WORK_ORDER_STATUSES,
+  WORK_ORDER_TYPES,
+} from '../rules/enums.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { WORK_ORDER_SORTS } from '../services/work-orders.js';
@@ -11,6 +23,20 @@ import { sendUpdateResult } from './write-response.js';
 const listQuery = z.strictObject({
   ...pageQueryFields,
   ...sortQueryFields(WORK_ORDER_SORTS, 'created_on', 'desc'),
+  q: textFilter,
+  // One status or several, comma-separated: status=OPEN,IN_PROGRESS,ON_HOLD
+  status: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',') : undefined))
+    .pipe(z.array(z.enum(WORK_ORDER_STATUSES)).min(1).max(5).optional()),
+  priority: z.enum(WORK_ORDER_PRIORITIES).optional(),
+  type: z.enum(WORK_ORDER_TYPES).optional(),
+  category: z.enum(CATEGORIES).optional(),
+  site: z.string().max(200).optional(),
+  assignee_id: z.coerce.number().int().positive().optional(),
+  mine: flagFilter,
+  overdue: flagFilter,
 });
 
 const statsQuery = z.strictObject({
@@ -27,7 +53,12 @@ export function workOrdersRouter({ workOrders, timeZone, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
-    res.json(workOrders.list(req.valid.query));
+    res.json(
+      workOrders.list(req.valid.query, {
+        userId: req.user.id,
+        today: dateInZone(timeZone, now()),
+      }),
+    );
   });
 
   // All roles may create (D27); BR-W12 restricts technicians in the service.

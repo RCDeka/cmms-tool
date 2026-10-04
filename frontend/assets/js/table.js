@@ -17,10 +17,11 @@ export const parseRowId = (value) => (/^\d+$/.test(value) ? Number(value) : valu
  * @param {(page: number, control: string) => void} options.onPage
  * @param {object[]} [options.pinned] records shown first (work orders waiting to be created)
  * @param {HTMLElement[]} [options.actions] buttons next to the record count
+ * @param {boolean} [options.filtered] search or filters are applied
  */
 export function renderTable(
   container,
-  { entity, data, selectedId, onOpen, onPage, pinned = [], actions = [] },
+  { entity, data, selectedId, onOpen, onPage, pinned = [], actions = [], filtered = false },
 ) {
   const cfg = ENTITIES[entity];
   const titleId = `${cfg.prefix}-table-title`;
@@ -68,7 +69,11 @@ export function renderTable(
       { class: 'table-header' },
       // The h1 already shows the section name; the h2 stays for screen readers and focus.
       h('h2', { id: titleId, class: 'table-title visually-hidden', tabindex: '-1' }, cfg.label),
-      h('p', { class: 'table-count' }, `${data.total} ${data.total === 1 ? 'record' : 'records'}`),
+      h(
+        'p',
+        { class: 'table-count', role: 'status' },
+        `${data.total} ${filtered ? 'matching ' : ''}${data.total === 1 ? 'record' : 'records'}`,
+      ),
       actions,
     ),
     h(
@@ -78,7 +83,13 @@ export function renderTable(
     ),
     rows.length
       ? h('div', { class: 'table-scroll' }, table)
-      : h('p', { class: 'empty-state' }, `No ${cfg.label.toLowerCase()} on this page.`),
+      : h(
+          'p',
+          { class: 'empty-state' },
+          filtered
+            ? `No ${cfg.singular.toLowerCase()} matches this search.`
+            : `No ${cfg.label.toLowerCase()} on this page.`,
+        ),
     renderPagination(data, onPage),
   );
 }

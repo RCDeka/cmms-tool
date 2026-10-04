@@ -5,6 +5,7 @@ import { fieldErrors } from '../middleware/validate.js';
 import { WORK_ORDER_FIELDS, WRITE_META } from '../rules/fields.js';
 import { forbiddenCreationFields } from '../rules/permissions.js';
 import { creationDate, nextWorkOrderNumber } from '../rules/work-order-creation.js';
+import { toFtsQuery } from '../rules/search.js';
 import { applyWorkOrderRules } from '../rules/work-order-status.js';
 import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/pagination.js';
 import {
@@ -106,6 +107,51 @@ export function toWorkOrder(row) {
   return wo;
 }
 
+/**
+ * WHERE clause of the work order filters (docs/api-design.md → GET /api/work-orders).
+ * `mine` needs the current user id and `overdue` today's date ('YYYY-MM-DD').
+ * @returns {{ clause: string, params: object }}
+ */
+export function workOrderFilters(
+  { q, status, priority, type, category, site, assignee_id: assigneeId, mine, overdue },
+  { userId, today },
+) {
+  const where = [];
+  const params = {};
+  if (q !== undefined) {
+    const fts = toFtsQuery(q);
+    if (fts === null) where.push('0');
+    else {
+      where.push('w.id IN (SELECT rowid FROM work_orders_fts WHERE work_orders_fts MATCH @fts)');
+      params.fts = fts;
+    }
+  }
+  if (status?.length) {
+    where.push(`w.status IN (${status.map((_, i) => `@status${i}`).join(', ')})`);
+    status.forEach((s, i) => (params[`status${i}`] = s));
+  }
+  for (const [key, value] of Object.entries({ priority, type, category, site })) {
+    if (value !== undefined) {
+      where.push(`w.${key} = @${key}`);
+      params[key] = value;
+    }
+  }
+  if (assigneeId !== undefined) {
+    where.push('w.assignee_id = @assigneeId');
+    params.assigneeId = assigneeId;
+  }
+  if (mine) {
+    where.push('w.assignee_id = @me');
+    params.me = userId;
+  }
+  if (overdue) {
+    // Same definition as the dashboard KPI (docs/data-model.md → KPI definitions).
+    where.push("w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD') AND w.due_on < @today");
+    params.today = today;
+  }
+  return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
+
 /** Counts per enum value, in enum order, zeros included. */
 function countsFor(values, rows, key) {
   const byValue = new Map(rows.map((r) => [r.value, r.count]));
@@ -114,7 +160,6 @@ function countsFor(values, rows, key) {
 
 /** @param {import('better-sqlite3').Database} db */
 export function createWorkOrderService(db) {
-  const count = db.prepare('SELECT count(*) FROM work_orders').pluck();
   const byId = db.prepare(`${SELECT} WHERE w.id = ?`);
   const getById = (id) => {
     const row = byId.get(id);
@@ -184,13 +229,15 @@ export function createWorkOrderService(db) {
 
   return {
     /** Paginated list, complete records (D7). */
-    list({ page, size, sort, order }) {
+    list({ page, size, sort, order, ...filters }, context = {}) {
+      const { clause, params } = workOrderFilters(filters, context);
+      const total = db.prepare(`SELECT count(*) FROM work_orders w ${clause}`).pluck().get(params);
       const rows = db
         .prepare(
-          `${SELECT} ${orderByClause(WORK_ORDER_SORTS, sort, order, 'w.id')} LIMIT ? OFFSET ?`,
+          `${SELECT} ${clause} ${orderByClause(WORK_ORDER_SORTS, sort, order, 'w.id')} LIMIT @limit OFFSET @offset`,
         )
-        .all(size, pageOffset(page, size));
-      return pageResponse({ total: count.get(), page, size, items: rows.map(toWorkOrder) });
+        .all({ ...params, limit: size, offset: pageOffset(page, size) });
+      return pageResponse({ total, page, size, items: rows.map(toWorkOrder) });
     },
 
     /** Work order with its asset, or null. */

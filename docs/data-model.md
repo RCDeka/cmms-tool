@@ -162,6 +162,9 @@ Rules:
 - BR-L3: A rejected conflicting edit is logged as `CONFLICT` (changes proposed, not applied) by its author; its resolution as `RESOLVE` (changes applied, choice in `note`) by the supervisor.
 - BR-L4: The mock data comes with a matching history: creation of every asset and work order, and the status changes of each work order.
 
+### Full-text indexes (added, D38)
+`assets_fts` and `work_orders_fts` (migration `003_search.sql`): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
+
 ### schema_migrations
 | Column | Type | Notes |
 |---|---|---|

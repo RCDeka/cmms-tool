@@ -104,7 +104,7 @@ describe('renderDashboard', () => {
     expect(tiles[2].textContent).toContain('Closed this month');
     expect(tiles[2].querySelector('.kpi-value').textContent).toBe('1,284');
     const overdue = tiles[3];
-    expect(overdue.getAttribute('href')).toBe('/work-orders');
+    expect(overdue.getAttribute('href')).toBe('/work-orders?overdue=true');
     expect(overdue.querySelector('.kpi-flag').textContent).toBe('⚠Needs attention');
   });
 

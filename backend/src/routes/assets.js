@@ -1,24 +1,30 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
-import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
+import { idParams, pageQueryFields, sortQueryFields, textFilter } from '../lib/pagination.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { ASSET_STATUSES, CATEGORIES, CRITICALITIES } from '../rules/enums.js';
 import { ASSET_SORTS } from '../services/assets.js';
 import { sendUpdateResult } from './write-response.js';
 
-const listQuery = z.strictObject({
-  ...pageQueryFields,
-  ...sortQueryFields(ASSET_SORTS, 'code', 'asc'),
-});
-
-const searchQuery = z.strictObject({
-  q: z.string().trim().max(100).optional(),
+/** Filters shared by the list and /search (docs/api-design.md → Search and filters). */
+const filterFields = {
+  q: textFilter,
   site: z.string().max(200).optional(),
   category: z.enum(CATEGORIES).optional(),
   status: z.enum(ASSET_STATUSES).optional(),
   criticality: z.enum(CRITICALITIES).optional(),
+};
+
+const listQuery = z.strictObject({
+  ...pageQueryFields,
+  ...sortQueryFields(ASSET_SORTS, 'code', 'asc'),
+  ...filterFields,
+});
+
+const searchQuery = z.strictObject({
+  ...filterFields,
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 

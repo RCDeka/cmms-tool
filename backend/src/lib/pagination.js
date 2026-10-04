@@ -9,6 +9,20 @@ export const pageQueryFields = {
   size: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 };
 
+/** Search text: trimmed, at most 100 characters; empty means "no search". */
+export const textFilter = z
+  .string()
+  .trim()
+  .max(100)
+  .optional()
+  .transform((v) => (v ? v : undefined));
+
+/** Boolean query flag: `true` or `false`. */
+export const flagFilter = z
+  .enum(['true', 'false'])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v === 'true'));
+
 /** Route parameter `:id`: a positive integer written in plain decimal digits. */
 export const idParams = z.strictObject({
   id: z
@@ -65,9 +79,4 @@ export function sortQueryFields(columns, defaultSort, defaultOrder) {
     sort: z.enum(Object.keys(columns)).default(defaultSort),
     order: z.enum(['asc', 'desc']).default(defaultOrder),
   };
-}
-
-/** Escapes LIKE wildcards so user text matches literally (used with ESCAPE '\'). */
-export function likePattern(text) {
-  return `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
