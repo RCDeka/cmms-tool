@@ -21,13 +21,14 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 |---|---|---|---|
 | Read assets, work orders, reference data, dashboard | yes | yes | yes |
 | `PUT /assets/:id` | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
+| `POST /work-orders` (create) | yes, assigned to themselves only (BR-W12) | yes | yes |
 | `PUT /work-orders/:id` | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
 | `GET /users` | no | yes | yes |
 | Conflict console and resolution | no | yes | yes |
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
-- **Work orders**: every column except `id`, `number`, `created_on`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
+- **Work orders**: every column except `id`, `number`, `client_id`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
 
 Sending a field the role may not edit → 403 with `details.fields`.
 
@@ -48,6 +49,7 @@ WorkOrder   { id, number, type, status, priority, title, description,
               supervisor_id, supervisor: UserRef|null,
               created_on, due_on, started_on, closed_on,
               estimated_hours, actual_hours, work_report,
+              client_id, created_by: UserRef,
               version, has_conflict, updated_by: UserRef|null, created_at, updated_at }
 Page<T>     { total, page, pages, items: T[] }
 ```
@@ -124,6 +126,13 @@ Page<T>     { total, page, pages, items: T[] }
   ```
 - Declared before `/:id` in the router.
 
+### POST /api/work-orders
+- Roles: TECHNICIAN, SUPERVISOR, ADMIN (rules BR-W9 to BR-W13).
+- Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "site"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or `site` is required.
+- `201 { "created": true, "item": WorkOrder }`
+- `200 { "created": false, "item": WorkOrder }` when `client_id` was already used (replay, BR-W11).
+- Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+`site`; 403 technician assigning someone else; 404 asset not found; 422 rule violated (assignee not eligible, `due_on` before `created_on`, `edited_at` out of range).
+
 ### GET /api/work-orders/:id
 - `200 WorkOrder` (with the linked asset). Errors: 404.
 
@@ -182,7 +191,7 @@ Page<T>     { total, page, pages, items: T[] }
 | Ops | `GET /api/health` |
 | Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Assets | `GET /api/assets`, `GET /api/assets/search`, `GET/PUT /api/assets/:id`, `PUT /api/assets/:id/resolve-conflict` |
-| Work orders | `GET /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict` |
+| Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |

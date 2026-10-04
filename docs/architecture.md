@@ -84,7 +84,8 @@ export const ENTITIES = {
 | `/assets?page=N` | assets table |
 | `/assets/:id` | table + asset detail (split view) |
 | `/work-orders?page=N` | work orders table |
-| `/work-orders/:id` | table + work order detail |
+| `/work-orders/new` | table + creation form in the detail panel; `?asset_id=N` pre-fills the asset ("New work order" button in an asset's detail panel) |
+| `/work-orders/:id` | table + work order detail (`:id` may be a temporary `tmp-<uuid>` id, see Work order creation) |
 | `/conflicts` | supervisor console: list of open conflicts (SUPERVISOR, ADMIN) |
 | `/conflicts/:id` | side-by-side arbitration |
 
@@ -99,8 +100,8 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 | `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, ids: [...], fetched_at }` |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
 | `config` | key | current page per entity, sort, user preferences, last user id, last dashboard and stats responses (for offline display) |
-| `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` |
-| `sync_queue` (D10) | auto id | `{ entity, record_id, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
+| `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
+| `sync_queue` (D10) | auto id | `{ op: 'create' \| 'update', entity, record_id, client_id?, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
 
 Pages store row ids only; the rows themselves live in the record stores. This way a record shows the same values in the table and in the detail panel.
 
@@ -145,6 +146,13 @@ Both modes write through the same queue (D11). They differ only in what triggers
 - Leaving the detail panel (close, open another record, route change) → the draft is enqueued and flushed automatically.
 - At startup, any power-user draft left over (tab closed before leaving the record) is enqueued automatically.
 
+## Work order creation (D15, D26)
+
+- "New work order" opens the creation form in the detail panel (`/work-orders/new`). The fields come from the same field definitions as editing, and the form follows the same save mode as editing: drafts in standard mode, explicit **Create** button in both modes. A creation is never sent automatically on leaving the form, because a half-filled form must not become a real work order.
+- On **Create**, the client generates `client_id` (`crypto.randomUUID()`), stores a temporary record in `wo_records` with id `tmp-<client_id>`, adds a `create` entry to the queue, and switches the panel to `/work-orders/tmp-<client_id>`.
+- Until the server answers, the work order shows "Pending creation" instead of a number, and pending creations are listed at the top of the work order table. Edits made to it meanwhile are merged into the `create` entry (no `update` is queued for a record that doesn't exist on the server yet).
+- When the server answers (`201`, or `200` for a replay): replace the temporary record with the server record, move any open panel to `/work-orders/:id` with `history.replaceState`, and refresh page 1 of the work orders cache.
+
 ## Sync queue
 
 - One queue entry per record: new edits to a record not yet sent are merged into its existing entry, keeping the original `base_version`.
@@ -153,10 +161,10 @@ Both modes write through the same queue (D11). They differ only in what triggers
 
 | Server response | Client action |
 |---|---|
-| 200 | Store the returned `item` as the record, update its row, delete the queue entry and the draft. |
-| 409 conflict | Delete the queue entry, store the server version, mark the record as in conflict, tell the user that a supervisor will arbitrate. |
+| 200 / 201 | Store the returned `item` as the record (for a `create`, replacing the temporary record, see Work order creation), update its row, delete the queue entry and the draft. |
+| 409 conflict (`update` only) | Delete the queue entry, store the server version, mark the record as in conflict, tell the user that a supervisor will arbitrate. |
 | 409 locked | Same as conflict. The edits are kept as a draft so they can be re-applied after arbitration. |
-| 400 / 403 / 422 | Delete the queue entry, keep the edits as a draft, show the error in the detail panel. |
+| 400 / 403 / 404 / 422 | Delete the queue entry, keep the edits as a draft, show the error in the detail panel. For a `create`, the temporary record stays visible, marked "Creation failed", until the user fixes it and retries or discards it. |
 | 401 | Pause the queue, ask the user to log in again, then resume. |
 | Network error / 5xx | Keep the entry; retry with backoff (5 s, 15 s, 60 s, then every 5 min). |
 

@@ -1,8 +1,8 @@
-# Small-CMMS
+# Fast-CMMS
 
 Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: head offices, branches and data centers. It focuses on user experience: very fast browsing of assets and work orders from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
 
-"Small-CMMS" is a working title. This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
+This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
 > **Status:** specifications only. Implementation follows `docs/roadmap-mvp.md`, starting with Phase 0. The commands below become valid once Phase 0 is done.
 
@@ -23,13 +23,14 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 ## MVP features
 
 - **Assets and work orders**: paginated tables (50 rows), table + detail split view, search, editing with per-role permissions and work order status workflow.
+- **Work order creation**: from the work order list or directly from an asset, including offline (synced later without duplicates).
 - **Local-first**: IndexedDB cache with prefetch of adjacent pages, silent revalidation, offline browsing and editing, sync queue.
 - **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a record).
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).
 - **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today".
 - **Roles**: `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
-Out of scope for the MVP: creating/deleting records, user administration, AI features, preventive maintenance, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`).
+Out of scope for the MVP: creating assets, deleting records, user administration, AI features, preventive maintenance, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`).
 
 ## Run locally
 

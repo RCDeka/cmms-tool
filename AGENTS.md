@@ -6,7 +6,7 @@ Before writing code, read `docs/decisions.md` (reference hierarchy and deviation
 
 ## Project summary
 
-Small-CMMS: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
+Fast-CMMS: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, work order creation, offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
 
 Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML + CSS + vanilla JavaScript (ES modules) + IndexedDB (`idb`) + Chart.js on the frontend; Nginx + systemd on a Linux VPS. Keep it simple.
 
@@ -20,7 +20,7 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), record creation/deletion, user administration UI, AI features (only the `.ai-only` mechanism), preventive-maintenance scheduling, inventory, file uploads. See the backlog in `docs/roadmap-mvp.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), asset creation, record deletion, user administration UI, AI features (only the `.ai-only` mechanism), preventive-maintenance scheduling, inventory, file uploads. See the backlog in `docs/roadmap-mvp.md`.
 
 ## Code conventions
 

@@ -4,7 +4,7 @@ Neutral, accessible baseline (Q3). Colors and fonts are **design tokens** (CSS c
 
 ## Language
 
-The interface is in English (D16). Field and value labels come from `assets/js/labels.js`. The app name comes from `APP_NAME` (working title "Small-CMMS", Q6).
+The interface is in English (D16). Field and value labels come from `assets/js/labels.js`. The app name comes from `APP_NAME`: "Fast-CMMS" (Q6).
 
 ## Layout (brief)
 

@@ -53,16 +53,16 @@ Tasks:
 
 Acceptance: opening a cached record from the table measures < 20 ms; IndexedDB never holds more than 5 pages per entity; with the network cut (DevTools offline), a reload still shows cached pages and records with the offline message.
 
-## Phase 4: Editing, save modes and sync queue
+## Phase 4: Editing, work order creation, save modes and sync queue
 
-**Objective:** users edit records safely online and offline, in standard and power-user modes.
+**Objective:** users edit records and create work orders safely online and offline, in standard and power-user modes.
 
 Tasks:
-- Backend: `PUT` endpoints with field whitelists per role, version check (BR-V1, BR-V2), work order rules (BR-W2 to BR-W8), transactions. Pure modules `rules/permissions.js`, `rules/work-order-status.js`, `rules/versioning.js`.
-- Frontend: editable detail panel (inputs generated from the field definitions and enums), `save-modes.js` (dirty flag, 60 s drafts, unsaved-changes dialog, draft restore; power-user auto-save), `queue.js` (merge per record, flush, backoff, result handling table).
-- Tests: unit tests on every transition (allowed and forbidden), permission matrix, version decision; API tests for 200 + version increment, 403 forbidden field, 422 invalid transition, 422 closing without `work_report`; frontend tests on queue merging and response handling.
+- Backend: `PUT` endpoints with field whitelists per role, version check (BR-V1, BR-V2), work order rules (BR-W2 to BR-W8), transactions. `POST /api/work-orders` with number generation, idempotent `client_id` and technician restrictions (BR-W9 to BR-W13). Pure modules `rules/permissions.js`, `rules/work-order-status.js`, `rules/versioning.js`.
+- Frontend: editable detail panel (inputs generated from the field definitions and enums), `save-modes.js` (dirty flag, 60 s drafts, unsaved-changes dialog, draft restore; power-user auto-save), `queue.js` (`create` and `update` entries, merge per record, flush, backoff, result handling table). "New work order" button (work order table and asset detail panel), creation form, temporary records and "Pending creation" display (`docs/architecture.md` → Work order creation).
+- Tests: unit tests on every transition (allowed and forbidden), permission matrix, version decision; API tests for 200 + version increment, 403 forbidden field, 422 invalid transition, 422 closing without `work_report`; creation: 201 with `WO-YYYY-NNNNN` number, replayed `client_id` returns 200 with the same record, numbering restarts with a new year, technician assigning someone else 403, missing `asset_id` and `site` 400; frontend tests on queue merging (including edits to a pending creation) and response handling.
 
-Acceptance: a technician edits a work order offline, comes back online and the edit is saved with a new version; a supervisor's edits are saved when leaving the record without pressing a button; a reload during unsaved standard-mode edits offers to restore the draft.
+Acceptance: a technician edits a work order offline, comes back online and the edit is saved with a new version; a supervisor's edits are saved when leaving the record without pressing a button; a reload during unsaved standard-mode edits offers to restore the draft; a technician creates a work order from an asset while offline, it appears as "Pending creation", and after reconnecting it gets its number exactly once, even if the request is retried.
 
 ## Phase 5: Conflicts and arbitration
 
@@ -100,7 +100,7 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 
 ## Post-MVP backlog (not scheduled)
 
-1. Create and delete assets and work orders (D15), with `number` generation.
+1. Create assets; delete records (D15). Work orders are withdrawn with `CANCELLED`.
 2. User administration screen.
 3. Work order status history and audit log.
 4. Filters and search on work order lists; full-text search (SQLite FTS5).
