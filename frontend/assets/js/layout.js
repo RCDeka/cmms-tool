@@ -1,4 +1,4 @@
-// App shell: sidebar, menu button (mobile), page title, status bar, live announcements,
+// App shell: sidebar, menu button, page title, status bar, live announcements,
 // split view.
 import { APP_NAME } from './config.js';
 import { h, replaceChildren } from './dom.js';
@@ -13,9 +13,13 @@ export function initLayout({ onLogout }) {
     setMenuOpen(!document.body.classList.contains('menu-open')),
   );
   $('logout-button').addEventListener('click', onLogout);
-  // Close the mobile menu after choosing a page, or with Escape.
+  // Close the menu after choosing a page, or with Escape.
   $('sidebar').addEventListener('click', (event) => {
     if (event.target.closest('a')) setMenuOpen(false);
+  });
+  // A click on the dimmed backdrop (the body itself) closes the menu.
+  document.body.addEventListener('click', (event) => {
+    if (event.target === document.body) setMenuOpen(false);
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && document.body.classList.contains('menu-open')) {

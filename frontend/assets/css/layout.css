@@ -224,8 +224,8 @@ body.is-offline #status-bar {
   padding: var(--space-4);
 }
 
-/* Small screens: off-canvas sidebar, detail panel full screen in split view. */
-@media (max-width: 767px) {
+/* Half-width windows and below (< 1024 px): off-canvas sidebar opened by the menu button. */
+@media (max-width: 1023px) {
   body:not(.is-logged-out) {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -260,7 +260,10 @@ body.is-offline #status-bar {
   #menu-button {
     display: inline-flex;
   }
+}
 
+/* Small screens: detail panel full screen in split view. */
+@media (max-width: 767px) {
   .topbar,
   #table-container,
   #detail-container,

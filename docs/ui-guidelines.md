@@ -12,7 +12,8 @@ The interface is in English (D16). Field and value labels come from `assets/js/l
 - Main area (`#app-main`): top bar with the page heading (and the menu button on small screens), then `#main-content`, then the status bar (`#status-bar`): online/offline state, pending sync count, current user.
 - `#main-content` default: `grid-template-columns: 1fr` (table only). With `.split-view`: `1fr 1fr` (table + detail panel). `#detail-container` is `.hidden` by default.
 - In split view the table keeps only its key columns (`splitColumns` in `entities.js`: code, name, status for assets; number, title, priority, status for work orders); the detail panel shows everything else.
-- Mobile (< 768 px): sidebar hidden behind a burger button. In split view, the table is hidden and the detail panel is full screen with a "Back to list" button.
+- Below 1024 px (e.g. half of a FullHD screen): sidebar hidden behind a burger button; it opens as an overlay and closes on page choice, backdrop click or Escape.
+- Mobile (< 768 px): in split view, the table is hidden and the detail panel is full screen with a "Back to list" button.
 
 ## Design tokens
 
