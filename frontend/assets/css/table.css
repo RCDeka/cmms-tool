@@ -251,7 +251,7 @@
 }
 
 .filter-search {
-  flex: 0 1 12rem;
+  flex: 1 1 11rem;
 }
 
 .filter-search input[type='search'] {
