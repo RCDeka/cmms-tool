@@ -78,8 +78,13 @@ const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
 /** Whitelisted sort keys (docs/api-design.md → GET /api/work-orders). */
 export const WORK_ORDER_SORTS = {
   number: 'w.number',
+  title: 'w.title',
+  site: 'w.site',
+  // Empty values last in both orders: orderByClause adds the direction to the last term only.
+  // The assignee sorts by the name shown in the table.
+  assignee: "w.assignee_id IS NULL, asg.first_name || ' ' || asg.last_name",
   created_on: 'w.created_on',
-  due_on: 'w.due_on',
+  due_on: 'w.due_on IS NULL, w.due_on',
   priority: rankExpression('w.priority', WORK_ORDER_PRIORITIES),
   status: rankExpression('w.status', WORK_ORDER_STATUSES),
   updated_at: 'w.updated_at',

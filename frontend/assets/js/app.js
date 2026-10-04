@@ -13,7 +13,7 @@ import {
 import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
-import { drawCategoryChart, renderDashboard } from './dashboard.js';
+import { renderDashboard } from './dashboard.js';
 import { feedbackUrl, openFeedbackDialog, renderFeedbackLog } from './feedback.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
@@ -38,7 +38,16 @@ import {
   withPending,
 } from './editor.js';
 import { ENTITIES } from './entities.js';
-import { filtersQuery, hasFilters, renderFilterBar } from './filters.js';
+import {
+  currentSort,
+  filtersQuery,
+  hasFilters,
+  isPlainList,
+  renderFilterBar,
+  sortByColumn,
+  sortOf,
+  withoutSort,
+} from './filters.js';
 import {
   announce,
   confirmDialog,
@@ -81,7 +90,14 @@ import {
   readCachedPage,
   readCachedRecord,
 } from './sync.js';
-import { focusPager, focusRow, renderPagination, renderTable, selectRow } from './table.js';
+import {
+  focusPager,
+  focusRow,
+  focusSortButton,
+  renderPagination,
+  renderTable,
+  selectRow,
+} from './table.js';
 
 const tableContainer = document.getElementById('table-container');
 const detailContainer = document.getElementById('detail-container');
@@ -217,18 +233,20 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
 
 const DASHBOARD_CACHE = 'dashboard_cache';
 
-/** Renders a dashboard snapshot { data, stats, fetched_at }, then draws the chart. */
+/** Renders a dashboard snapshot { data, stats, fetched_at }, then draws the charts. */
 async function paintDashboard(snapshot, fromCache, isCurrent) {
-  const chart = renderDashboard(tableContainer, {
+  const charts = renderDashboard(tableContainer, {
     data: snapshot.data,
     stats: snapshot.stats,
     fromCache,
     fetchedAt: snapshot.fetched_at,
+    charts: !hasRole('TECHNICIAN'),
   });
   try {
-    await drawCategoryChart(chart.canvas, chart.rows);
+    for (const chart of charts) await chart.draw(chart.canvas, chart.rows);
   } catch {
-    // No chart library (e.g. offline before it was ever cached): the table stays available.
+    // No chart library (e.g. offline before it was ever cached): the table stays available
+    // (the status pie lists its values next to it).
     if (isCurrent()) tableContainer.querySelector('.chart-table')?.setAttribute('open', '');
   }
 }
@@ -684,7 +702,11 @@ async function ensureListLayout(route) {
     refs,
     canFilterAssignee: hasRole('SUPERVISOR', 'ADMIN'),
     // Typing replaces the history entry (no entry per keystroke); other changes add one.
-    onChange: (next, { typing }) => navigate(listUrl(route.entity, 1, next), { replace: typing }),
+    // The table sort is not in the bar: it is kept from the URL.
+    onChange: (next, { typing }) =>
+      navigate(listUrl(route.entity, 1, { ...next, ...sortOf(currentRoute().filters) }), {
+        replace: typing,
+      }),
   });
   setSplitView(Boolean(openDetail));
   replaceChildren(tableContainer, bar.element, area);
@@ -720,6 +742,11 @@ function displayPage(route, data, pinned = shownPage?.pinned ?? []) {
     onPage: (page, control) => {
       pendingFocus = { type: 'pager', control };
       navigate(listUrl(route.entity, page, filters));
+    },
+    sort: currentSort(route.entity, filters),
+    onSort: (column) => {
+      pendingFocus = { type: 'sort', column };
+      navigate(listUrl(route.entity, 1, sortByColumn(route.entity, filters, column)));
     },
     actions: tableActions(route),
   });
@@ -769,6 +796,8 @@ async function showEntity(route, isCurrent) {
 
   const filters = route.filters ?? {};
   const filtered = hasFilters(filters);
+  // Only plain lists (no filter, default order) are cached on the device (D38, D42).
+  const plain = isPlainList(filters);
   const filterKey = filtersQuery(route.entity, filters);
   const area = await ensureListLayout(route);
   if (!isCurrent()) return;
@@ -784,7 +813,7 @@ async function showEntity(route, isCurrent) {
   } else {
     // Pending creations appear on the plain list only (they match no search yet).
     const pinned = route.entity === 'work_orders' && !filtered ? await loadPendingCreations() : [];
-    const cached = filtered ? null : await readCachedPage(route.entity, route.page);
+    const cached = plain ? await readCachedPage(route.entity, route.page) : null;
     if (!isCurrent()) return;
     if (cached) {
       fromCache = true;
@@ -799,11 +828,11 @@ async function showEntity(route, isCurrent) {
       area.setAttribute('aria-busy', 'true');
       let data;
       try {
-        data = filtered
-          ? await fetchFilteredPage(route.entity, route.page, filters)
-          : (await fetchAndStorePage(route.entity, route.page)).data;
+        data = plain
+          ? (await fetchAndStorePage(route.entity, route.page)).data
+          : await fetchFilteredPage(route.entity, route.page, filters);
       } catch (err) {
-        if (isCurrent()) showTableError(area, err, cfg, route, filtered);
+        if (isCurrent()) showTableError(area, err, cfg, route);
         return;
       } finally {
         if (isCurrent()) area.removeAttribute('aria-busy');
@@ -866,7 +895,7 @@ async function showEntity(route, isCurrent) {
   // Background work, after the visible content: revalidate a page shown from the cache,
   // then prefetch the neighbours and evict the rest (plain lists only).
   if (fromCache) await revalidatePage(route, isCurrent);
-  if (isCurrent() && shownPage && !filtered) {
+  if (isCurrent() && shownPage && plain) {
     prefetchAround(route.entity, route.page, shownPage.pages, {
       openId: typeof route.id === 'number' ? route.id : null,
     }).catch(() => {});
@@ -905,7 +934,7 @@ function offerUpdate(route) {
 
 async function showDetail(route, isCurrent) {
   const cfg = ENTITIES[route.entity];
-  const onClose = () => navigate(listUrl(route.entity, route.page));
+  const onClose = () => navigate(listUrl(route.entity, route.page, route.filters));
   setSplitView(true);
   openDetail = { entity: route.entity, id: route.id };
 
@@ -981,16 +1010,25 @@ function restoreFocus(defaultFocus) {
   const focus = pendingFocus;
   pendingFocus = null;
   if (focus?.type === 'pager') focusPager(tableContainer, focus.control);
-  else defaultFocus();
+  else if (focus?.type !== 'sort' || !focusSortButton(tableContainer, focus.column)) defaultFocus();
 }
 
 /** Error in the table area; the filter bar stays so the user can change or clear it. */
-function showTableError(area, err, cfg, route, filtered) {
+function showTableError(area, err, cfg, route) {
+  const filters = route.filters ?? {};
+  const filtered = hasFilters(filters);
+  const sorted = !filtered && !isPlainList(filters);
   let message = err.message;
   if (err.status === 0) {
-    message = filtered
-      ? 'Search and filters need a connection to the server. Without filters, the pages saved on this device are available.'
-      : `Page ${route.page} of ${cfg.label.toLowerCase()} has not been loaded before, so it is not available offline.`;
+    if (filtered) {
+      message =
+        'Search and filters need a connection to the server. Without filters, the pages saved on this device are available.';
+    } else if (sorted) {
+      message =
+        'Sorting needs a connection to the server. In the default order, the pages saved on this device are available.';
+    } else {
+      message = `Page ${route.page} of ${cfg.label.toLowerCase()} has not been loaded before, so it is not available offline.`;
+    }
   }
   replaceChildren(
     area,
@@ -1015,6 +1053,17 @@ function showTableError(area, err, cfg, route, filtered) {
               'a',
               { href: listUrl(route.entity), 'data-link': true, class: 'button button-secondary' },
               'Clear filters',
+            )
+          : null,
+        sorted
+          ? h(
+              'a',
+              {
+                href: listUrl(route.entity, route.page, withoutSort(filters)),
+                'data-link': true,
+                class: 'button button-secondary',
+              },
+              'Default order',
             )
           : null,
       ),

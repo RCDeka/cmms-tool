@@ -15,13 +15,26 @@ export const parseRowId = (value) => (/^\d+$/.test(value) ? Number(value) : valu
  * @param {number | null} options.selectedId row shown in the detail panel
  * @param {(id: number) => void} options.onOpen
  * @param {(page: number, control: string) => void} options.onPage
+ * @param {{ sort: string, order: 'asc' | 'desc' }} [options.sort] order of the rows
+ * @param {(column: string) => void} [options.onSort] click on a sortable column title
  * @param {object[]} [options.pinned] records shown first (work orders waiting to be created)
  * @param {HTMLElement[]} [options.actions] buttons next to the record count
  * @param {boolean} [options.filtered] search or filters are applied
  */
 export function renderTable(
   container,
-  { entity, data, selectedId, onOpen, onPage, pinned = [], actions = [], filtered = false },
+  {
+    entity,
+    data,
+    selectedId,
+    onOpen,
+    onPage,
+    sort = null,
+    onSort = null,
+    pinned = [],
+    actions = [],
+    filtered = false,
+  },
 ) {
   const cfg = ENTITIES[entity];
   const titleId = `${cfg.prefix}-table-title`;
@@ -54,9 +67,7 @@ export function renderTable(
       h(
         'tr',
         {},
-        cfg.columns.map((f) =>
-          h('th', { scope: 'col', class: columnClass(cfg, f) }, cfg.fields[f].label),
-        ),
+        cfg.columns.map((f) => columnHeader(cfg, f, sort, onSort)),
       ),
     ),
     tbody,
@@ -69,6 +80,8 @@ export function renderTable(
       { class: 'table-header' },
       // The h1 already shows the section name; the h2 stays for screen readers and focus.
       h('h2', { id: titleId, class: 'table-title visually-hidden', tabindex: '-1' }, cfg.label),
+      // Page buttons above long tables too, so changing page needs no scrolling.
+      data.pages > 1 ? renderPagination(data, onPage, 'top') : null,
       h(
         'p',
         { class: 'table-count', role: 'status' },
@@ -92,6 +105,44 @@ export function renderTable(
         ),
     renderPagination(data, onPage),
   );
+}
+
+const SORT_ARROWS = { ascending: '▲', descending: '▼', none: '↕' };
+
+/**
+ * Column title. Sortable columns hold a button; the sorted one has `aria-sort` and an arrow
+ * (▲ ascending, ▼ descending), the others a faint ↕.
+ */
+function columnHeader(cfg, field, sort, onSort) {
+  const label = cfg.fields[field].label;
+  const attrs = { scope: 'col', class: columnClass(cfg, field) };
+  if (!onSort || !cfg.sortColumns.includes(field)) return h('th', attrs, label);
+  const state =
+    sort?.sort === field ? (sort.order === 'desc' ? 'descending' : 'ascending') : 'none';
+  const classes = ['sortable', attrs.class].filter(Boolean).join(' ');
+  return h(
+    'th',
+    { ...attrs, class: classes, 'aria-sort': state === 'none' ? null : state },
+    h(
+      'button',
+      {
+        type: 'button',
+        class: `sort-button is-${state}`,
+        dataset: { sort: field },
+        onClick: () => onSort(field),
+      },
+      label,
+      h('span', { class: 'sort-arrow', 'aria-hidden': 'true' }, SORT_ARROWS[state]),
+    ),
+  );
+}
+
+/** Focuses a column title button after a sort, or returns false. */
+export function focusSortButton(container, column) {
+  // Column names come from the entity config: safe inside the attribute selector.
+  const button = container.querySelector(`[data-sort="${column}"]`);
+  button?.focus();
+  return Boolean(button);
 }
 
 /** Columns hidden in split view get `col-secondary` (layout.css). */
@@ -220,16 +271,24 @@ export function focusPager(container, control) {
   else container.querySelector('.table-title')?.focus();
 }
 
-export function renderPagination({ page, pages }, onPage) {
+/**
+ * Pagination controls. The `top` copy above a table names its buttons `top-first`, … so
+ * focus returns to the copy that was used.
+ * @param {{ page: number, pages: number }} data
+ * @param {(page: number, control: string) => void} onPage
+ * @param {'top' | 'bottom'} [position]
+ */
+export function renderPagination({ page, pages }, onPage, position = 'bottom') {
+  const top = position === 'top';
   const button = (name, label, arrow, target, arrowFirst) =>
     h(
       'button',
       {
         type: 'button',
         class: 'button button-pager',
-        dataset: { pager: name },
+        dataset: { pager: top ? `top-${name}` : name },
         disabled: target < 1 || target > pages || target === page,
-        onClick: () => onPage(target, name),
+        onClick: () => onPage(target, top ? `top-${name}` : name),
       },
       arrowFirst ? h('span', { 'aria-hidden': 'true' }, `${arrow} `) : null,
       label,
@@ -237,7 +296,10 @@ export function renderPagination({ page, pages }, onPage) {
     );
   return h(
     'nav',
-    { class: 'pagination', 'aria-label': 'Pagination' },
+    {
+      class: top ? 'pagination pagination-top' : 'pagination',
+      'aria-label': top ? 'Pagination, top' : 'Pagination',
+    },
     button('first', 'First', '◀◀', 1, true),
     button('previous', 'Previous', '◀', page - 1, true),
     h('span', { class: 'pagination-status' }, `Page ${page} / ${pages}`),

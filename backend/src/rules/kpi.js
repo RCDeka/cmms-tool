@@ -17,13 +17,23 @@ export function isOverdue(workOrder, today) {
   return !isTerminal(workOrder.status) && Boolean(workOrder.due_on) && workOrder.due_on < today;
 }
 
-/** "My work today": assigned to the user, not terminal, due today or earlier, or no due date. */
-export function isMyWorkToday(workOrder, userId, today) {
+/** "My work": assigned to the user, not terminal, due on `lastDay` or earlier, or no due date. */
+export function isMyWorkDueBy(workOrder, userId, lastDay) {
   return (
     workOrder.assignee_id === userId &&
     !isTerminal(workOrder.status) &&
-    (!workOrder.due_on || workOrder.due_on <= today)
+    (!workOrder.due_on || workOrder.due_on <= lastDay)
   );
+}
+
+/** "My work today": due today or earlier, or no due date. */
+export function isMyWorkToday(workOrder, userId, today) {
+  return isMyWorkDueBy(workOrder, userId, today);
+}
+
+/** Last day of "My work this week": the next 7 days, today included. */
+export function weekEnd(today) {
+  return addDays(today, 6);
 }
 
 const PRIORITY_RANK = Object.fromEntries(WORK_ORDER_PRIORITIES.map((p, i) => [p, i]));

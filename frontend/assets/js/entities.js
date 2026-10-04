@@ -42,6 +42,9 @@ export const ENTITIES = {
     columns: ['code', 'name', 'site', 'category', 'criticality', 'status'],
     // Columns kept when the detail panel takes half of the width (the panel shows the rest).
     splitColumns: ['code', 'name', 'status'],
+    // Every column sorts (API sort key = column name); the API default comes first.
+    defaultSort: { sort: 'code', order: 'asc' },
+    sortColumns: ['code', 'name', 'site', 'category', 'criticality', 'status'],
     detailFields: [
       'code',
       'name',
@@ -97,6 +100,9 @@ export const ENTITIES = {
     },
     columns: ['number', 'title', 'site', 'priority', 'status', 'assignee', 'due_on'],
     splitColumns: ['number', 'title', 'status'],
+    // Newest first by default: not a column, so no header shows the default order.
+    defaultSort: { sort: 'created_on', order: 'desc' },
+    sortColumns: ['number', 'title', 'site', 'priority', 'status', 'assignee', 'due_on'],
     detailFields: [
       'number',
       'title',

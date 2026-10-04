@@ -1,8 +1,10 @@
 // Home dashboard (brief → Home page / Dashboard; docs/data-model.md → KPI definitions).
 // Chart rules from the data-viz method: one series → one color for every bar, value at the
 // bar tip, no legend (the title names the series), tooltip, and a table as the accessible
-// equivalent. Chart.js is loaded only when the dashboard is shown (docs/architecture.md).
+// equivalent. The status pie gives each status a fixed color and lists every value next to
+// it. Chart.js is loaded only when the dashboard is shown (docs/architecture.md).
 import { h, replaceChildren } from './dom.js';
+import { ENUMS } from './enums.js';
 import { badge, formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 
@@ -58,11 +60,38 @@ export function chartRows(stats) {
 }
 
 /** Text equivalent of the chart for screen readers. Pure. */
-export function chartSummary(rows) {
-  return `Bar chart. ${rows.map((r) => `${r.label}: ${r.count}`).join(', ')}.`;
+export function chartSummary(rows, kind = 'Bar chart') {
+  return `${kind}. ${rows.map((r) => `${r.label}: ${r.count}`).join(', ')}.`;
 }
 
 const numberFormat = new Intl.NumberFormat('en-GB');
+const percentFormat = new Intl.NumberFormat('en-GB', { style: 'percent' });
+
+/**
+ * Pie slices: every status in workflow order, each with its fixed color slot (the color
+ * follows the status, never its rank) and its share of the total. Pure.
+ */
+export function statusRows(stats) {
+  const counts = new Map(stats.by_status.map((s) => [s.status, s.count]));
+  const total = stats.by_status.reduce((sum, s) => sum + s.count, 0);
+  return ENUMS.work_order_status.map((code, i) => {
+    const count = counts.get(code) ?? 0;
+    return {
+      code,
+      label: valueLabel('work_order_status', code),
+      count,
+      share: total ? count / total : 0,
+      slot: i + 1,
+    };
+  });
+}
+
+/** "My work" periods: today (default) or the next 7 days (`my_work_week`). */
+export const MY_WORK_RANGES = [
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'Next 7 days' },
+];
+let myWorkRange = 'today';
 
 let chartLoading = null;
 /** Loads Chart.js once, on demand (script from our own origin: allowed by the CSP). */
@@ -127,6 +156,7 @@ function chartSection(stats) {
   return {
     canvas,
     rows,
+    draw: drawCategoryChart,
     element: h(
       'figure',
       { class: 'dashboard-card chart-card', 'aria-labelledby': 'chart-heading' },
@@ -181,6 +211,63 @@ function chartSection(stats) {
   };
 }
 
+/** Status pie with its legend: label, count and share of every status (the table view). */
+function statusChartSection(stats) {
+  const rows = statusRows(stats);
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  const canvas = h('canvas', {
+    role: 'img',
+    'aria-label': chartSummary(rows, 'Pie chart'),
+  });
+  return {
+    canvas,
+    rows,
+    draw: drawStatusChart,
+    element: h(
+      'figure',
+      { class: 'dashboard-card chart-card', 'aria-labelledby': 'status-chart-heading' },
+      h(
+        'figcaption',
+        {},
+        h(
+          'h2',
+          { id: 'status-chart-heading' },
+          `Work orders by status — last ${stats.period} days`,
+        ),
+        h(
+          'p',
+          { class: 'muted' },
+          `${numberFormat.format(total)} work order${total === 1 ? '' : 's'} created, by current status`,
+        ),
+      ),
+      total
+        ? h(
+            'div',
+            { class: 'pie-layout' },
+            h('div', { class: 'pie-frame' }, canvas),
+            h(
+              'ul',
+              { class: 'pie-legend', 'aria-label': 'Work orders by status' },
+              rows.map((r) =>
+                h(
+                  'li',
+                  {},
+                  h('span', {
+                    class: `pie-swatch chart-series-${r.slot}`,
+                    'aria-hidden': 'true',
+                  }),
+                  h('span', { class: 'pie-label' }, r.label),
+                  h('span', { class: 'numeric' }, numberFormat.format(r.count)),
+                  h('span', { class: 'numeric muted' }, percentFormat.format(r.share)),
+                ),
+              ),
+            ),
+          )
+        : h('p', { class: 'empty-state' }, 'No work order was created in this period.'),
+    ),
+  };
+}
+
 function workOrderLink(wo) {
   return h('a', { href: `/work-orders/${wo.id}`, 'data-link': true }, `${wo.number} — ${wo.title}`);
 }
@@ -217,57 +304,125 @@ function recentSection(items) {
   );
 }
 
-function myWorkSection(items, today) {
-  return h(
-    'section',
-    { class: 'dashboard-card', 'aria-labelledby': 'mywork-heading' },
-    h('h2', { id: 'mywork-heading' }, 'My work today'),
-    items.length
-      ? h(
-          'ul',
-          { class: 'activity-list' },
-          items.map((wo) => {
-            const late = wo.due_on && wo.due_on < today;
-            return h(
-              'li',
-              {},
-              h(
-                'div',
-                { class: 'activity-main' },
-                workOrderLink(wo),
-                ' ',
-                badge('priority', 'work_order_priority', wo.priority),
-              ),
-              h(
-                'p',
-                { class: 'muted' },
-                wo.due_on ? `Due ${formatDate(wo.due_on)}` : 'No due date',
-                late
-                  ? [
-                      ' ',
-                      h(
-                        'span',
-                        { class: 'badge badge-tone-warning' },
-                        h('span', { 'aria-hidden': 'true' }, '⚠'),
-                        'Overdue',
-                      ),
-                    ]
-                  : null,
-              ),
-            );
-          }),
-        )
-      : h('p', { class: 'empty-state' }, 'No work order assigned to you is due today.'),
-  );
+/** Work orders of the chosen period; `my_work_week` is missing from older saved copies. Pure. */
+export function myWorkItems(data, range) {
+  return range === 'week' ? (data.my_work_week ?? []) : data.my_work_today;
+}
+
+/** "My work" card with its Today / Next 7 days switch; the switch redraws the card only. */
+function myWorkSection(data) {
+  const section = h('section', { class: 'dashboard-card', 'aria-labelledby': 'mywork-heading' });
+  const paint = (focusKey) => {
+    replaceChildren(
+      section,
+      ...myWorkContent(data, (key) => {
+        myWorkRange = key;
+        paint(key);
+      }),
+    );
+    if (focusKey) section.querySelector(`[data-range="${focusKey}"]`)?.focus();
+  };
+  paint();
+  return section;
+}
+
+function myWorkContent(data, onRange) {
+  const items = myWorkItems(data, myWorkRange);
+  const week = myWorkRange === 'week';
+  return [
+    h(
+      'div',
+      { class: 'card-header' },
+      h('h2', { id: 'mywork-heading' }, 'My work'),
+      h(
+        'div',
+        { class: 'segmented', role: 'group', 'aria-label': 'Period' },
+        MY_WORK_RANGES.map((r) =>
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'segmented-option',
+              dataset: { range: r.key },
+              'aria-pressed': String(r.key === myWorkRange),
+              onClick: () => {
+                if (r.key !== myWorkRange) onRange(r.key);
+              },
+            },
+            r.label,
+          ),
+        ),
+      ),
+    ),
+    h(
+      'p',
+      { class: 'muted' },
+      week && data.week_end
+        ? `Due by ${formatDate(data.week_end)}, late or without a due date.`
+        : 'Due today, late or without a due date.',
+    ),
+    workList(items, data.today, week),
+  ];
+}
+
+function workList(items, today, week) {
+  return items.length
+    ? h(
+        'ul',
+        { class: 'activity-list' },
+        items.map((wo) => {
+          const late = wo.due_on && wo.due_on < today;
+          return h(
+            'li',
+            {},
+            h(
+              'div',
+              { class: 'activity-main' },
+              workOrderLink(wo),
+              ' ',
+              badge('priority', 'work_order_priority', wo.priority),
+            ),
+            h(
+              'p',
+              { class: 'muted' },
+              wo.due_on ? `Due ${formatDate(wo.due_on)}` : 'No due date',
+              late
+                ? [
+                    ' ',
+                    h(
+                      'span',
+                      { class: 'badge badge-tone-warning' },
+                      h('span', { 'aria-hidden': 'true' }, '⚠'),
+                      'Overdue',
+                    ),
+                  ]
+                : null,
+            ),
+          );
+        }),
+      )
+    : h(
+        'p',
+        { class: 'empty-state' },
+        week
+          ? 'No work order assigned to you is due in the next 7 days.'
+          : 'No work order assigned to you is due today.',
+      );
 }
 
 /**
- * Renders the dashboard. Returns the chart canvas and rows, drawn afterwards (async).
+ * Renders the dashboard. Returns the charts, drawn afterwards (async) with
+ * `chart.draw(chart.canvas, chart.rows)`. Technicians get no chart: their dashboard is about
+ * their own work (product owner, 2026-10-04).
  * @param {HTMLElement} container
- * @param {{ data: object, stats: object, fromCache: boolean, fetchedAt: string }} options
+ * @param {{ data: object, stats: object, fromCache: boolean, fetchedAt: string,
+ *   charts?: boolean }} options
+ * @returns {{ canvas: HTMLCanvasElement, rows: object[], draw: Function, element: HTMLElement }[]}
  */
-export function renderDashboard(container, { data, stats, fromCache, fetchedAt }) {
-  const chart = chartSection(stats);
+export function renderDashboard(container, { data, stats, fromCache, fetchedAt, charts = true }) {
+  const shown = charts ? [chartSection(stats), statusChartSection(stats)] : [];
+  const myWork = myWorkSection(data);
+  const recent = recentSection(data.recent_activity);
   replaceChildren(
     container,
     h(
@@ -281,20 +436,22 @@ export function renderDashboard(container, { data, stats, fromCache, fetchedAt }
           )
         : null,
       kpiSection(data.kpis),
-      h(
-        'div',
-        { class: 'dashboard-grid' },
-        chart.element,
-        h(
-          'div',
-          { class: 'dashboard-lists' },
-          myWorkSection(data.my_work_today, data.today),
-          recentSection(data.recent_activity),
-        ),
-      ),
+      charts
+        ? h(
+            'div',
+            { class: 'dashboard-grid' },
+            h(
+              'div',
+              { class: 'dashboard-charts' },
+              shown.map((c) => c.element),
+            ),
+            h('div', { class: 'dashboard-lists' }, myWork, recent),
+          )
+        : h('div', { class: 'dashboard-grid' }, myWork, recent),
     ),
   );
-  return chart;
+  // An empty pie has no canvas on the page: nothing to draw.
+  return shown.filter((c) => c.canvas.isConnected);
 }
 
 /**
@@ -375,5 +532,53 @@ export async function drawCategoryChart(canvas, rows) {
       },
     },
     plugins: [valueLabels],
+  });
+}
+
+/**
+ * Draws the status pie: fixed color per status (`--color-chart-series-N`), 2 px white gaps
+ * between slices, no Chart.js legend (the list next to it names every slice with its
+ * value), tooltip with count and share.
+ * @returns {Promise<object>} the Chart instance
+ */
+export async function drawStatusChart(canvas, rows) {
+  const Chart = await loadChartJs();
+  const css = getComputedStyle(document.documentElement);
+  const token = (name) => css.getPropertyValue(name).trim();
+  const font = token('--font-sans');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  return new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels: rows.map((r) => r.label),
+      datasets: [
+        {
+          label: 'Work orders',
+          data: rows.map((r) => r.count),
+          backgroundColor: rows.map((r) => token(`--color-chart-series-${r.slot}`)),
+          borderColor: token('--color-surface'),
+          borderWidth: 2,
+          hoverOffset: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduceMotion ? false : { duration: 300 },
+      layout: { padding: 6 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          titleFont: { family: font },
+          bodyFont: { family: font, weight: '600' },
+          callbacks: {
+            label: (item) =>
+              `${numberFormat.format(item.parsed)} work orders (${percentFormat.format(rows[item.dataIndex].share)})`,
+          },
+        },
+      },
+    },
   });
 }

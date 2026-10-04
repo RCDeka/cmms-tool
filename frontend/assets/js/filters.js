@@ -1,6 +1,7 @@
 // Search and filters above the tables (docs/api-design.md → Search and filters). Filters live
 // in the URL query, so they survive reloads, the back button, and opening a record.
 import { h } from './dom.js';
+import { ENTITIES } from './entities.js';
 import { ENUMS } from './enums.js';
 import { valueLabel } from './labels.js';
 import { debounce } from './save-modes.js';
@@ -53,8 +54,23 @@ function parseValue(def, raw) {
   }
 }
 
+/** Sort chosen in the URL: a sortable column and `asc`/`desc` (default `asc`), or {}. Pure. */
+function parseSort(entity, query) {
+  const cfg = ENTITIES[entity];
+  const sort = query.get('sort');
+  if (!cfg || !cfg.sortColumns.includes(sort)) return {};
+  return sortParams(cfg, { sort, order: query.get('order') === 'desc' ? 'desc' : 'asc' });
+}
+
+/** `{ sort, order }`, or {} for the default order, which stays out of the URL. */
+function sortParams(cfg, { sort, order }) {
+  const { defaultSort } = cfg;
+  return sort === defaultSort.sort && order === defaultSort.order ? {} : { sort, order };
+}
+
 /**
- * Filters of an entity from a URL query (unknown or invalid values are dropped). Pure.
+ * Filters of an entity from a URL query (unknown or invalid values are dropped), with the
+ * table sort when it is not the default (`sort`, `order`). Pure.
  * @param {string} entity
  * @param {URLSearchParams} query
  * @returns {Record<string, string | number | boolean>}
@@ -65,19 +81,54 @@ export function parseFilters(entity, query) {
     const value = parseValue(def, query.get(name));
     if (value !== undefined) filters[name] = value;
   }
-  return filters;
+  return { ...filters, ...parseSort(entity, query) };
 }
 
-/** Query string of filters, in a stable order (also the API query). Pure. */
+/** Query string of filters then sort, in a stable order (also the API query). Pure. */
 export function filtersQuery(entity, filters = {}) {
   const query = new URLSearchParams();
-  for (const name of Object.keys(FILTERS[entity] ?? {})) {
+  for (const name of [...Object.keys(FILTERS[entity] ?? {}), 'sort', 'order']) {
     if (filters[name] !== undefined) query.set(name, String(filters[name]));
   }
   return query.toString();
 }
 
-export const hasFilters = (filters) => Object.keys(filters ?? {}).length > 0;
+const SORT_KEYS = ['sort', 'order'];
+
+/** Search or filters applied (the sort alone narrows nothing). Pure. */
+export const hasFilters = (filters) =>
+  Object.keys(filters ?? {}).some((name) => !SORT_KEYS.includes(name));
+
+/** Neither filters nor a sort: the only lists cached on the device (D38, D42). Pure. */
+export const isPlainList = (filters) => Object.keys(filters ?? {}).length === 0;
+
+/** The filters without the sort. Pure. */
+export function withoutSort(filters = {}) {
+  return Object.fromEntries(Object.entries(filters).filter(([name]) => !SORT_KEYS.includes(name)));
+}
+
+/** The sort part of the filters (`{}` for the default order). Pure. */
+export function sortOf(filters = {}) {
+  return filters.sort ? { sort: filters.sort, order: filters.order } : {};
+}
+
+/** Sort shown in the table: the one in the URL, or the entity's default. Pure. */
+export function currentSort(entity, filters = {}) {
+  return filters.sort ? sortOf(filters) : ENTITIES[entity].defaultSort;
+}
+
+/**
+ * Filters after a click on a column title: the same column flips the order, another one
+ * starts ascending. Filters are kept. Pure.
+ * @param {string} entity
+ * @param {object} filters current filters (and sort)
+ * @param {string} column
+ */
+export function sortByColumn(entity, filters, column) {
+  const now = currentSort(entity, filters);
+  const order = now.sort === column && now.order === 'asc' ? 'desc' : 'asc';
+  return { ...withoutSort(filters), ...sortParams(ENTITIES[entity], { sort: column, order }) };
+}
 
 /**
  * Filter bar. Controls are named after the query parameters; changes call `onChange` with

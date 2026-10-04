@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { chartRows, chartSummary, kpiTiles, renderDashboard } from '../assets/js/dashboard.js';
+import {
+  chartRows,
+  chartSummary,
+  kpiTiles,
+  myWorkItems,
+  renderDashboard,
+  statusRows,
+} from '../assets/js/dashboard.js';
 
 const kpis = {
   open_work_orders: 18,
@@ -19,7 +26,11 @@ const stats = {
     { category: 'SECURITY', count: 7 },
     { category: 'UNSPECIFIED', count: 40 },
   ],
-  by_status: [],
+  by_status: [
+    { status: 'CLOSED', count: 50 },
+    { status: 'OPEN', count: 30 },
+    { status: 'IN_PROGRESS', count: 20 },
+  ],
   by_type: [],
 };
 const wo = (id, extra = {}) => ({
@@ -73,6 +84,28 @@ describe('chartRows', () => {
   });
 });
 
+describe('statusRows', () => {
+  it('lists every status in workflow order with a fixed color slot and its share', () => {
+    expect(statusRows(stats).map((r) => [r.label, r.count, r.share, r.slot])).toEqual([
+      ['Open', 30, 0.3, 1],
+      ['In progress', 20, 0.2, 2],
+      ['On hold', 0, 0, 3],
+      ['Closed', 50, 0.5, 4],
+      ['Cancelled', 0, 0, 5],
+    ]);
+    expect(statusRows({ by_status: [] }).every((r) => r.share === 0)).toBe(true);
+  });
+});
+
+describe('myWorkItems', () => {
+  it('picks the list of the period, and copes with copies saved before the week list', () => {
+    const data = { my_work_today: [1], my_work_week: [1, 2] };
+    expect(myWorkItems(data, 'today')).toEqual([1]);
+    expect(myWorkItems(data, 'week')).toEqual([1, 2]);
+    expect(myWorkItems({ my_work_today: [1] }, 'week')).toEqual([]);
+  });
+});
+
 describe('renderDashboard', () => {
   let host;
   beforeEach(() => {
@@ -86,9 +119,15 @@ describe('renderDashboard', () => {
         today: '2026-10-04',
         kpis,
         recent_activity: [wo(1), wo(2, { status: 'CLOSED' })],
+        week_end: '2026-10-10',
         my_work_today: [
           wo(3, { priority: 'URGENT', due_on: '2026-10-02' }),
           wo(4, { due_on: '2026-10-04' }),
+        ],
+        my_work_week: [
+          wo(3, { priority: 'URGENT', due_on: '2026-10-02' }),
+          wo(4, { due_on: '2026-10-04' }),
+          wo(5, { due_on: '2026-10-09' }),
         ],
       },
       stats,
@@ -109,7 +148,7 @@ describe('renderDashboard', () => {
   });
 
   it('gives the chart a text alternative and a data table', () => {
-    const chart = render();
+    const [chart] = render();
     expect(chart.canvas.getAttribute('role')).toBe('img');
     expect(chart.canvas.getAttribute('aria-label')).toMatch(/^Bar chart\. Electrical: 30/);
     const rows = [...host.querySelectorAll('.chart-table tbody tr')].map((tr) => tr.textContent);
@@ -120,6 +159,54 @@ describe('renderDashboard', () => {
     expect(host.querySelector('.chart-card figcaption p').textContent).toBe(
       '101 work orders created',
     );
+  });
+
+  it('shows the status pie with every value written next to it', () => {
+    const charts = render();
+    expect(charts).toHaveLength(2);
+    expect(charts[1].canvas.getAttribute('aria-label')).toBe(
+      'Pie chart. Open: 30, In progress: 20, On hold: 0, Closed: 50, Cancelled: 0.',
+    );
+    expect(host.querySelector('#status-chart-heading').textContent).toBe(
+      'Work orders by status — last 30 days',
+    );
+    const legend = [...host.querySelectorAll('.pie-legend li')].map((li) => li.textContent);
+    expect(legend[0]).toBe('Open3030%');
+    expect(legend[3]).toBe('Closed5050%');
+    expect(host.querySelector('.pie-legend .chart-series-4')).not.toBeNull();
+  });
+
+  it('shows no pie, and nothing to draw, when no work order was created', () => {
+    const charts = render({ stats: { ...stats, by_status: [] } });
+    expect(charts).toHaveLength(1);
+    expect(host.textContent).toContain('No work order was created in this period.');
+  });
+
+  it('gives technicians their work and the recent activity, without charts', () => {
+    expect(render({ charts: false })).toEqual([]);
+    expect(host.querySelector('canvas')).toBeNull();
+    expect(host.querySelector('[aria-labelledby="mywork-heading"]')).not.toBeNull();
+    expect(host.querySelector('[aria-labelledby="recent-heading"]')).not.toBeNull();
+  });
+
+  it('switches my work between today (default) and the next 7 days', () => {
+    render();
+    const card = () => host.querySelector('[aria-labelledby="mywork-heading"]');
+    const option = (key) => card().querySelector(`[data-range="${key}"]`);
+    expect(option('today').getAttribute('aria-pressed')).toBe('true');
+    expect(card().querySelectorAll('li')).toHaveLength(2);
+
+    option('week').click();
+    expect(option('week').getAttribute('aria-pressed')).toBe('true');
+    expect(option('today').getAttribute('aria-pressed')).toBe('false');
+    expect(document.activeElement).toBe(option('week'));
+    expect(card().querySelectorAll('li')).toHaveLength(3);
+    expect(card().textContent).toContain('Due by 10 Oct 2026, late or without a due date.');
+
+    render(); // the choice survives a refresh of the figures
+    expect(card().querySelectorAll('li')).toHaveLength(3);
+    option('today').click();
+    expect(card().querySelectorAll('li')).toHaveLength(2);
   });
 
   it('lists my work with an overdue mark, and recent activity', () => {

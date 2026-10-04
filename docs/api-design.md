@@ -145,9 +145,10 @@ Every authenticated request also answers 401 when the account was deactivated (B
 ## Work orders
 
 ### GET /api/work-orders
-- Query: `page`, `size`, `sort` (`number`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
+- Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?` (one status or several comma-separated, e.g. `OPEN,IN_PROGRESS,ON_HOLD`), `priority?`, `type?`, `category?`, `site?`, `assignee_id?`;
   - `mine?=true`: assigned to the current user; `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
+- `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
 
 ### GET /api/work-orders/stats
@@ -270,12 +271,14 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
     "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
               "closed_this_month": 40, "assets_broken_down": 21,
               "overdue_work_orders": 9, "pending_conflicts": 2 },
+    "week_end": "2026-10-10",
     "recent_activity": [WorkOrder x5],
-    "my_work_today": [WorkOrder] }
+    "my_work_today": [WorkOrder],
+    "my_work_week": [WorkOrder] }
   ```
 - `pending_conflicts` is present for SUPERVISOR and ADMIN only. Definitions: `docs/data-model.md` → KPI definitions.
-- `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` is sorted by priority (URGENT first), then due date (undated last), then number.
-- The chart uses `GET /api/work-orders/stats?period=30`.
+- `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
+- The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
 ## Future AI endpoints (not in the MVP)
 

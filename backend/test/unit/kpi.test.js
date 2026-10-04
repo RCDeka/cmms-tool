@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compareMyWork, isMyWorkToday, isOverdue, monthRange } from '../../src/rules/kpi.js';
+import {
+  compareMyWork,
+  isMyWorkDueBy,
+  isMyWorkToday,
+  isOverdue,
+  monthRange,
+  weekEnd,
+} from '../../src/rules/kpi.js';
 
 describe('monthRange', () => {
   it.each([
@@ -55,5 +62,22 @@ describe('my work today', () => {
       wo({ number: 'd', priority: 'HIGH', due_on: '2026-10-02' }),
     ];
     expect(list.sort(compareMyWork).map((w) => w.number)).toEqual(['b', 'd', 'c', 'a']);
+  });
+});
+
+describe('my work this week', () => {
+  it('ends 6 days after today, across month and year ends', () => {
+    expect(weekEnd('2026-10-04')).toBe('2026-10-10');
+    expect(weekEnd('2026-12-28')).toBe('2027-01-03');
+  });
+
+  it('keeps work due by the last day, late work and undated work', () => {
+    const wo = (o) => ({ status: 'OPEN', assignee_id: 4, due_on: null, ...o });
+    expect(isMyWorkDueBy(wo({ due_on: '2026-10-10' }), 4, '2026-10-10')).toBe(true);
+    expect(isMyWorkDueBy(wo({ due_on: '2026-09-01' }), 4, '2026-10-10')).toBe(true);
+    expect(isMyWorkDueBy(wo({}), 4, '2026-10-10')).toBe(true);
+    expect(isMyWorkDueBy(wo({ due_on: '2026-10-11' }), 4, '2026-10-10')).toBe(false);
+    expect(isMyWorkDueBy(wo({ status: 'ON_HOLD', assignee_id: 5 }), 4, '2026-10-10')).toBe(false);
+    expect(isMyWorkDueBy(wo({ status: 'CANCELLED' }), 4, '2026-10-10')).toBe(false);
   });
 });

@@ -2,7 +2,7 @@
 import { parseUserFilters } from './admin-users.js';
 import { ENTITIES, entityForSegment } from './entities.js';
 import { parseFeedbackFilters } from './feedback.js';
-import { filtersQuery, hasFilters, parseFilters } from './filters.js';
+import { filtersQuery, isPlainList, parseFilters } from './filters.js';
 
 const ID = /^[1-9]\d{0,15}$/;
 /** Work orders created offline have a temporary id until the server answers (D26). */
@@ -15,7 +15,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
  * @property {number} [assetId] creation form: asset to pre-fill
- * @property {object} [filters] search and filters of the table (only when some are set)
+ * @property {object} [filters] search, filters and sort of the table (only when some are set)
  * @property {number} page table page (1 when absent or invalid)
  * @property {string} [next] login: where to go after logging in
  */
@@ -75,7 +75,7 @@ export function parseRoute(pathname, search = '') {
   const entity = entityForSegment(first);
   if (!entity) return { name: 'notFound', page };
   const filters = parseFilters(entity.key, query);
-  const extra = hasFilters(filters) ? { filters } : {};
+  const extra = isPlainList(filters) ? {} : { filters };
   if (!second) return { name: 'list', entity: entity.key, page, ...extra };
   if (second === 'new') {
     const assetId = entity.key === 'work_orders' ? positiveInt(query.get('asset_id'), null) : null;

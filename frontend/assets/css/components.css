@@ -404,9 +404,116 @@ a.button {
   align-items: start;
 }
 
-.dashboard-lists {
+.dashboard-lists,
+.dashboard-charts {
   display: grid;
   gap: var(--space-4);
+}
+
+/* Card title with a control at its end (My work → Today / Next 7 days). */
+.card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.card-header h2 {
+  margin: 0;
+}
+
+/* Two-option switch: the chosen option is filled black (aria-pressed). */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.segmented-option {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmented-option + .segmented-option {
+  border-left: 1px solid var(--color-border);
+}
+
+.segmented-option:hover {
+  background: var(--color-hover);
+}
+
+.segmented-option[aria-pressed='true'] {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.segmented-option:focus-visible {
+  outline-offset: -3px;
+}
+
+/* Status pie and the list of its values side by side; stacked on narrow cards. */
+.pie-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+}
+
+.pie-frame {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex: none;
+}
+
+.pie-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 14rem;
+}
+
+.pie-legend li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto 3.5rem;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pie-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.chart-series-1 {
+  background: var(--color-chart-series-1);
+}
+
+.chart-series-2 {
+  background: var(--color-chart-series-2);
+}
+
+.chart-series-3 {
+  background: var(--color-chart-series-3);
+}
+
+.chart-series-4 {
+  background: var(--color-chart-series-4);
+}
+
+.chart-series-5 {
+  background: var(--color-chart-series-5);
 }
 
 .dashboard-card {

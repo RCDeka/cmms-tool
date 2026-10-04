@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderDetail } from '../assets/js/detail.js';
-import { focusRow, renderTable, selectRow } from '../assets/js/table.js';
+import { focusRow, focusSortButton, renderTable, selectRow } from '../assets/js/table.js';
 
 const asset = (id, extra = {}) => ({
   id,
@@ -145,6 +145,69 @@ describe('renderTable', () => {
     expect(buttons().next.disabled).toBe(true);
     expect(buttons().last.disabled).toBe(true);
     expect(buttons().first.textContent).toBe('◀◀ First');
+  });
+
+  it('repeats the page buttons above the table when there are several pages', () => {
+    const onPage = vi.fn();
+    renderTable(container, {
+      entity: 'assets',
+      data: page([asset(1)], { page: 1, pages: 3 }),
+      selectedId: null,
+      onOpen() {},
+      onPage,
+    });
+    const [top, bottom] = container.querySelectorAll('nav.pagination');
+    expect(top.getAttribute('aria-label')).toBe('Pagination, top');
+    expect(top.parentElement.classList.contains('table-header')).toBe(true);
+    expect(bottom.getAttribute('aria-label')).toBe('Pagination');
+    // Each copy has its own control names, so focus returns to the copy used.
+    top.querySelector('[data-pager="top-next"]').click();
+    expect(onPage).toHaveBeenCalledWith(2, 'top-next');
+
+    renderTable(container, {
+      entity: 'assets',
+      data: page([asset(1)], { page: 1, pages: 1 }),
+      selectedId: null,
+      onOpen() {},
+      onPage,
+    });
+    expect(container.querySelectorAll('nav.pagination')).toHaveLength(1);
+  });
+
+  it('sorts from the column titles, showing the order with aria-sort and an arrow', () => {
+    const onSort = vi.fn();
+    renderTable(container, {
+      entity: 'assets',
+      data: page([asset(1)]),
+      selectedId: null,
+      onOpen() {},
+      onPage() {},
+      sort: { sort: 'name', order: 'desc' },
+      onSort,
+    });
+    const headers = [...container.querySelectorAll('thead th')];
+    const name = headers.find((th) => th.textContent.startsWith('Name'));
+    expect(name.getAttribute('aria-sort')).toBe('descending');
+    expect(name.querySelector('.sort-arrow').textContent).toBe('▼');
+    const code = headers.find((th) => th.textContent.startsWith('Asset code'));
+    expect(code.hasAttribute('aria-sort')).toBe(false);
+    expect(code.querySelector('.sort-arrow').textContent).toBe('↕');
+    expect(code.querySelector('.sort-arrow').getAttribute('aria-hidden')).toBe('true');
+    code.querySelector('button').click();
+    expect(onSort).toHaveBeenCalledWith('code');
+    expect(focusSortButton(container, 'code')).toBe(true);
+    expect(document.activeElement).toBe(code.querySelector('button'));
+  });
+
+  it('keeps plain column titles without a sort handler', () => {
+    renderTable(container, {
+      entity: 'assets',
+      data: page([asset(1)]),
+      selectedId: null,
+      onOpen() {},
+      onPage() {},
+    });
+    expect(container.querySelector('thead button')).toBeNull();
   });
 
   it('updates the selection without re-rendering, and focuses a row', () => {

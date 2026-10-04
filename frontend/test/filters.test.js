@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   NOT_FINISHED,
+  currentSort,
   filtersQuery,
   hasFilters,
+  isPlainList,
   parseFilters,
   renderFilterBar,
+  sortByColumn,
+  withoutSort,
 } from '../assets/js/filters.js';
 import { detailUrl, listUrl, parseRoute } from '../assets/js/router.js';
 
@@ -34,6 +38,58 @@ describe('parseFilters', () => {
     );
     expect(hasFilters({})).toBe(false);
     expect(hasFilters({ q: 'x' })).toBe(true);
+  });
+});
+
+describe('table sort', () => {
+  it('reads a sortable column and its order, and leaves the default order out', () => {
+    expect(parseFilters('work_orders', q('sort=assignee'))).toEqual({
+      sort: 'assignee',
+      order: 'asc',
+    });
+    expect(parseFilters('assets', q('sort=status&order=desc&q=fan'))).toEqual({
+      q: 'fan',
+      sort: 'status',
+      order: 'desc',
+    });
+    expect(parseFilters('assets', q('sort=code&order=asc'))).toEqual({}); // the default
+    expect(parseFilters('assets', q('sort=brand'))).toEqual({}); // not a column
+    expect(parseFilters('work_orders', q('sort=created_on'))).toEqual({}); // not a column
+  });
+
+  it('tells sorted lists from filtered ones', () => {
+    const sorted = { sort: 'name', order: 'asc' };
+    expect(hasFilters(sorted)).toBe(false);
+    expect(isPlainList(sorted)).toBe(false);
+    expect(isPlainList({})).toBe(true);
+    expect(withoutSort({ ...sorted, q: 'x' })).toEqual({ q: 'x' });
+    expect(filtersQuery('assets', { order: 'desc', sort: 'name', q: 'x' })).toBe(
+      'q=x&sort=name&order=desc',
+    );
+  });
+
+  it('starts a new column ascending, flips the same column, and keeps the filters', () => {
+    expect(currentSort('assets', {})).toEqual({ sort: 'code', order: 'asc' });
+    expect(currentSort('work_orders', {})).toEqual({ sort: 'created_on', order: 'desc' });
+    expect(sortByColumn('work_orders', { mine: true }, 'due_on')).toEqual({
+      mine: true,
+      sort: 'due_on',
+      order: 'asc',
+    });
+    const desc = sortByColumn('work_orders', { sort: 'due_on', order: 'asc' }, 'due_on');
+    expect(desc).toEqual({ sort: 'due_on', order: 'desc' });
+    expect(sortByColumn('work_orders', desc, 'due_on')).toEqual({ sort: 'due_on', order: 'asc' });
+    // Assets: Code is the default order, so code ascending leaves the URL clean.
+    expect(sortByColumn('assets', {}, 'code')).toEqual({ sort: 'code', order: 'desc' });
+    expect(sortByColumn('assets', { sort: 'code', order: 'desc' }, 'code')).toEqual({});
+  });
+
+  it('keeps the sort in list and record URLs', () => {
+    const filters = { status: 'OPEN', sort: 'priority', order: 'desc' };
+    const url = new URL(detailUrl('work_orders', 4, 2, filters), 'http://x');
+    expect(url.search).toBe('?status=OPEN&sort=priority&order=desc&page=2');
+    expect(parseRoute(url.pathname, url.search).filters).toEqual(filters);
+    expect(parseRoute('/assets', '?sort=name').filters).toEqual({ sort: 'name', order: 'asc' });
   });
 });
 

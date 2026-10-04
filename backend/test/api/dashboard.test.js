@@ -13,7 +13,7 @@ import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
  *  1  OPEN         2026-10-03              tech1    NORMAL    open, overdue, my work (3rd)
  *  2  OPEN         2026-10-04              tech1    URGENT    open, my work (1st) — due today is not late
  *  3  IN_PROGRESS  —                       tech1    HIGH      in progress, my work (2nd)
- *  4  ON_HOLD      2026-10-10              tech1    NORMAL    not late, not today
+ *  4  ON_HOLD      2026-10-10              tech1    NORMAL    not late, not today; this week (4th)
  *  5  IN_PROGRESS  2026-09-30              tech2    LOW       in progress, overdue
  *  6  CLOSED                   2026-10-01  tech1    NORMAL    closed this month
  *  7  CLOSED                   2026-09-30  tech2    NORMAL    closed last month: not counted
@@ -128,6 +128,13 @@ describe('GET /api/dashboard on a hand-made dataset', () => {
   it("orders the user's work for today: URGENT first, then by due date", async () => {
     const res = await dashboardAs('tech1');
     expect(res.body.my_work_today.map((w) => w.id)).toEqual([2, 3, 1]);
+  });
+
+  it("lists the user's work for the next 7 days, today's work included", async () => {
+    const res = await dashboardAs('tech1');
+    expect(res.body.week_end).toBe('2026-10-10');
+    expect(res.body.my_work_week.map((w) => w.id)).toEqual([2, 3, 1, 4]);
+    expect((await dashboardAs('sup')).body.my_work_week).toEqual([]);
   });
 
   it('does not give the conflict count to technicians', async () => {

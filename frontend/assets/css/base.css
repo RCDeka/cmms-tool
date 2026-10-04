@@ -25,6 +25,14 @@
   /* Single-series chart bars: dark gray, the brand red on hover. */
   --color-chart-bar: #3d3d3d;
   --color-chart-bar-hover: #c00319;
+  /* Categorical series (status pie), fixed order, validated for color-vision deficiency on
+     white (data-viz method). Slots 3–5 are under 3:1, so values are always written next to
+     the chart. */
+  --color-chart-series-1: #2a78d6;
+  --color-chart-series-2: #eb6834;
+  --color-chart-series-3: #1baf7a;
+  --color-chart-series-4: #eda100;
+  --color-chart-series-5: #e87ba4;
   /* Dark sidebar */
   --color-sidebar-bg: #000000;
   --color-sidebar-text: #f2f2f2;

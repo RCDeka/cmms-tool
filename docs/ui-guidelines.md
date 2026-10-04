@@ -71,6 +71,9 @@ Badges always show text. Badge class names come from the field and the code in k
 
 ## Dashboard
 
+- **By role** (D43): supervisors and admins see the two charts beside "My work" and "Recent activity"; technicians see no chart, only their work and the recent activity.
+- **My work**: a Today / Next 7 days switch (two buttons with `aria-pressed`, the chosen one filled black), Today by default; the choice is kept while the app is open. A line under the title says what the list holds ("Due by 10 Oct 2026, late or without a due date").
+- **Status pie** ("Work orders by status — last 30 days"): five slices, one fixed color per status in workflow order (`--color-chart-series-1` … `-5`: blue, orange, aqua, yellow, pink; the color follows the status, never its rank), 2 px white gaps between slices, tooltip with count and share. Three of these colors are under 3:1 on white, so the list beside the pie writes every status with its count and share: it is the pie's table view, and stays readable without the chart library.
 - **KPI tiles** (stat tiles): sentence-case label, value in the same sans with proportional figures, the whole tile is a link to the matching list. Tiles whose count needs attention (overdue work orders, broken-down assets, conflicts) add an amber edge and a "⚠ Needs attention" badge with text when the count is above zero. Technicians get no conflict tile.
 - **Chart** (Chart.js, loaded on demand): one series, so **one color for every bar** (`--color-chart-bar`, dark gray, 10.8:1 on the card; brand red on hover), never a darker-is-bigger ramp on these nominal categories. Horizontal bars ≤ 24 px with a 4 px rounded end, sorted by count with "Unspecified" last, value at the bar tip in text color, no legend (the title names the series), solid hairline grid (`--color-grid`), tooltip on hover.
 - Every chart has a text equivalent (`aria-label` summary on the canvas) and a "Show as a table" view; if the chart library is unavailable, the table opens instead.
@@ -79,4 +82,8 @@ Badges always show text. Badge class names come from the field and the code in k
 
 ## Pagination (brief)
 
-`◀◀ First` · `◀ Previous` · `Page X / Y` · `Next ▶` · `Last ▶▶`. Buttons are disabled at the bounds. 50 rows per page.
+`◀◀ First` · `◀ Previous` · `Page X / Y` · `Next ▶` · `Last ▶▶`. Buttons are disabled at the bounds. 50 rows per page. On the asset and work order tables, a second copy sits at the start of the row above the table (record count and "New …" at its end) when there is more than one page, so changing page needs no scrolling (D42). Focus stays on the button used, in the copy used.
+
+## Table sort (D42)
+
+Every column title of the asset and work order tables is a button. A click sorts by that column ascending; a second click on the same column flips to descending, and so on. The sorted column has `aria-sort` and an arrow (▲ ascending, ▼ descending); the other columns show a faint ↕. Enumerated columns follow business order (priority Low → Urgent), and empty values (no assignee, no due date) come last. Focus stays on the column title after the sort. The default order (assets by code, work orders newest first) is not in the URL.

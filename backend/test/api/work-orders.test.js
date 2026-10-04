@@ -71,8 +71,35 @@ describe('GET /api/work-orders', () => {
     expect(res.body.items[0].priority).toBe('URGENT');
   });
 
+  it('sorts by title, site and assignee name (table columns)', async () => {
+    const names = (items) =>
+      items.map((w) => (w.assignee ? `${w.assignee.first_name} ${w.assignee.last_name}` : ''));
+    const byName = (await get('/api/work-orders?sort=assignee&order=asc&size=100').expect(200)).body
+      .items;
+    const named = names(byName).filter(Boolean);
+    expect(names(byName)).toEqual([...named.sort(), ...names(byName).filter((n) => !n)]);
+    const byDue = [];
+    for (const page of [1, 2, 3]) {
+      const url = `/api/work-orders?sort=due_on&order=desc&size=100&page=${page}`;
+      byDue.push(...(await get(url).expect(200)).body.items);
+    }
+    const dates = byDue.map((w) => w.due_on);
+    const firstEmpty = dates.indexOf(null);
+    expect(firstEmpty).toBeGreaterThan(0);
+    expect(dates.slice(firstEmpty).every((d) => d === null)).toBe(true); // undated last
+    expect(dates.slice(0, firstEmpty)).toEqual([...dates.slice(0, firstEmpty)].sort().reverse());
+    const byTitle = (
+      await get('/api/work-orders?sort=title&order=desc&size=100').expect(200)
+    ).body.items.map((w) => w.title);
+    expect(byTitle).toEqual([...byTitle].sort().reverse());
+    const bySite = (
+      await get('/api/work-orders?sort=site&order=asc&size=100').expect(200)
+    ).body.items.map((w) => w.site);
+    expect(bySite).toEqual([...bySite].sort());
+  });
+
   it('answers 400 for a sort key outside the whitelist', async () => {
-    await get('/api/work-orders?sort=title').expect(400);
+    await get('/api/work-orders?sort=asset').expect(400);
   });
 });
 

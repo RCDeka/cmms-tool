@@ -1,6 +1,6 @@
 // GET /api/dashboard (docs/data-model.md → KPI definitions).
 import { dateInZone } from '../lib/dates.js';
-import { compareMyWork, isMyWorkToday, monthRange } from '../rules/kpi.js';
+import { compareMyWork, isMyWorkDueBy, monthRange, weekEnd } from '../rules/kpi.js';
 
 const RECENT_ACTIVITY_SIZE = 5;
 
@@ -43,15 +43,19 @@ export function createDashboardService(db, { workOrders }) {
       if (['SUPERVISOR', 'ADMIN'].includes(user.role))
         kpis.pending_conflicts = pendingConflicts.get();
 
+      const lastDay = weekEnd(today);
+      const myWeek = workOrders
+        .openAssignedTo(user.id)
+        .filter((wo) => isMyWorkDueBy(wo, user.id, lastDay))
+        .sort(compareMyWork);
       return {
         today,
+        week_end: lastDay,
         generated_at: now.toISOString(),
         kpis,
         recent_activity: workOrders.recent(RECENT_ACTIVITY_SIZE),
-        my_work_today: workOrders
-          .openAssignedTo(user.id)
-          .filter((wo) => isMyWorkToday(wo, user.id, today))
-          .sort(compareMyWork),
+        my_work_today: myWeek.filter((wo) => isMyWorkDueBy(wo, user.id, today)),
+        my_work_week: myWeek,
       };
     },
   };

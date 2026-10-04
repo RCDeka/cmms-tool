@@ -253,6 +253,7 @@ Indexes: `created_at`, (`status`, `created_at`).
 - Work orders by category / status / type (`stats?period=N`): work orders with `created_on` within the last N days. Work orders without `category` are counted under `UNSPECIFIED`.
 - Recent activity: the 5 work orders with the most recent `updated_at`.
 - My work today: non-terminal work orders with `assignee_id` = current user and (`due_on` ≤ today or empty), sorted by priority (`URGENT` first) then `due_on`.
+- My work, next 7 days: the same with `due_on` ≤ today + 6 days (`week_end`), so today's and late work are included (D43).
 
 ## Seed data (mock)
 

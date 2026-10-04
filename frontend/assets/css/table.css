@@ -45,6 +45,41 @@
   white-space: nowrap;
 }
 
+/* Sortable column title: the whole cell is the button (44 px target). */
+.data-table th.sortable {
+  padding: 0;
+}
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sort-button:hover,
+.data-table th[aria-sort] .sort-button {
+  color: var(--color-text);
+}
+
+.sort-button:focus-visible {
+  outline-offset: -3px;
+}
+
+/* ↕ on columns not sorted yet: a hint, quieter than the ▲ / ▼ of the sorted column. */
+.sort-button.is-none .sort-arrow {
+  opacity: 0.55;
+}
+
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -94,6 +129,12 @@
   margin-top: var(--space-4);
 }
 
+/* Top copy: at the start of the table header row, the count and actions at its end. */
+.pagination-top {
+  justify-content: flex-start;
+  margin: 0 auto 0 0;
+}
+
 .pagination-status {
   padding: 0 var(--space-2);
   font-weight: 600;
@@ -101,6 +142,7 @@
 }
 
 .table-header {
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
 }
