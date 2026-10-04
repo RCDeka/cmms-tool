@@ -1,237 +1,188 @@
 # API Design
 
-Base path: `/api/v1`. Format: JSON (UTF-8). Auth: `Authorization: Bearer <jwt>` on all endpoints except `POST /auth/login` and `GET /health`.
+Base path: `/api`. Format: JSON (UTF-8). Auth: `Authorization: Bearer <jwt>` on every endpoint except `POST /api/auth/login` and `GET /api/health`.
+
+Endpoints from the product brief are kept as written there. Endpoints marked **(added)** are listed in decision D8.
 
 ## Conventions
 
-- IDs: UUID strings. Dates: ISO 8601 UTC.
-- Pagination query params: `page` (default 1), `pageSize` (default 20, max 100). Paginated response: `{ "data": [...], "meta": { "page", "pageSize", "total" } }`.
-- Sorting: `sortBy` (whitelisted field) and `order` (`asc`|`desc`).
-- Error body: `{ "statusCode": number, "error": string, "message": string | string[], "details"?: object }`. `details` is optional (e.g. per-field validation errors or the violated business rule id).
-- Common status codes: `400` validation error, `401` missing/invalid token, `403` insufficient role, `404` not found, `409` conflict (uniqueness, business rule, invalid transition), `422` semantically invalid reference, `429` rate limit.
-- Roles legend: **A** = ADMIN, **M** = MANAGER, **T** = TECHNICIAN.
+- IDs: integers. Datetimes: ISO 8601 UTC. Dates: `YYYY-MM-DD`. Booleans: `true`/`false`.
+- JSON field names are the database column names (`snake_case`, French; D16).
+- Pagination (brief): `page` (default 1), `size` (default 50, max 100). Response: `{ "total", "page", "pages", "items": [...] }`. A `page` above `pages` returns an empty `items` array.
+- Sorting: `sort` (whitelisted column, see each endpoint) and `order` (`asc`|`desc`). Any other value → 400.
+- List items are **complete records**, identical to the `GET /:id` response (D7).
+- Error body (all errors except version conflicts): `{ "statusCode": number, "error": string, "message": string, "details"?: object }`. `details` holds per-field validation errors or the violated business rule (e.g. `{ "rule": "BR-B4" }`).
+- Status codes: `400` invalid input, `401` missing/invalid/expired token, `403` role or field not allowed, `404` not found, `409` version conflict or record locked by a conflict, `422` business rule violated (status transition, required field, invalid reference), `429` rate limit.
+- Unknown body fields are rejected (400). The input is validated with zod.
 
-## Shared Response Shapes
+## Permission matrix (D23)
+
+| Action | operateur | superviseur | admin |
+|---|---|---|---|
+| Read équipements, BT, referentiels, dashboard | yes | yes | yes |
+| `PUT /equipements/:id` | only `statut`, `commentaire`, `date_derniere_revision` | all editable fields | all editable fields |
+| `PUT /bons_travaux/:id` | only BT assigned to them; only `statut`, `date_debut`, `duree_reelle_h`, `compte_rendu` | all editable fields | all editable fields |
+| `GET /users` | no | yes | yes |
+| Conflict console and resolution | no | yes | yes |
+
+Editable fields:
+- **Équipements**: every column except `id`, `code`, `version`, `conflit`, `updated_by`, `created_at`, `updated_at`.
+- **BT**: every column except `id`, `numero`, `date_creation`, `version`, `conflit`, `updated_by`, `created_at`, `updated_at`.
+
+Sending a field the role may not edit → 403 with `details.fields`.
+
+## Shared shapes
 
 ```
-User        { id, email, firstName, lastName, role, isActive, createdAt, updatedAt }
-Location    { id, name, parentId, createdAt, updatedAt }
-Category    { id, name, description, createdAt, updatedAt }
-Asset       { id, code, name, description, category: {id,name}, location: {id,name},
-              status, manufacturer, model, serialNumber, installedAt, createdAt, updatedAt }
-WorkOrder   { id, number, title, description, type, priority, status,
-              asset: {id,code,name}, assignee: {id,firstName,lastName},
-              createdBy: {id,firstName,lastName}, dueDate, startedAt, completedAt,
-              resolutionNotes, createdAt, updatedAt }
-HistoryItem { id, fromStatus, toStatus, changedBy: {id,firstName,lastName}, comment, changedAt }
+User         { id, nom, prenom, login, role, site, domaine_technique, power_user }
+UserRef      { id, nom, prenom }
+Equipement   { id, code, libelle, site, batiment, etage, famille, sous_famille, criticite,
+               statut, marque, modele, numero_serie, date_mise_en_service,
+               date_derniere_revision, fournisseur, contrat_maintenance,
+               technicien_responsable, localisation_precise, commentaire,
+               version, conflit, updated_by: UserRef|null, created_at, updated_at }
+BonTravaux   { id, numero, type, statut, priorite, titre, description,
+               equipement_id, equipement: { id, code, libelle, site, statut } | null,
+               site, domaine_technique,
+               technicien_assigne_id, technicien_assigne: UserRef|null,
+               superviseur_id, superviseur: UserRef|null,
+               date_creation, date_souhaitee, date_debut, date_cloture,
+               duree_estimee_h, duree_reelle_h, compte_rendu,
+               version, conflit, updated_by: UserRef|null, created_at, updated_at }
+Page<T>      { total, page, pages, items: T[] }
 ```
+
+`password_hash` is never returned.
 
 ---
 
-## Health
+## Health (added)
 
-### GET /health
-- Roles: public.
-- Response 200: `{ "status": "ok" }`
+### GET /api/health
+- Public. `200 { "status": "ok", "time": "<ISO>" }`. The client also uses it to check whether the server can be reached.
 
-## Auth
+## Authentication
 
-### POST /auth/login
-- Roles: public. Rate limited.
-- Body: `{ "email": string, "password": string }`
-- 200: `{ "accessToken": string, "expiresIn": number, "user": User }`
-- Errors: 400 invalid body; 401 invalid credentials or inactive user; 429.
+### POST /api/auth/login
+- Public, rate limited (10 attempts per 15 min per IP).
+- Body: `{ "login": string, "password": string }`
+- `200 { "token": string, "expires_in": number, "user": { id, nom, prenom, role, power_user } }`
+- Errors: 400; 401 invalid credentials; 429.
 
-### GET /auth/me
-- Roles: A, M, T.
-- 200: `User`
-- Errors: 401.
+### POST /api/auth/logout
+- `204`. JWTs are stateless: the server keeps no session, and the client deletes its token and local data (D22).
 
-### POST /auth/change-password
-- Roles: A, M, T (own account).
-- Body: `{ "currentPassword": string, "newPassword": string }` (min 10 chars)
-- 204 no content.
-- Errors: 400; 401 wrong current password.
+### GET /api/auth/me (added)
+- `200 User`. Errors: 401.
 
-## Users
+## Équipements
 
-### GET /users
-- Roles: A (M may read a reduced list for assignment, see `/users/assignable`).
-- Query: `page`, `pageSize`, `role?`, `isActive?`, `search?` (name/email).
-- 200: paginated `User`.
-- Errors: 401, 403.
+### GET /api/equipements
+- Query: `page`, `size`, `sort` (`code`|`libelle`|`site`|`famille`|`criticite`|`statut`|`updated_at`, default `code`), `order` (default `asc`).
+- `200 Page<Equipement>`
 
-### GET /users/assignable
-- Roles: A, M.
-- Returns active users with role TECHNICIAN or MANAGER, for assignment dropdowns.
-- 200: `[{ id, firstName, lastName, role }]`
+### GET /api/equipements/search
+- Query: `q` (matches `code`, `libelle`, `marque`, `modele`, `numero_serie`; case-insensitive), `site?`, `famille?`, `statut?`, `criticite?`, `limit` (default 50, max 200).
+- `200 { "items": Equipement[], "total": number }` (`total` = number of matches before `limit`).
+- Declared before `/:id` in the router.
 
-### GET /users/:id
-- Roles: A.
-- 200: `User`. Errors: 401, 403, 404.
+### GET /api/equipements/:id
+- `200 Equipement`. Errors: 404.
 
-### POST /users
-- Roles: A.
-- Body: `{ "email", "password", "firstName", "lastName", "role" }`
-- 201: `User`. Errors: 400; 409 email already used.
+### PUT /api/equipements/:id
+- Body: `{ ...changed fields..., "version": number, "edited_at"?: ISO }`. `edited_at` is when the user made the edit (used for queued offline edits); it defaults to now.
+- `200 { "updated": true, "version": N+1, "item": Equipement }`
+- `409` version mismatch (BR-V3):
+  ```
+  { "conflict": true, "conflictId": 12,
+    "serverVersion": { ...Equipement as stored... },
+    "clientVersion": { ...fields sent by the client..., "version": N } }
+  ```
+- `409` record locked (BR-V4): `{ "conflict": true, "locked": true, "conflictId": 12 }`
+- Errors: 400; 403; 404; 422.
 
-### PATCH /users/:id
-- Roles: A.
-- Body (all optional): `{ "email", "firstName", "lastName", "role", "isActive", "password" }`
-- 200: `User`. Errors: 400; 404; 409 email conflict, last-admin rule (BR-U4), or open work orders on deactivation (BR-U5).
+### PUT /api/equipements/:id/resolve-conflict
+- Roles: superviseur, admin.
+- Body: `{ "conflictId": number, "choice": "A" | "B" | "merge", "fields"?: { ... } }`. `fields` is required for `merge` and contains the final value of each divergent field.
+- `200 { "resolved": true, "version": N+1, "item": Equipement }`
+- Errors: 400; 403; 404 conflict or record not found; 409 conflict already resolved; 422 merged values break a rule.
 
-There is no `DELETE /users/:id` (deactivate via PATCH).
+## Bons de travaux
 
-## Locations
+### GET /api/bons_travaux
+- Query: `page`, `size`, `sort` (`numero`|`date_creation`|`date_souhaitee`|`priorite`|`statut`|`updated_at`, default `date_creation`), `order` (default `desc`).
+- `200 Page<BonTravaux>`
 
-### GET /locations
-- Roles: A, M, T. Query: `parentId?`. 
-- 200: `Location[]` (flat list, not paginated).
+### GET /api/bons_travaux/stats
+- Query: `periode` (days, default 30, max 365).
+- `200`:
+  ```
+  { "periode": 30,
+    "par_domaine": [{ "domaine": "CVC", "count": 42 }, ...],
+    "par_statut":  [{ "statut": "Ouvert", "count": 18 }, ...],
+    "par_type":    [{ "type": "Correctif", "count": 120 }, ...] }
+  ```
+- Declared before `/:id` in the router.
 
-### POST /locations
-- Roles: A, M.
-- Body: `{ "name": string, "parentId"?: uuid }`
-- 201: `Location`. Errors: 400; 404 parent not found; 409 duplicate name under same parent.
+### GET /api/bons_travaux/:id
+- `200 BonTravaux` (with the linked équipement). Errors: 404.
 
-### PATCH /locations/:id
-- Roles: A, M.
-- Body: `{ "name"?, "parentId"? }`
-- 200: `Location`. Errors: 400; 404; 409 duplicate or cycle.
+### PUT /api/bons_travaux/:id
+- Same contract as `PUT /api/equipements/:id`, plus the BT rules BR-B2 to BR-B8 (422 on violation).
 
-### DELETE /locations/:id
-- Roles: A.
-- 204. Errors: 404; 409 used by assets or has children.
+### PUT /api/bons_travaux/:id/resolve-conflict
+- Same contract as for équipements.
 
-## Asset Categories
+## Conflicts (added)
 
-### GET /asset-categories
-- Roles: A, M, T. 200: `Category[]`.
+### GET /api/conflits
+- Roles: superviseur, admin. Query: `statut` (default `ouvert`).
+- `200`:
+  ```
+  { "items": [{ "id", "entity_type", "entity_id", "label": "EQ-0123 — Ventilo-convecteur R+3",
+                "server_updated_at", "server_updated_by": UserRef,
+                "client_edited_at", "client_user": UserRef, "created_at" }] }
+  ```
 
-### POST /asset-categories
-- Roles: A, M. Body: `{ "name": string, "description"?: string }`
-- 201: `Category`. Errors: 400; 409 duplicate name.
+### GET /api/conflits/:id
+- Roles: superviseur, admin.
+- `200 { ...list item..., "versionA": { ...server snapshot... }, "versionB": { ...client changes... }, "current": { ...current record... }, "divergent_fields": ["statut", "commentaire"] }`
 
-### PATCH /asset-categories/:id
-- Roles: A, M. Body: `{ "name"?, "description"? }`
-- 200: `Category`. Errors: 400; 404; 409.
+## Reference data and users (added)
 
-### DELETE /asset-categories/:id
-- Roles: A. 204. Errors: 404; 409 used by assets.
+### GET /api/referentiels
+- `200 { "sites": string[], "familles": string[], "criticites": [...], "statuts_equipement": [...], "types_bt": [...], "statuts_bt": [...], "priorites_bt": [...] }`. `sites` comes from the data; the other lists are the enums.
 
-## Assets
+### GET /api/users
+- Roles: superviseur, admin. Returns the users that can be assigned to a BT (for dropdowns).
+- `200 [{ id, nom, prenom, role, site, domaine_technique }]`
 
-### GET /assets
-- Roles: A, M, T.
-- Query: `page`, `pageSize`, `search?` (code/name), `status?`, `categoryId?`, `locationId?`, `sortBy?` (`code`|`name`|`createdAt`), `order?`.
-- 200: paginated `Asset` (excludes soft-deleted).
+## Dashboard (added)
 
-### GET /assets/:id
-- Roles: A, M, T.
-- 200: `Asset`. Errors: 404.
+### GET /api/dashboard
+- `200`:
+  ```
+  { "kpis": { "bt_ouverts": 18, "bt_en_cours": 25, "bt_clotures_mois": 40,
+              "equipements_en_panne": 21, "bt_en_retard": 9,
+              "conflits_en_attente": 2 },
+    "dernieres_activites": [BonTravaux x5],
+    "mes_interventions": [BonTravaux] }
+  ```
+- `conflits_en_attente` is present for superviseur and admin only. Definitions: `docs/data-model.md` → KPI definitions.
+- The chart uses `GET /api/bons_travaux/stats?periode=30`.
 
-### POST /assets
-- Roles: A, M.
-- Body: `{ "code": string, "name": string, "description"?: string, "categoryId": uuid, "locationId": uuid, "status"?: AssetStatus, "manufacturer"?, "model"?, "serialNumber"?, "installedAt"?: date }`
-- 201: `Asset`. Errors: 400; 404/422 unknown category or location; 409 duplicate `code`.
+## Future AI endpoints (not in the MVP)
 
-### PATCH /assets/:id
-- Roles: A, M.
-- Body: any field of POST except `code`.
-- 200: `Asset`. Errors: 400; 404; 422.
+`POST /api/assistant/cr-format` and `POST /api/assistant/find-bt` are described in the brief. They are not implemented. The UI only prepares the `.ai-only` mechanism (see `docs/architecture.md`).
 
-### DELETE /assets/:id
-- Roles: A, M. Soft delete.
-- 204. Errors: 404; 409 non-terminal work orders exist (BR-A3).
-
-### GET /assets/:id/work-orders
-- Roles: A, M, T. Query: `page`, `pageSize`, `status?`.
-- 200: paginated `WorkOrder` for the asset (maintenance history).
-
-## Work Orders
-
-### GET /work-orders
-- Roles: A, M, T.
-- Query: `page`, `pageSize`, `status?` (comma-separated), `priority?`, `type?`, `assetId?`, `assigneeId?`, `mine?` (boolean, filters on current user), `overdue?` (boolean), `search?` (title/number), `createdFrom?`, `createdTo?`, `sortBy?` (`createdAt`|`dueDate`|`priority`|`number`), `order?`.
-- 200: paginated `WorkOrder`.
-
-### GET /work-orders/:id
-- Roles: A, M, T.
-- 200: `WorkOrder`. Errors: 404.
-
-### POST /work-orders
-- Roles: A, M.
-- Body: `{ "title": string, "description"?: string, "type"?: WorkOrderType, "priority"?: WorkOrderPriority, "assetId": uuid, "assigneeId": uuid, "dueDate"?: ISO date }`
-- 201: `WorkOrder` with status `OPEN`; creates the initial history entry.
-- Errors: 400 (missing `assetId` or `assigneeId`, bad enum, past `dueDate`); 401; 403; 404 asset or user not found; 422 asset retired/deleted or assignee inactive/not eligible.
-
-### PATCH /work-orders/:id
-- Roles: A, M (all editable fields); T (assignee only: `resolutionNotes`).
-- Body (all optional): `{ "title", "description", "type", "priority", "dueDate", "assigneeId", "resolutionNotes" }`. `assetId` and `status` cannot be changed here.
-- 200: `WorkOrder`. Errors: 400; 403; 404; 409 order is terminal (BR-W8); 422 invalid assignee.
-
-### POST /work-orders/:id/status
-- Roles: A, M (any order); T (only if assignee).
-- Body: `{ "status": WorkOrderStatus, "comment"?: string, "resolutionNotes"?: string }`
-- Rules: transition must be allowed (BR-W4); `COMPLETED` requires `resolutionNotes` (already stored or provided); `ON_HOLD` and `CANCELLED` require `comment`.
-- 200: `WorkOrder` (updated). 
-- Errors: 400 missing required comment/notes; 403 technician not assignee; 404; 409 invalid transition.
-
-### GET /work-orders/:id/history
-- Roles: A, M, T.
-- 200: `HistoryItem[]` ordered by `changedAt` ascending.
-
-There is no hard `DELETE /work-orders/:id`; use status `CANCELLED`.
-
-## Dashboard
-
-All dashboard endpoints: Roles A, M (T gets only `/dashboard/my-workload`). Common optional query params: `from`, `to` (ISO dates, default: last 30 days). Dates apply to `completed_at` for closed/MTTR metrics and `created_at` for created metrics.
-
-### GET /dashboard/kpis
-- 200:
-```
-{
-  "period": { "from": "2026-09-04T00:00:00Z", "to": "2026-10-04T23:59:59Z" },
-  "openWorkOrders": 42,
-  "openByStatus": { "OPEN": 20, "IN_PROGRESS": 17, "ON_HOLD": 5 },
-  "overdueWorkOrders": 6,
-  "closedWorkOrders": 58,
-  "cancelledWorkOrders": 3,
-  "createdWorkOrders": 61,
-  "mttrHours": 18.4,
-  "assetsByStatus": { "ACTIVE": 210, "INACTIVE": 4, "UNDER_MAINTENANCE": 7, "RETIRED": 12 }
-}
-```
-- `mttrHours` is `null` when no corrective orders were completed in the period.
-- Errors: 400 invalid dates; 401; 403.
-
-### GET /dashboard/workload
-- Roles: A, M.
-- 200:
-```
-[
-  { "userId": "uuid", "firstName": "Ana", "lastName": "Diaz",
-    "open": 5, "inProgress": 2, "onHold": 1, "overdue": 1, "completedInPeriod": 14 }
-]
-```
-- Includes all active technicians, even those with zero orders. Sorted by `open` descending.
-
-### GET /dashboard/my-workload
-- Roles: A, M, T.
-- 200: same shape as one item of `/dashboard/workload`, for the current user.
-
-### GET /dashboard/work-orders-trend
-- Roles: A, M. Query: `from`, `to`, `interval` (`day`|`week`, default `week`).
-- 200: `[{ "bucket": "2026-09-28", "created": 12, "completed": 10 }]`
-
-## Endpoint Summary
+## Endpoint summary
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/login`, `GET /auth/me`, `POST /auth/change-password` |
-| Users | `GET/POST /users`, `GET/PATCH /users/:id`, `GET /users/assignable` |
-| Locations | `GET/POST /locations`, `PATCH/DELETE /locations/:id` |
-| Categories | `GET/POST /asset-categories`, `PATCH/DELETE /asset-categories/:id` |
-| Assets | `GET/POST /assets`, `GET/PATCH/DELETE /assets/:id`, `GET /assets/:id/work-orders` |
-| Work orders | `GET/POST /work-orders`, `GET/PATCH /work-orders/:id`, `POST /work-orders/:id/status`, `GET /work-orders/:id/history` |
-| Dashboard | `GET /dashboard/kpis`, `/dashboard/workload`, `/dashboard/my-workload`, `/dashboard/work-orders-trend` |
-| Ops | `GET /health` |
+| Ops | `GET /api/health` |
+| Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| Équipements | `GET /api/equipements`, `GET /api/equipements/search`, `GET/PUT /api/equipements/:id`, `PUT /api/equipements/:id/resolve-conflict` |
+| BT | `GET /api/bons_travaux`, `GET /api/bons_travaux/stats`, `GET/PUT /api/bons_travaux/:id`, `PUT /api/bons_travaux/:id/resolve-conflict` |
+| Conflicts | `GET /api/conflits`, `GET /api/conflits/:id` |
+| Reference | `GET /api/referentiels`, `GET /api/users` |
+| Dashboard | `GET /api/dashboard` |

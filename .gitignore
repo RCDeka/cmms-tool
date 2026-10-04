@@ -1,15 +1,20 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
-build/
+# Test coverage
 coverage/
 
 # Environment (never commit secrets)
 .env
 .env.*
 !.env.example
+
+# SQLite databases
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
 
 # Logs / OS / editor
 *.log
