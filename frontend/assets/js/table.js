@@ -59,7 +59,7 @@ export function renderTable(
 
   const table = h(
     'table',
-    { class: 'data-table', 'aria-describedby': `${cfg.prefix}-table-help` },
+    { class: `data-table ${cfg.prefix}-table`, 'aria-describedby': `${cfg.prefix}-table-help` },
     h('caption', { class: 'visually-hidden' }, `${cfg.label}, page ${data.page} of ${data.pages}`),
     h(
       'thead',

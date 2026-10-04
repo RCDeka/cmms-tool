@@ -34,13 +34,22 @@
   min-width: 56rem;
 }
 
+/* Fixed columns plus at least 16 rem for the name / title column; the table scrolls sideways. */
+#main-content:not(.split-view) .asset-table {
+  min-width: 66rem;
+}
+
+#main-content:not(.split-view) .wo-table {
+  min-width: 76rem;
+}
+
 .data-table .col-code,
 .data-table .col-number {
   width: 8rem;
 }
 
 .data-table .col-site {
-  width: 15rem;
+  width: 13rem;
 }
 
 .data-table .col-category {
