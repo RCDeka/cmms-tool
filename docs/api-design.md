@@ -147,7 +147,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 ### GET /api/work-orders
 - Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?` (one status or several comma-separated, e.g. `OPEN,IN_PROGRESS,ON_HOLD`), `priority?`, `type?`, `category?`, `site?`, `assignee_id?`;
-  - `mine?=true`: assigned to the current user; `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
+  - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
 - `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
 

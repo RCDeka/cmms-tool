@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as DB from '../assets/js/db.js';
 import { pageKey, storesOf } from '../assets/js/db.js';
 import { reportOffline, reportOnline } from '../assets/js/network.js';
+import { clearSession, saveSession } from '../assets/js/session.js';
 import { evictOutside, keepSet, prefetchAround } from '../assets/js/preload.js';
 import {
   diffRecords,
@@ -126,6 +127,29 @@ describe('fetchAndStorePage / readCachedPage', () => {
     await fetchAndStorePage('assets', 1);
     await DB.evict(storesOf('assets').records, [1, 2, 3]);
     expect(await readCachedPage('assets', 1)).toBeNull();
+  });
+
+  it("caches technicians' own work orders as their plain list, for them only", async () => {
+    // Unsigned token with a future expiry: enough for the client, which only reads `exp`.
+    const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }));
+    const token = `x.${payload.replace(/=+$/, '')}.x`;
+    saveSession(token, { id: 4, role: 'TECHNICIAN' });
+    try {
+      await fetchAndStorePage('work_orders', 1);
+      const url = new URL(api.fetchMock.mock.calls.at(-1)[0], 'http://localhost');
+      expect(url.pathname).toBe('/api/work-orders');
+      expect(url.searchParams.get('mine')).toBe('true');
+      expect(await readCachedPage('work_orders', 1)).not.toBeNull();
+      // Another role must not be shown the technician's list.
+      saveSession(token, { id: 2, role: 'SUPERVISOR' });
+      expect(await readCachedPage('work_orders', 1)).toBeNull();
+      await fetchAndStorePage('work_orders', 1);
+      const again = new URL(api.fetchMock.mock.calls.at(-1)[0], 'http://localhost');
+      expect(again.searchParams.has('mine')).toBe(false);
+      expect(await readCachedPage('work_orders', 1)).not.toBeNull();
+    } finally {
+      clearSession();
+    }
   });
 
   it('fetchAndStoreRecord reports whether the record changed', async () => {

@@ -48,7 +48,8 @@ function parseValue(def, raw) {
     case 'user':
       return /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : undefined;
     case 'flag':
-      return raw === 'true' ? true : undefined;
+      // `false` only matters to turn off a default filter (technicians' "Assigned to me").
+      return raw === 'true' ? true : raw === 'false' ? false : undefined;
     default:
       return undefined;
   }
@@ -118,6 +119,40 @@ export function currentSort(entity, filters = {}) {
 }
 
 /**
+ * Filters a role gets on a list opened without any: technicians see the work orders
+ * assigned to them (suggestion #3, D44). Pure.
+ * @param {string} entity
+ * @param {string} [role]
+ */
+export function defaultFilters(entity, role) {
+  return entity === 'work_orders' && role === 'TECHNICIAN' ? { mine: true } : {};
+}
+
+const sameFilters = (entity, a, b) => filtersQuery(entity, a) === filtersQuery(entity, b);
+
+/**
+ * Filters applied to a list: the role defaults when the URL has no filter, else the URL's
+ * own. A `false` flag in the URL only turns a default off. Pure.
+ */
+export function effectiveFilters(entity, role, filters = {}) {
+  const merged = { ...(hasFilters(filters) ? {} : defaultFilters(entity, role)), ...filters };
+  return Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== false));
+}
+
+/**
+ * URL filters for what the filter bar shows: the role defaults alone give a clean URL (the
+ * list cached on the device), and an unchecked default is written as `false`. Pure.
+ */
+export function urlFilters(entity, role, chosen) {
+  const defaults = defaultFilters(entity, role);
+  const filters = withoutSort(chosen);
+  if (sameFilters(entity, filters, defaults)) return sortOf(chosen);
+  if (hasFilters(filters)) return chosen;
+  const off = Object.fromEntries(Object.keys(defaults).map((name) => [name, false]));
+  return { ...off, ...sortOf(chosen) };
+}
+
+/**
  * Filters after a click on a column title: the same column flips the order, another one
  * starts ascending. Filters are kept. Pure.
  * @param {string} entity
@@ -138,10 +173,18 @@ export function sortByColumn(entity, filters, column) {
  * @param {object} options.filters current filters
  * @param {{ sites: string[], users: object[] }} options.refs
  * @param {boolean} options.canFilterAssignee supervisors and admins
+ * @param {object} [options.defaults] filters of the role's default list ("Clear filters")
  * @param {(filters: object, how: { typing: boolean }) => void} options.onChange
  * @returns {{ element: HTMLElement, setFilters: (filters: object) => void }}
  */
-export function renderFilterBar({ entity, filters, refs, canFilterAssignee, onChange }) {
+export function renderFilterBar({
+  entity,
+  filters,
+  refs,
+  canFilterAssignee,
+  defaults = {},
+  onChange,
+}) {
   const controls = new Map();
   const read = () => {
     const query = new URLSearchParams();
@@ -229,7 +272,7 @@ export function renderFilterBar({ entity, filters, refs, canFilterAssignee, onCh
       class: 'button button-secondary filter-clear',
       onClick: () => {
         typed.cancel();
-        onChange({}, { typing: false });
+        onChange({ ...defaults }, { typing: false });
       },
     },
     'Clear filters',
@@ -259,7 +302,7 @@ export function renderFilterBar({ entity, filters, refs, canFilterAssignee, onCh
       if (el.type === 'checkbox') el.checked = value === true;
       else if (document.activeElement !== el) el.value = value === undefined ? '' : String(value);
     }
-    clear.hidden = !hasFilters(next);
+    clear.hidden = sameFilters(entity, withoutSort(next), defaults);
   };
   setFilters(filters);
   return { element, setFilters };

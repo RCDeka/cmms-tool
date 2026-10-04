@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   NOT_FINISHED,
   currentSort,
+  defaultFilters,
+  effectiveFilters,
   filtersQuery,
   hasFilters,
   isPlainList,
   parseFilters,
   renderFilterBar,
   sortByColumn,
+  urlFilters,
   withoutSort,
 } from '../assets/js/filters.js';
 import { detailUrl, listUrl, parseRoute } from '../assets/js/router.js';
@@ -90,6 +93,70 @@ describe('table sort', () => {
     expect(url.search).toBe('?status=OPEN&sort=priority&order=desc&page=2');
     expect(parseRoute(url.pathname, url.search).filters).toEqual(filters);
     expect(parseRoute('/assets', '?sort=name').filters).toEqual({ sort: 'name', order: 'asc' });
+  });
+});
+
+describe("technicians' default list: assigned to me (D44)", () => {
+  const T = 'TECHNICIAN';
+
+  it('applies to technicians on work orders only', () => {
+    expect(defaultFilters('work_orders', T)).toEqual({ mine: true });
+    expect(defaultFilters('work_orders', 'SUPERVISOR')).toEqual({});
+    expect(defaultFilters('assets', T)).toEqual({});
+  });
+
+  it('applies the default to a list without filters, sorted or not', () => {
+    expect(effectiveFilters('work_orders', T, {})).toEqual({ mine: true });
+    expect(effectiveFilters('work_orders', T, { sort: 'due_on', order: 'asc' })).toEqual({
+      mine: true,
+      sort: 'due_on',
+      order: 'asc',
+    });
+    expect(effectiveFilters('work_orders', 'ADMIN', {})).toEqual({});
+  });
+
+  it('lets mine=false turn the default off, and links with filters show all work', () => {
+    expect(parseFilters('work_orders', q('mine=false'))).toEqual({ mine: false });
+    expect(effectiveFilters('work_orders', T, { mine: false })).toEqual({});
+    // Dashboard tiles: the count is for every work order, so the list must be too.
+    expect(effectiveFilters('work_orders', T, { status: 'OPEN' })).toEqual({ status: 'OPEN' });
+  });
+
+  it('writes what the filter bar shows as URL filters', () => {
+    expect(urlFilters('work_orders', T, { mine: true })).toEqual({}); // the default: clean URL
+    expect(urlFilters('work_orders', T, {})).toEqual({ mine: false }); // unchecked
+    expect(urlFilters('work_orders', T, { sort: 'title', order: 'asc' })).toEqual({
+      mine: false,
+      sort: 'title',
+      order: 'asc',
+    });
+    expect(urlFilters('work_orders', T, { mine: true, status: 'OPEN' })).toEqual({
+      mine: true,
+      status: 'OPEN',
+    });
+    expect(urlFilters('work_orders', 'SUPERVISOR', {})).toEqual({});
+    expect(listUrl('work_orders', 1, { mine: false })).toBe('/work-orders?mine=false');
+  });
+
+  it('clears back to the default and hides "Clear filters" there', () => {
+    const onChange = vi.fn();
+    const { element, setFilters } = renderFilterBar({
+      entity: 'work_orders',
+      filters: { mine: true },
+      refs: { sites: [], users: [] },
+      canFilterAssignee: false,
+      defaults: { mine: true },
+      onChange,
+    });
+    const clear = element.querySelector('.filter-clear');
+    expect(element.querySelector('#filter-mine').checked).toBe(true);
+    expect(clear.hidden).toBe(true);
+    setFilters({ status: 'OPEN' });
+    expect(clear.hidden).toBe(false);
+    clear.click();
+    expect(onChange).toHaveBeenLastCalledWith({ mine: true }, { typing: false });
+    setFilters({});
+    expect(clear.hidden).toBe(false); // all work orders: not the default
   });
 });
 

@@ -50,7 +50,7 @@ export async function close() {
   dbPromise = null;
 }
 
-/** Saves a page: `{ pageKey, page, pages, total, sort, order, ids, fetched_at }`. */
+/** Saves a page: `{ pageKey, page, pages, total, sort, order, scope, ids, fetched_at }`. */
 export async function savePage(store, key, data) {
   await (await init()).put(store, { ...data, pageKey: key });
 }

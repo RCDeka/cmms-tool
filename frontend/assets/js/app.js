@@ -40,12 +40,15 @@ import {
 import { ENTITIES } from './entities.js';
 import {
   currentSort,
+  defaultFilters,
+  effectiveFilters,
   filtersQuery,
   hasFilters,
   isPlainList,
   renderFilterBar,
   sortByColumn,
   sortOf,
+  urlFilters,
   withoutSort,
 } from './filters.js';
 import {
@@ -689,7 +692,9 @@ let listLayout = null; // { entity, bar, area }
 
 /** Ensures the filter bar and table area are on screen; returns the table area. */
 async function ensureListLayout(route) {
-  const filters = route.filters ?? {};
+  const role = currentUser()?.role;
+  // The bar shows the filters applied, role defaults included (technicians: "Assigned to me").
+  const filters = effectiveFilters(route.entity, role, route.filters);
   if (listLayout?.entity === route.entity && tableContainer.contains(listLayout.area)) {
     listLayout.bar.setFilters(filters);
     return listLayout.area;
@@ -701,12 +706,15 @@ async function ensureListLayout(route) {
     filters,
     refs,
     canFilterAssignee: hasRole('SUPERVISOR', 'ADMIN'),
+    defaults: defaultFilters(route.entity, role),
     // Typing replaces the history entry (no entry per keystroke); other changes add one.
     // The table sort is not in the bar: it is kept from the URL.
-    onChange: (next, { typing }) =>
-      navigate(listUrl(route.entity, 1, { ...next, ...sortOf(currentRoute().filters) }), {
+    onChange: (next, { typing }) => {
+      const chosen = { ...next, ...sortOf(currentRoute().filters) };
+      navigate(listUrl(route.entity, 1, urlFilters(route.entity, role, chosen)), {
         replace: typing,
-      }),
+      });
+    },
   });
   setSplitView(Boolean(openDetail));
   replaceChildren(tableContainer, bar.element, area);
@@ -733,7 +741,8 @@ function displayPage(route, data, pinned = shownPage?.pinned ?? []) {
     entity: route.entity,
     data: { ...data, items },
     pinned,
-    filtered: hasFilters(filters),
+    // "Matching" when the list is narrowed: technicians' default list counts, `mine=false` not.
+    filtered: hasFilters(effectiveFilters(route.entity, currentUser()?.role, filters)),
     selectedId: route.id ?? null,
     onOpen: (id) => {
       performance.mark('detail-open');
@@ -830,7 +839,11 @@ async function showEntity(route, isCurrent) {
       try {
         data = plain
           ? (await fetchAndStorePage(route.entity, route.page)).data
-          : await fetchFilteredPage(route.entity, route.page, filters);
+          : await fetchFilteredPage(
+              route.entity,
+              route.page,
+              effectiveFilters(route.entity, currentUser()?.role, filters),
+            );
       } catch (err) {
         if (isCurrent()) showTableError(area, err, cfg, route);
         return;

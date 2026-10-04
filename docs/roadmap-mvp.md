@@ -111,6 +111,7 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 - **Phase 12: suggestions from any page; Société Générale colors and a new logo** — done (D40, D41). Acceptance: from any page, every user opens "Suggest an improvement", sees the page it refers to, and sends an idea (empty text refused, unsent text kept, Send disabled offline); admins list, filter and triage the ideas and open the page they refer to; `npm run feedback:export` lists the open ideas; the tool uses black, red and white with a maintenance logo, at AA contrast.
 
 - **Phase 13: first round of suggestions (#1, #4, #5, #6)** — done (D42, D43). Acceptance: clicking a column title of the asset or work order table sorts it, a second click reverses it, the arrow shows the order, and the sort is kept with the filters when a record is opened and closed; the page buttons also appear above long tables; supervisors and admins see the status pie with every value listed; technicians see no chart and switch "My work" between Today (default) and the next 7 days.
+- **Phase 14: technicians' default list (#3)** — done (D44). Acceptance: a technician opening the work order list sees their own work with "Assigned to me" checked; unchecking shows every work order and survives reload and back; "Clear filters" returns to their own work; a dashboard tile opens the full matching list; their own work is available offline.
 
 ## Post-MVP backlog (not scheduled)
 

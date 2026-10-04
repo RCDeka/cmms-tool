@@ -111,7 +111,7 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 
 | Store | Key | Content |
 |---|---|---|
-| `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, ids: [...], fetched_at }` |
+| `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, scope, ids: [...], fetched_at }` (`scope`: query of the role's plain list, D44) |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
 | `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display) |
 | `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
@@ -128,7 +128,7 @@ When page N of an entity is shown (P = number of pages):
 2. Prefetch the pages of K not yet cached. One request per page; the rows are stored as records directly (D7).
 3. Evict pages not in K. **The current page N is part of K** (the brief's sample code would have evicted it).
 4. Evict records that belong to no kept page, unless they have a draft, a queued write, or are open in the detail panel.
-5. Only the default order is cached (assets by code, work orders newest first). A table sorted from its column titles is fetched from the server like a filtered list (D42).
+5. Only the plain list is cached: default order (assets by code, work orders newest first) and no filters except the role's default (technicians: their own work orders, D44). Each cached page records that query, so a page saved under another role is ignored. A table sorted from its column titles is fetched from the server like a filtered list (D42).
 
 Prefetching runs after the visible content is rendered, one request at a time, and is skipped while offline.
 
@@ -136,6 +136,7 @@ Prefetching runs after the visible content is rendered, one request at a time, a
 
 - The filter bar sits above the table; its values live in the URL query (`/assets?status=BROKEN_DOWN`, `/work-orders?q=leak&mine=true`), so they survive reloads and the back button and stay applied when a record is opened and closed. Typing in the search field updates the list 350 ms after the last key and replaces the history entry; other filter changes add one.
 - Only **unfiltered** pages are cached in IndexedDB (prefetch, revalidation, offline). A filtered list is always fetched from the server; its records are stored so they open instantly. Offline, a filtered list says that search needs a connection and offers to clear the filters (the cached pages remain available).
+- Technicians' default work order list is "Assigned to me" (D44): applied when the URL has no filter; `mine=false` turns it off; "Clear filters" returns to it.
 - The table sort lives in the URL too (`/work-orders?sort=due_on&order=asc`, D42); the default order is left out. Filter changes keep the sort, "Clear filters" keeps it, and a new sort goes back to page 1. A sorted list follows the filtered-list rules above: fetched from the server, not cached; offline it offers "Default order".
 - Pending creations are listed on the unfiltered work order list only.
 - Dashboard tiles open the matching filtered list (e.g. "Overdue work orders" → `/work-orders?overdue=true`).

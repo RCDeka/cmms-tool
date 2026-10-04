@@ -1,14 +1,23 @@
 // Server → IndexedDB synchronization: read local data first, then revalidate quietly
 // (stale-while-revalidate; docs/architecture.md → Revalidation).
 import { apiFetch } from './api.js';
+import { currentUser } from './auth.js';
 import { PAGE_SIZE } from './config.js';
 import * as DB from './db.js';
 import { pageKey, storesOf } from './db.js';
 import { ENTITIES } from './entities.js';
-import { filtersQuery } from './filters.js';
+import { defaultFilters, filtersQuery } from './filters.js';
 
 /** Sort used by the tables; a cached page is only valid for the sort it was fetched with. */
 const DEFAULT_SORT = 'default';
+
+/**
+ * Query of the plain list for the current role (technicians: their own work orders, D44).
+ * Cached pages remember it, so a page saved for another role is never shown.
+ */
+function plainListQuery(entity) {
+  return filtersQuery(entity, defaultFilters(entity, currentUser()?.role));
+}
 
 /**
  * Compares server records with local ones. A record changes when it is new locally or its
@@ -45,6 +54,7 @@ export async function readCachedPage(entity, page) {
   const stores = storesOf(entity);
   const cached = await DB.getPage(stores.pages, pageKey(entity, page));
   if (!cached || cached.sort !== DEFAULT_SORT) return null;
+  if ((cached.scope ?? '') !== plainListQuery(entity)) return null;
   const records = await DB.getRecords(stores.records, cached.ids);
   if (records.some((r) => !r)) return null;
   return { total: cached.total, page: cached.page, pages: cached.pages, items: records.map(clean) };
@@ -59,7 +69,11 @@ export async function readCachedPage(entity, page) {
 export async function fetchAndStorePage(entity, page) {
   const cfg = ENTITIES[entity];
   const stores = storesOf(entity);
-  const remote = await apiFetch(`${cfg.api}?page=${page}&size=${PAGE_SIZE}`);
+  const scope = plainListQuery(entity);
+  const query = new URLSearchParams(scope);
+  query.set('page', String(page));
+  query.set('size', String(PAGE_SIZE));
+  const remote = await apiFetch(`${cfg.api}?${query}`);
 
   const key = pageKey(entity, page);
   const cachedPage = await DB.getPage(stores.pages, key);
@@ -81,6 +95,7 @@ export async function fetchAndStorePage(entity, page) {
     total: remote.total,
     sort: DEFAULT_SORT,
     order: DEFAULT_SORT,
+    scope,
     ids,
     fetched_at: now,
   });
