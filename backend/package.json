@@ -15,11 +15,13 @@
     "format": "prettier --write .",
     "db:migrate": "node src/db/cli.js migrate",
     "db:seed": "node src/db/cli.js seed",
-    "db:reset": "node src/db/cli.js reset"
+    "db:reset": "node src/db/cli.js reset",
+    "db:backup": "node src/db/cli.js backup"
   },
   "dependencies": {
     "argon2": "^0.45.1",
     "better-sqlite3": "^13.0.3",
+    "compression": "^1.8.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",

@@ -50,3 +50,17 @@ describe('service worker', () => {
     expect(precached).toEqual(['/index.html', ...files].sort());
   });
 });
+
+describe('index.html', () => {
+  it('preloads every module of the app, so they load in parallel', () => {
+    const html = fs.readFileSync(path.join(FRONTEND, 'index.html'), 'utf8');
+    const preloaded = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)]
+      .map((m) => m[1])
+      .sort();
+    const modules = fs
+      .readdirSync(path.join(FRONTEND, 'assets/js'))
+      .filter((f) => f.endsWith('.js') && f !== 'app.js')
+      .map((f) => `/assets/js/${f}`);
+    expect(preloaded).toEqual([...modules, '/assets/vendor/idb-8.0.3/index.js'].sort());
+  });
+});

@@ -204,6 +204,8 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - JWT in `localStorage` (8 h expiry). Mitigation against script injection: all values escaped (D12), and a strict Content-Security-Policy set by `helmet` (no inline scripts or styles, `default-src 'self'`).
 - `helmet`, `express-rate-limit` on login, JSON body limit 100 kB, prepared statements only (sort columns from a whitelist).
 - Same origin in production (Nginx), so no CORS configuration is needed.
+- The API listens on `127.0.0.1` only (D32); Nginx terminates HTTPS and sets the same security headers on the static shell. API answers are `Cache-Control: no-store`.
+- Only the shell is public: `index.html`, `sw.js`, `assets/*` (D31).
 - Logout clears the token and IndexedDB (D22). Confidential data must not be added to the mock dataset (brief: no sensitive data in IndexedDB).
 
 ## Performance budget
@@ -214,4 +216,17 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 | Initial load | < 2 s | Lighthouse / DevTools on the VPS, cold cache, Fast 4G profile |
 | Pages kept in IndexedDB | ≤ 5 per entity | unit test on the keep-set logic + manual check in DevTools |
 
-The frontend has no build step. Chart.js is loaded on demand (script injected the first time the dashboard is shown), not at startup.
+The frontend has no build step. To keep the first load fast anyway:
+- `index.html` lists every module with `<link rel="modulepreload">`, so the browser fetches the whole module graph in parallel instead of level by level (a test checks the list is complete).
+- Responses are gzip-compressed (Express, and Nginx in production); the first load transfers about 120 KB (180 KB on the dashboard, Chart.js included).
+- Chart.js is loaded on demand (script injected the first time the dashboard is shown), not at startup.
+
+Measured in Phase 7 on a local server, empty cache, logged-in first visit:
+
+| Network profile | Assets table usable | Dashboard usable / chart drawn |
+|---|---|---|
+| Fast 4G (60 ms, 9 Mbps), the budget's profile | 1.2 s | 1.5 s / 1.6 s |
+| Slow 4G (150 ms, 1.6 Mbps), stress test | 2.0 s | 2.1 s / 2.3 s |
+| Office network (20 ms, 30 Mbps) | 0.6 s | 0.7 s / 0.7 s |
+
+To be measured again on the VPS (HTTP/2 through Nginx should improve these figures).

@@ -88,6 +88,9 @@ Acceptance: the KPI values equal hand-computed values on the test dataset; a tec
 
 ## Phase 7: Hardening and deployment
 
+**Status (2026-10-04):** everything that does not need a server is done and verified: accessibility audit (axe-core, 19 views and states: 0 violations; 44 px targets; reflow at 320 px), performance against the budget on a local server (Fast 4G: 1.2–1.5 s), security pass (D31–D32, dependency audit: 0 vulnerabilities), deployment files (Nginx parsed with crossplane, systemd units verified, exposure score 3.0 "OK"), nightly backups (D33), and the README deployment guide, rehearsed on a fresh clone in production mode. **Waiting for a VPS:** HTTPS deployment, `nginx -t` on the real server, and the load-time measure on the VPS.
+
+
 **Objective:** the MVP runs over HTTPS on the VPS and meets the brief's non-functional requirements.
 
 Tasks:

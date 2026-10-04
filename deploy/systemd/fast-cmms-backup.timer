@@ -1,0 +1,13 @@
+# Runs the database backup every night (install as /etc/systemd/system/fast-cmms-backup.timer
+# and enable with: systemctl enable --now fast-cmms-backup.timer).
+[Unit]
+Description=Daily Fast-CMMS database backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=10min
+# Catch up after a reboot if the server was off at 02:30.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

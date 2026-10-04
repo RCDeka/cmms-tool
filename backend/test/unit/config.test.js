@@ -10,6 +10,7 @@ describe('loadConfig', () => {
     expect(cfg).toMatchObject({
       nodeEnv: 'development',
       port: 3000,
+      host: '127.0.0.1',
       jwtExpiresIn: '8h',
       timeZone: 'Europe/Paris',
       seedPassword: undefined,
@@ -32,6 +33,15 @@ describe('loadConfig', () => {
 
   it('rejects a short seed password (BR-U2)', () => {
     expect(() => loadConfig({ ...valid, SEED_PASSWORD: 'short' })).toThrow(/SEED_PASSWORD/);
+  });
+
+  it('requires a long secret in production', () => {
+    expect(() => loadConfig({ JWT_SECRET: 'x'.repeat(20), NODE_ENV: 'production' })).toThrow(
+      /at least 32 characters in production/,
+    );
+    expect(loadConfig({ JWT_SECRET: 'x'.repeat(32), NODE_ENV: 'production' }).nodeEnv).toBe(
+      'production',
+    );
   });
 
   it('rejects the example JWT secret in production only', () => {

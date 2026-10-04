@@ -1,0 +1,44 @@
+# Fast-CMMS API server (install as /etc/systemd/system/fast-cmms.service).
+[Unit]
+Description=Fast-CMMS API server
+Documentation=https://github.com/RCDeka/cmms-tool
+After=network.target
+
+[Service]
+Type=simple
+User=fast-cmms
+Group=fast-cmms
+WorkingDirectory=/opt/fast-cmms/backend
+# Secrets and settings (JWT_SECRET, DATABASE_PATH, …): root-owned, readable by the group.
+EnvironmentFile=/etc/fast-cmms/fast-cmms.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+# Creates /var/lib/fast-cmms (database) owned by the service user.
+StateDirectory=fast-cmms
+StateDirectoryMode=0750
+UMask=0077
+
+# Sandboxing: the service can only write its own state directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

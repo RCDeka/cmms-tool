@@ -18,6 +18,17 @@ beforeAll(() => {
   fs.mkdirSync(path.join(frontendDir, 'assets', 'css'), { recursive: true });
   fs.writeFileSync(path.join(frontendDir, 'index.html'), '<!doctype html><title>shell</title>');
   fs.writeFileSync(path.join(frontendDir, 'assets', 'css', 'base.css'), 'body{}');
+  fs.writeFileSync(path.join(frontendDir, 'sw.js'), '// worker');
+  fs.writeFileSync(
+    path.join(frontendDir, 'assets', 'css', 'big.css'),
+    'body { color: red; }\n'.repeat(400),
+  );
+  // Files that exist in frontend/ but must never be served (D31).
+  fs.writeFileSync(path.join(frontendDir, 'package.json'), '{}');
+  fs.mkdirSync(path.join(frontendDir, 'test'));
+  fs.writeFileSync(path.join(frontendDir, 'test', 'x.test.js'), '');
+  fs.mkdirSync(path.join(frontendDir, 'node_modules', 'pkg'), { recursive: true });
+  fs.writeFileSync(path.join(frontendDir, 'node_modules', 'pkg', 'index.js'), '');
   app = createApp({ db: ctx.db, config: TEST_CONFIG, frontendDir });
 });
 
@@ -96,5 +107,37 @@ describe('frontend serving', () => {
 
   it('answers 404 for a missing file instead of the shell', async () => {
     await request(app).get('/assets/js/missing.js').expect(404);
+  });
+
+  it('serves the shell as /index.html, which the service worker precaches', async () => {
+    const res = await request(app).get('/index.html').expect(200);
+    expect(res.text).toContain('<title>shell</title>');
+  });
+
+  it('serves the service worker, always revalidated', async () => {
+    const res = await request(app).get('/sw.js').expect(200);
+    expect(res.headers['cache-control']).toBe('no-cache');
+  });
+
+  it.each(['/package.json', '/test/x.test.js', '/node_modules/pkg/index.js'])(
+    'never serves %s from the frontend folder (D31)',
+    async (file) => {
+      await request(app).get(file).expect(404);
+    },
+  );
+});
+
+describe('caching', () => {
+  it('forbids storing API answers', async () => {
+    const res = await request(app).get('/api/health').expect(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('compresses responses with gzip', async () => {
+    const res = await request(app)
+      .get('/assets/css/big.css')
+      .set('Accept-Encoding', 'gzip')
+      .expect(200);
+    expect(res.headers['content-encoding']).toBe('gzip');
   });
 });

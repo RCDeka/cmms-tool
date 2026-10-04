@@ -1,18 +1,36 @@
-// Database commands: `node src/db/cli.js <migrate|seed|reset> [--with-conflicts] [--force]`
-// Used by the npm scripts db:migrate, db:seed and db:reset.
+// Database commands: `node src/db/cli.js <migrate|seed|reset|backup> [--with-conflicts] [--force]`
+// Used by the npm scripts db:migrate, db:seed, db:reset and db:backup.
 import fs from 'node:fs';
 import { loadConfig, loadEnvFile } from '../config/index.js';
 import { dateInZone } from '../lib/dates.js';
+import { backupDatabase } from './backup.js';
 import { openDb } from './connection.js';
 import { runMigrations } from './migrate.js';
 import { seedDatabase } from './seed/index.js';
 
-const USAGE = 'Usage: node src/db/cli.js <migrate|seed|reset> [--with-conflicts] [--force]';
+const USAGE = 'Usage: node src/db/cli.js <migrate|seed|reset|backup> [--with-conflicts] [--force]';
 
 async function main() {
   const [command, ...flags] = process.argv.slice(2);
   loadEnvFile();
   const config = loadConfig();
+
+  if (command === 'backup') {
+    if (!fs.existsSync(config.databasePath))
+      throw new Error(`No database at ${config.databasePath}`);
+    const db = openDb(config.databasePath);
+    try {
+      const { file, removed } = await backupDatabase(db, {
+        dir: config.backupDir,
+        keepDays: config.backupKeepDays,
+      });
+      console.log(`Backup written: ${file}`);
+      if (removed.length) console.log(`Deleted old backups: ${removed.join(', ')}`);
+    } finally {
+      db.close();
+    }
+    return;
+  }
 
   if (command === 'reset') {
     if (config.nodeEnv === 'production' && !flags.includes('--force')) {

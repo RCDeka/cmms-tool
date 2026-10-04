@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 import { REPO_ROOT } from './config/index.js';
@@ -76,7 +77,15 @@ export function createApp({
       },
     }),
   );
+  // gzip responses (Nginx also compresses in production; this covers direct access and dev).
+  app.use(compression());
   app.use(express.json({ limit: '100kb' }));
+
+  // API answers hold personal data and tokens: never stored by browsers or proxies.
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
 
   // API: public routes first, then everything else requires a valid token.
   app.use('/api/health', healthRouter(db));
@@ -89,12 +98,24 @@ export function createApp({
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);
 
-  // Frontend: static files, then the SPA fallback: any GET without a file extension
-  // (a client route such as /assets/12) receives index.html.
+  // Frontend: only the shell is public: /assets/*, /sw.js and index.html. The rest of
+  // frontend/ (package.json, tests, node_modules, tool configs) is never served (D31).
   // `redirect: false`: the static folder frontend/assets/ shares its prefix with the client
   // route /assets; a directory redirect would turn /assets into /assets/.
   const indexFile = path.join(frontendDir, 'index.html');
-  app.use(express.static(frontendDir, { index: false, redirect: false }));
+  app.use(
+    '/assets',
+    express.static(path.join(frontendDir, 'assets'), { index: false, redirect: false }),
+  );
+  // The shell itself; the service worker precaches it under this name.
+  app.get('/index.html', (_req, res, next) => res.sendFile(indexFile, (err) => err && next()));
+  app.get('/sw.js', (_req, res, next) => {
+    // The browser checks for a new service worker on each visit: always revalidate.
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(frontendDir, 'sw.js'), (err) => err && next());
+  });
+  // SPA fallback: any GET without a file extension (a client route such as /assets/12)
+  // receives index.html.
   app.get('/{*path}', (req, res, next) => {
     if (path.extname(req.path) || !fs.existsSync(indexFile)) return next();
     res.sendFile(indexFile);
