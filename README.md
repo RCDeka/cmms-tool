@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 
 This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
-> **Status:** Phases 0–5 done: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). Next: the dashboard (Phase 6, `docs/roadmap-mvp.md`).
+> **Status:** Phases 0–6 done: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Next: hardening and deployment (Phase 7, `docs/roadmap-mvp.md`).
 
 ## Tech stack
 
@@ -107,7 +107,7 @@ Nginx serves `frontend/` and proxies `/api` to the Node service run by systemd, 
 │   ├── assets/
 │   │   ├── css/
 │   │   ├── js/
-│   │   ├── vendor/           idb, Chart.js
+│   │   ├── vendor/           idb 8.0.3, Chart.js 4.5.1 (with their licenses)
 │   │   └── img/              logo, icons
 │   └── test/
 └── deploy/

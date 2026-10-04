@@ -9,9 +9,12 @@
   --color-text-muted: #5a6475;
   --color-hover: #eef2f7;
   --color-neutral-bg: #eceff3;
+  /* Chart gridlines: hairline, one step off the surface, recessive. */
+  --color-grid: #e6e9ed;
   /* Brand */
   --color-primary: #1f5fad;
   --color-primary-contrast: #ffffff;
+  --color-primary-hover: #174a87;
   --color-primary-bg: #e3edf9;
   --color-row-selected: #e3edf9;
   /* Semantic */

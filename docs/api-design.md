@@ -178,13 +178,15 @@ Page<T>     { total, page, pages, items: T[] }
 ### GET /api/dashboard
 - `200`:
   ```
-  { "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
+  { "today": "2026-10-04", "generated_at": "2026-10-04T12:00:00.000Z",
+    "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
               "closed_this_month": 40, "assets_broken_down": 21,
               "overdue_work_orders": 9, "pending_conflicts": 2 },
     "recent_activity": [WorkOrder x5],
     "my_work_today": [WorkOrder] }
   ```
 - `pending_conflicts` is present for SUPERVISOR and ADMIN only. Definitions: `docs/data-model.md` → KPI definitions.
+- `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` is sorted by priority (URGENT first), then due date (undated last), then number.
 - The chart uses `GET /api/work-orders/stats?period=30`.
 
 ## Future AI endpoints (not in the MVP)

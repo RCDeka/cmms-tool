@@ -326,3 +326,182 @@ a.button {
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+
+/* Dashboard */
+.dashboard {
+  display: grid;
+  gap: var(--space-6);
+}
+
+#table-container.is-refreshing .dashboard {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.kpi-grid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.kpi-tile {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  height: 100%;
+  min-height: 96px;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.kpi-tile:hover {
+  border-color: var(--color-primary);
+}
+
+.kpi-tile.is-flagged {
+  border-color: var(--color-warning);
+  box-shadow: inset 4px 0 0 var(--color-warning);
+}
+
+.kpi-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+/* Stat values: same sans, proportional figures (tabular only in table columns). */
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.kpi-flag {
+  justify-self: start;
+  white-space: normal; /* never wider than its tile */
+}
+
+.kpi-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dashboard-lists {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dashboard-card {
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.dashboard-card h2 {
+  font-size: 1.0625rem;
+}
+
+.chart-card figcaption {
+  margin-bottom: var(--space-3);
+}
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+}
+
+.chart-table {
+  margin-top: var(--space-3);
+}
+
+.chart-table summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chart-table table {
+  max-width: 28rem;
+}
+
+.chart-table tbody th {
+  position: static;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-weight: 400;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-list {
+  list-style: none;
+  padding: 0;
+  margin-top: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.activity-list li {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity-list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.activity-main {
+  overflow-wrap: anywhere;
+}
+
+.activity-list .muted {
+  font-size: var(--font-size-small);
+}
+
+@media (max-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  /* Two tiles per row on phones. */
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-tile {
+    padding: var(--space-3);
+  }
+
+  .kpi-value {
+    font-size: 1.75rem;
+  }
+
+  .dashboard-card {
+    padding: var(--space-4);
+  }
+}

@@ -118,6 +118,10 @@ export function createWorkOrderService(db) {
     const row = byId.get(id);
     return row ? toWorkOrder(row) : null;
   };
+  const recentStmt = db.prepare(`${SELECT} ORDER BY w.updated_at DESC, w.id DESC LIMIT ?`);
+  const openAssigned = db.prepare(
+    `${SELECT} WHERE w.assignee_id = ? AND w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')`,
+  );
   const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
   const roleOf = db.prepare('SELECT role FROM users WHERE id = ?').pluck();
   const idByClientId = db.prepare('SELECT id FROM work_orders WHERE client_id = ?').pluck();
@@ -189,6 +193,16 @@ export function createWorkOrderService(db) {
 
     /** Work order with its asset, or null. */
     getById,
+
+    /** The most recently updated work orders (dashboard → Recent activity). */
+    recent(limit) {
+      return recentStmt.all(limit).map(toWorkOrder);
+    },
+
+    /** Non-terminal work orders assigned to a user (dashboard → My work today). */
+    openAssignedTo(userId) {
+      return openAssigned.all(userId).map(toWorkOrder);
+    },
 
     /**
      * PUT /api/work-orders/:id: permissions, BR-V1 to BR-V4, BR-W2 to BR-W8.

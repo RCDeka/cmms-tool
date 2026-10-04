@@ -20,6 +20,7 @@ const SHELL_FILES = [
   '/assets/js/auth.js',
   '/assets/js/config.js',
   '/assets/js/conflicts.js',
+  '/assets/js/dashboard.js',
   '/assets/js/db.js',
   '/assets/js/detail.js',
   '/assets/js/dom.js',
@@ -41,6 +42,7 @@ const SHELL_FILES = [
   '/assets/js/session.js',
   '/assets/js/sync.js',
   '/assets/js/table.js',
+  '/assets/vendor/chart.js-4.5.1/chart.umd.min.js',
   '/assets/vendor/idb-8.0.3/index.js',
 ];
 

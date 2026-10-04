@@ -108,7 +108,7 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 |---|---|---|
 | `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, ids: [...], fetched_at }` |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
-| `config` | key | current page per entity, sort, user preferences, last user id, last dashboard and stats responses (for offline display) |
+| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display) |
 | `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
 | `sync_queue` (D10) | auto id | `{ op: 'create' \| 'update', entity, record_id, client_id?, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
 

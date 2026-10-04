@@ -63,6 +63,14 @@ Badges always show text. Badge class names come from the field and the code in k
 - Dynamic messages (saved, offline, update available, conflict) are announced through an `aria-live="polite"` region.
 - Respect `prefers-reduced-motion`.
 
+## Dashboard
+
+- **KPI tiles** (stat tiles): sentence-case label, value in the same sans with proportional figures, the whole tile is a link to the matching list. Tiles whose count needs attention (overdue work orders, broken-down assets, conflicts) add an amber edge and a "⚠ Needs attention" badge with text when the count is above zero. Technicians get no conflict tile.
+- **Chart** (Chart.js, loaded on demand): one series, so **one color for every bar** (`--color-primary`, validated ≥ 3:1 on the card with the data-viz palette validator), never a darker-is-bigger ramp on these nominal categories. Horizontal bars ≤ 24 px with a 4 px rounded end, sorted by count with "Unspecified" last, value at the bar tip in text color, no legend (the title names the series), solid hairline grid (`--color-grid`), tooltip on hover.
+- Every chart has a text equivalent (`aria-label` summary on the canvas) and a "Show as a table" view; if the chart library is unavailable, the table opens instead.
+- The frame grows with the number of bars (no nested scroll). A refresh keeps the previous render, dimmed, until the new figures arrive (no skeleton flash).
+- Offline, the last saved figures are shown with "Offline: figures saved on this device on <date>".
+
 ## Pagination (brief)
 
 `◀◀ First` · `◀ Previous` · `Page X / Y` · `Next ▶` · `Last ▶▶`. Buttons are disabled at the bounds. 50 rows per page.

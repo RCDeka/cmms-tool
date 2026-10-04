@@ -4,6 +4,7 @@
 import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
+import { drawCategoryChart, renderDashboard } from './dashboard.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
@@ -128,11 +129,7 @@ async function render(route) {
     case 'create':
       return showEntity(route, isCurrent);
     case 'dashboard':
-      return showPlaceholder(
-        'dashboard',
-        'Dashboard',
-        'The dashboard is not available yet. Use the menu to browse assets and work orders.',
-      );
+      return showDashboard(isCurrent);
     case 'conflicts':
     case 'conflict':
       if (!hasRole('SUPERVISOR', 'ADMIN')) {
@@ -179,6 +176,69 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
       .append(h('p', {}, h('a', { href: '/dashboard', 'data-link': true }, 'Go to the dashboard')));
   }
   tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+// --- Dashboard ------------------------------------------------------------------------------
+
+const DASHBOARD_CACHE = 'dashboard_cache';
+
+/** Renders a dashboard snapshot { data, stats, fetched_at }, then draws the chart. */
+async function paintDashboard(snapshot, fromCache, isCurrent) {
+  const chart = renderDashboard(tableContainer, {
+    data: snapshot.data,
+    stats: snapshot.stats,
+    fromCache,
+    fetchedAt: snapshot.fetched_at,
+  });
+  try {
+    await drawCategoryChart(chart.canvas, chart.rows);
+  } catch {
+    // No chart library (e.g. offline before it was ever cached): the table stays available.
+    if (isCurrent()) tableContainer.querySelector('.chart-table')?.setAttribute('open', '');
+  }
+}
+
+/** Dashboard: the copy saved on this device first, then fresh figures from the server. */
+async function showDashboard(isCurrent) {
+  leaveRecordViews('dashboard', 'Dashboard');
+  const cached = await DB.getConfig(DASHBOARD_CACHE);
+  if (!isCurrent()) return;
+  if (cached) {
+    renderPage();
+    await paintDashboard(cached, true, isCurrent);
+  } else {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the dashboard…'));
+  }
+  tableContainer.querySelector('#kpi-heading')?.focus();
+  if (!isOnline() && cached) return;
+
+  // Refresh keeps the frame: the previous render stays, dimmed, until new figures arrive.
+  tableContainer.classList.add('is-refreshing');
+  tableContainer.setAttribute('aria-busy', 'true');
+  try {
+    const [data, stats] = await Promise.all([
+      apiFetch('/dashboard'),
+      apiFetch('/work-orders/stats?period=30'),
+    ]);
+    const snapshot = { data, stats, fetched_at: new Date().toISOString() };
+    await DB.setConfig(DASHBOARD_CACHE, snapshot);
+    if (!isCurrent()) return;
+    const hadFocus = tableContainer.contains(document.activeElement);
+    await paintDashboard(snapshot, false, isCurrent);
+    if (hadFocus) tableContainer.querySelector('#kpi-heading')?.focus();
+  } catch (err) {
+    if (!isCurrent() || cached) return; // the saved copy stays on screen with its date
+    showConsoleError(err, () => render(currentRoute()));
+    tableContainer.querySelector('.error-state p').textContent =
+      err.status === 0
+        ? 'The dashboard has not been loaded on this device yet, so it is not available offline.'
+        : err.message;
+  } finally {
+    if (isCurrent()) {
+      tableContainer.classList.remove('is-refreshing');
+      tableContainer.removeAttribute('aria-busy');
+    }
+  }
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------

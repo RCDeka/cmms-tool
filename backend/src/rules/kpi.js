@@ -1,0 +1,38 @@
+// Dashboard KPI rules (docs/data-model.md → KPI definitions). Pure: "today" is given,
+// computed by the caller in APP_TIMEZONE (D13).
+import { addDays } from '../lib/dates.js';
+import { WORK_ORDER_PRIORITIES } from './enums.js';
+import { isTerminal } from './work-order-status.js';
+
+/** First and last day of the calendar month of `today` ('YYYY-MM-DD'). */
+export function monthRange(today) {
+  const first = `${today.slice(0, 7)}-01`;
+  const [y, m] = today.split('-').map(Number);
+  const nextFirst = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  return { from: first, to: addDays(nextFirst, -1) };
+}
+
+/** Overdue: not closed or cancelled, and the due date is before today (due today is not late). */
+export function isOverdue(workOrder, today) {
+  return !isTerminal(workOrder.status) && Boolean(workOrder.due_on) && workOrder.due_on < today;
+}
+
+/** "My work today": assigned to the user, not terminal, due today or earlier, or no due date. */
+export function isMyWorkToday(workOrder, userId, today) {
+  return (
+    workOrder.assignee_id === userId &&
+    !isTerminal(workOrder.status) &&
+    (!workOrder.due_on || workOrder.due_on <= today)
+  );
+}
+
+const PRIORITY_RANK = Object.fromEntries(WORK_ORDER_PRIORITIES.map((p, i) => [p, i]));
+
+/** Order of "My work today": URGENT first, then the earliest due date (none last), then number. */
+export function compareMyWork(a, b) {
+  return (
+    PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority] ||
+    (a.due_on ?? '9999-12-31').localeCompare(b.due_on ?? '9999-12-31') ||
+    a.number.localeCompare(b.number)
+  );
+}
