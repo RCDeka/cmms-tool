@@ -55,11 +55,18 @@
       </main>
       <footer id="status-bar">
         <span id="network-status">Online</span>
+        <span id="sync-status"></span>
         <span id="session-status"></span>
       </footer>
     </div>
 
     <div id="login-container"></div>
     <div id="live-region" class="visually-hidden" aria-live="polite"></div>
+    <dialog
+      id="confirm-dialog"
+      class="dialog"
+      aria-labelledby="confirm-title"
+      aria-describedby="confirm-message"
+    ></dialog>
   </body>
 </html>

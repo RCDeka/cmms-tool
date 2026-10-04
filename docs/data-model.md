@@ -167,8 +167,8 @@ Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'O
 
 ### Work orders
 - BR-W1: `number` is unique and immutable; format `WO-YYYY-NNNNN` (see BR-W10).
-- BR-W2: If `asset_id` is set, it must reference an existing asset, and `site` takes the asset's site.
-- BR-W3: `assignee_id` must reference a user with role `TECHNICIAN` or `SUPERVISOR`.
+- BR-W2: If `asset_id` is set, it must reference an existing asset, and `site` takes the asset's site. Sending a different `site` together with an asset is refused (422).
+- BR-W3: `assignee_id` must reference a user with role `TECHNICIAN` or `SUPERVISOR`; `supervisor_id` a user with role `SUPERVISOR` or `ADMIN`.
 - BR-W4: Allowed status transitions (any other is rejected with 422):
 
 | From | To |

@@ -55,7 +55,11 @@ frontend/
     preload.js                prefetch of adjacent pages and eviction
     network.js                online/offline detection, status bar, .ai-only toggling
     queue.js                  sync_queue: enqueue, flush, retry, result handling
-    save-modes.js             standard vs power-user behavior, drafts, unsaved-changes guard
+    save-modes.js             drafts, leave decision (standard vs power user), debounce
+    editor.js                 edit and creation flows in the detail panel, navigation guard
+    form.js                   form controls generated from field definitions, errors
+    rules.js                  copies of backend rules (transitions, permission matrix)
+    refs.js                   sites and users for dropdowns, asset lookup by code
     router.js                 pushState / popstate, URL parsing
     table.js, detail.js       list and detail panel rendering
     format.js                 value formatting (dates, enums as badges, users)
@@ -147,13 +151,13 @@ Prefetching runs after the visible content is rendered, one request at a time, a
 Both modes write through the same queue (D11). They differ only in what triggers a save.
 
 **Standard mode** (`power_user = false`):
-- Editing a field marks the record as dirty. Every 60 s, the dirty record is saved as a draft in `drafts`.
+- Editing a field marks the record as dirty. 1 s after the last edit, the changes are saved as a draft in `drafts` (D29).
 - **Save** button → enqueue the changes → flush.
 - Closing the detail panel, opening another record, or navigating away while dirty → confirmation dialog "Unsaved changes" (Save / Discard / Cancel). Leaving the page uses the browser's `beforeunload` prompt.
 - When a record with a draft is opened → banner "Unsaved draft from <date>": Restore / Discard.
 
 **Power-user mode** (`power_user = true`):
-- Edits are saved to `drafts` continuously (debounced, 500 ms), so nothing is lost if the tab closes.
+- Edits are saved to `drafts` 1 s after the last edit (D29), and immediately when the tab is hidden or closed, so nothing is lost.
 - Leaving the detail panel (close, open another record, route change) → the draft is enqueued and flushed automatically.
 - At startup, any power-user draft left over (tab closed before leaving the record) is enqueued automatically.
 
@@ -166,7 +170,7 @@ Both modes write through the same queue (D11). They differ only in what triggers
 
 ## Sync queue
 
-- One queue entry per record: new edits to a record not yet sent are merged into its existing entry, keeping the original `base_version`.
+- One queue entry per record: new edits to a record not yet sent are merged into its existing entry, keeping the original `base_version`. Edits made while that entry is being sent go into a follow-up entry, which waits for the answer: on success it gets the new version (and the real id after a creation); after a refused creation it is folded into the kept draft.
 - Flush: FIFO, one request at a time. Runs on enqueue (if online), on reconnect, at startup, and every 30 s while the queue isn't empty.
 - Display: queued edits are shown immediately in the detail panel, marked "Pending sync". The status bar shows the number of pending writes.
 

@@ -2,12 +2,15 @@
 import { ENTITIES, entityForSegment } from './entities.js';
 
 const ID = /^[1-9]\d{0,15}$/;
+/** Work orders created offline have a temporary id until the server answers (D26). */
+const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'notFound'} name
  * @property {string} [entity] 'assets' | 'work_orders'
- * @property {number} [id]
+ * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
+ * @property {number} [assetId] creation form: asset to pre-fill
  * @property {number} page table page (1 when absent or invalid)
  * @property {string} [next] login: where to go after logging in
  */
@@ -44,9 +47,14 @@ export function parseRoute(pathname, search = '') {
   const entity = entityForSegment(first);
   if (!entity) return { name: 'notFound', page };
   if (!second) return { name: 'list', entity: entity.key, page };
-  if (second === 'new' && entity.key === 'work_orders')
-    return { name: 'create', entity: entity.key, page };
+  if (second === 'new' && entity.key === 'work_orders') {
+    const assetId = positiveInt(query.get('asset_id'), null);
+    return { name: 'create', entity: entity.key, page, ...(assetId && { assetId }) };
+  }
   if (ID.test(second)) return { name: 'detail', entity: entity.key, id: Number(second), page };
+  if (TMP_ID.test(second) && entity.key === 'work_orders') {
+    return { name: 'detail', entity: entity.key, id: second, page };
+  }
   return { name: 'notFound', page };
 }
 
@@ -73,6 +81,16 @@ export function detailUrl(entity, id, page = 1) {
 }
 
 let listener = () => {};
+let guard = null;
+let lastUrl = typeof location === 'undefined' ? '' : location.pathname + location.search;
+
+/**
+ * Called before leaving the current URL; resolves to false to stay (unsaved changes).
+ * @param {((toUrl: string) => Promise<boolean> | boolean) | null} fn
+ */
+export function setNavigationGuard(fn) {
+  guard = fn;
+}
 
 /** Current route from the browser location. */
 export function currentRoute() {
@@ -84,9 +102,11 @@ export function currentRoute() {
  * @param {string} url
  * @param {{ replace?: boolean }} [options]
  */
-export function navigate(url, { replace = false } = {}) {
+export async function navigate(url, { replace = false, force = false } = {}) {
   if (url === location.pathname + location.search && !replace) return;
+  if (!force && guard && !(await guard(url))) return;
   history[replace ? 'replaceState' : 'pushState'](null, '', url);
+  lastUrl = url;
   listener(currentRoute());
 }
 
@@ -97,7 +117,17 @@ export function navigate(url, { replace = false } = {}) {
  */
 export function startRouter(onRoute) {
   listener = onRoute;
-  window.addEventListener('popstate', () => listener(currentRoute()));
+  lastUrl = location.pathname + location.search;
+  window.addEventListener('popstate', async () => {
+    const url = location.pathname + location.search;
+    // Back/forward has already moved: if the user stays, put the previous URL back.
+    if (guard && !(await guard(url))) {
+      history.pushState(null, '', lastUrl);
+      return;
+    }
+    lastUrl = url;
+    listener(currentRoute());
+  });
   document.addEventListener('click', (event) => {
     const link = event.target instanceof Element ? event.target.closest('a[data-link]') : null;
     if (!link) return;

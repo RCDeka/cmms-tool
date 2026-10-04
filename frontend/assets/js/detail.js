@@ -40,11 +40,34 @@ function conflictBanner() {
 }
 
 /**
- * Renders a record.
- * @param {HTMLElement} container
- * @param {{ entity: string, record: object, onClose: () => void }} options
+ * Notice under the header (draft to restore, refused change, pending sync, …).
+ * @param {'info' | 'warning' | 'danger'} tone
+ * @param {unknown[]} content text and nodes; actions are buttons inside
  */
-export function renderDetail(container, { entity, record, onClose }) {
+export function notice(tone, ...content) {
+  return h(
+    'div',
+    { class: `banner banner-${tone}`, role: tone === 'danger' ? 'alert' : 'note' },
+    content,
+  );
+}
+
+/**
+ * Renders a record: read-only fields, or `body` (the edit form) when given.
+ * @param {HTMLElement} container
+ * @param {object} options
+ * @param {string} options.entity
+ * @param {object} options.record
+ * @param {() => void} options.onClose
+ * @param {string} [options.title] defaults to the entity title of the record
+ * @param {HTMLElement[]} [options.notices] banners under the header
+ * @param {HTMLElement[]} [options.actions] buttons or links above the fields
+ * @param {HTMLElement} [options.body] replaces the read-only fields
+ */
+export function renderDetail(
+  container,
+  { entity, record, onClose, title, notices = [], actions = [], body = null },
+) {
   const cfg = ENTITIES[entity];
   const fields = cfg.detailFields
     .filter((field) => !isEmpty(record[field]))
@@ -54,9 +77,11 @@ export function renderDetail(container, { entity, record, onClose }) {
     ]);
   replaceChildren(
     container,
-    header(cfg.title(record), onClose),
+    header(title ?? cfg.title(record), onClose),
     record.has_conflict ? conflictBanner() : null,
-    h('dl', { class: 'detail-fields' }, fields),
+    notices,
+    actions.length ? h('div', { class: 'detail-actions' }, actions) : null,
+    body ?? h('dl', { class: 'detail-fields' }, fields),
   );
 }
 

@@ -82,9 +82,10 @@ export const ENTITIES = {
       status: { label: 'Status', type: 'enum', enum: 'work_order_status' },
       priority: { label: 'Priority', type: 'enum', enum: 'work_order_priority' },
       description: { label: 'Description' },
-      asset: { label: 'Asset', type: 'asset' },
-      assignee: { label: 'Assignee', type: 'user' },
-      supervisor: { label: 'Supervisor', type: 'user' },
+      // editField: the API field a row edits when it shows a nested object.
+      asset: { label: 'Asset', type: 'asset', editField: 'asset_id' },
+      assignee: { label: 'Assignee', type: 'user', editField: 'assignee_id' },
+      supervisor: { label: 'Supervisor', type: 'user', editField: 'supervisor_id' },
       created_on: { label: 'Created', type: 'date' },
       due_on: { label: 'Due', type: 'date' },
       started_on: { label: 'Started', type: 'date' },
@@ -95,7 +96,7 @@ export const ENTITIES = {
       created_by: { label: 'Created by', type: 'user' },
     },
     columns: ['number', 'title', 'site', 'priority', 'status', 'assignee', 'due_on'],
-    splitColumns: ['number', 'title', 'priority', 'status'],
+    splitColumns: ['number', 'title', 'status'],
     detailFields: [
       'number',
       'title',

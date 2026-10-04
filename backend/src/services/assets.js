@@ -7,6 +7,7 @@ import {
   rankExpression,
 } from '../lib/pagination.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
+import { parseUpdate, versionedUpdate } from './writes.js';
 
 const FIELDS = [
   'id',
@@ -64,6 +65,10 @@ export function toAsset(row) {
 export function createAssetService(db) {
   const count = db.prepare('SELECT count(*) FROM assets').pluck();
   const byId = db.prepare(`${SELECT} WHERE a.id = ?`);
+  const getById = (id) => {
+    const row = byId.get(id);
+    return row ? toAsset(row) : null;
+  };
 
   return {
     /** Paginated list, complete records (D7). */
@@ -75,9 +80,24 @@ export function createAssetService(db) {
     },
 
     /** Asset or null. */
-    getById(id) {
-      const row = byId.get(id);
-      return row ? toAsset(row) : null;
+    getById,
+
+    /**
+     * PUT /api/assets/:id (BR-V1 to BR-V4, permission matrix).
+     * @returns {{ status: 'applied' | 'conflict' | 'locked', conflictId?: number, item: object }}
+     */
+    update(id, body, user, { now }) {
+      const { changes, version, editedAt } = parseUpdate('assets', body, user);
+      const result = versionedUpdate(db, {
+        entity: 'assets',
+        id,
+        changes,
+        version,
+        editedAt,
+        user,
+        now: now.toISOString(),
+      });
+      return { ...result, item: getById(id), changes, version };
     },
 
     /**

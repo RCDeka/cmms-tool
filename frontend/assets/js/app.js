@@ -1,18 +1,36 @@
 // Entry point: wires the shell, the router and the views (docs/architecture.md).
 // Data flow: IndexedDB first, then quiet revalidation from the server (stale-while-revalidate).
+// Writes go through the sync queue (queue.js); editing and creation live in editor.js.
 import { onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import * as DB from './db.js';
-import { renderDetail, renderDetailMessage, showUpdateAvailable } from './detail.js';
+import { renderDetailMessage, showUpdateAvailable } from './detail.js';
 import { h, replaceChildren } from './dom.js';
+import {
+  clearEditor,
+  currentEditor,
+  enqueueLeftoverDrafts,
+  flushDraft,
+  leaveGuard,
+  loadPendingCreations,
+  onBeforeUnload,
+  setRefs,
+  setRerender,
+  showCreate,
+  showPendingCreation,
+  showRecord,
+  withPending,
+} from './editor.js';
 import { ENTITIES } from './entities.js';
 import {
   announce,
+  confirmDialog,
   initLayout,
   renderPage,
   renderPlaceholder,
   setActiveNav,
   setSplitView,
+  setSyncStatus,
   setTitle,
   showLoggedIn,
   showLoggedOut,
@@ -20,7 +38,23 @@ import {
 import { renderLogin } from './login.js';
 import { initNetwork, isOnline, onNetworkChange } from './network.js';
 import { prefetchAround } from './preload.js';
-import { currentRoute, detailUrl, listUrl, navigate, startRouter } from './router.js';
+import {
+  loadQueue,
+  onQueueChange,
+  pendingCount,
+  resume as resumeQueue,
+  setQueueHandlers,
+  startQueue,
+} from './queue.js';
+import { loadRefs } from './refs.js';
+import {
+  currentRoute,
+  detailUrl,
+  listUrl,
+  navigate,
+  setNavigationGuard,
+  startRouter,
+} from './router.js';
 import { clearSession } from './session.js';
 import {
   fetchAndStorePage,
@@ -36,9 +70,13 @@ const detailContainer = document.getElementById('detail-container');
 /** Revalidation on window focus happens at most this often. */
 const REVALIDATE_THROTTLE_MS = 10_000;
 
-/** Table page on screen; its records serve the detail panel without any lookup (D7). */
-let shownPage = null; // { entity, page, pages, byId: Map<number, object> }
-/** Record open in the detail panel. */
+/**
+ * Table page on screen. `data` is the server page; `byId` holds its records as the server
+ * sent them (pending changes are applied when displayed), so the detail panel opens without
+ * any lookup (D7).
+ */
+let shownPage = null; // { entity, page, pages, data, pinned, byId: Map }
+/** Record open in the detail panel ('new' for the creation form). */
 let openDetail = null; // { entity, id }
 /** Focus to restore after the next render, e.g. the pagination button just used. */
 let pendingFocus = null;
@@ -50,6 +88,7 @@ function resetViews() {
   shownPage = null;
   openDetail = null;
   pendingFocus = null;
+  clearEditor();
   setSplitView(false);
   replaceChildren(tableContainer);
   replaceChildren(detailContainer);
@@ -59,12 +98,12 @@ async function render(route) {
   const seq = ++renderSeq;
   const isCurrent = () => seq === renderSeq;
 
-  if (route.name === 'root') return navigate('/dashboard', { replace: true });
+  if (route.name === 'root') return navigate('/dashboard', { replace: true, force: true });
 
   if (!isLoggedIn()) {
     if (route.name !== 'login') {
       const next = encodeURIComponent(location.pathname + location.search);
-      return navigate(`/login?next=${next}`, { replace: true });
+      return navigate(`/login?next=${next}`, { replace: true, force: true });
     }
     resetViews();
     showLoggedOut();
@@ -72,28 +111,24 @@ async function render(route) {
     return renderLogin(document.getElementById('login-container'), {
       onLoggedIn: async (user) => {
         await forgetOtherUsersData(user);
-        navigate(route.next, { replace: true });
+        startSession(user);
+        navigate(route.next, { replace: true, force: true });
       },
     });
   }
-  if (route.name === 'login') return navigate(route.next, { replace: true });
+  if (route.name === 'login') return navigate(route.next, { replace: true, force: true });
 
   showLoggedIn(currentUser());
   switch (route.name) {
     case 'list':
     case 'detail':
+    case 'create':
       return showEntity(route, isCurrent);
     case 'dashboard':
       return showPlaceholder(
         'dashboard',
         'Dashboard',
         'The dashboard is not available yet. Use the menu to browse assets and work orders.',
-      );
-    case 'create':
-      return showPlaceholder(
-        'work_orders',
-        'New work order',
-        'Creating work orders is not available yet.',
       );
     case 'conflicts':
     case 'conflict':
@@ -116,9 +151,19 @@ async function forgetOtherUsersData(user) {
   await DB.setConfig('user_id', user.id);
 }
 
+/** After login or at startup: lists for forms, leftover drafts, the queue. */
+function startSession(user) {
+  setRefs(loadRefs(user));
+  loadQueue()
+    .then(() => enqueueLeftoverDrafts(user))
+    .then(() => resumeQueue())
+    .catch(() => {});
+}
+
 function showPlaceholder(section, title, message, withHomeLink = false) {
   shownPage = null;
   openDetail = null;
+  clearEditor();
   setActiveNav(section);
   setTitle(title);
   renderPlaceholder(title, message);
@@ -130,17 +175,21 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
   tableContainer.querySelector('.placeholder-title')?.focus();
 }
 
-/** Renders a table page and remembers its records for the detail panel. */
-function displayPage(route, data) {
+/** Renders a table page (with pending changes and pending creations) and remembers it. */
+function displayPage(route, data, pinned = shownPage?.pinned ?? []) {
+  const items = data.items.map((record) => withPending(route.entity, record));
   shownPage = {
     entity: route.entity,
     page: route.page,
     pages: data.pages,
-    byId: new Map(data.items.map((record) => [record.id, record])),
+    data,
+    pinned,
+    byId: new Map([...pinned, ...data.items].map((record) => [record.id, record])),
   };
   renderTable(tableContainer, {
     entity: route.entity,
-    data,
+    data: { ...data, items },
+    pinned,
     selectedId: route.id ?? null,
     onOpen: (id) => {
       performance.mark('detail-open');
@@ -150,20 +199,36 @@ function displayPage(route, data) {
       pendingFocus = { type: 'pager', control };
       navigate(listUrl(route.entity, page));
     },
+    actions:
+      route.entity === 'work_orders'
+        ? [
+            h(
+              'a',
+              {
+                href: `/work-orders/new${route.page > 1 ? `?page=${route.page}` : ''}`,
+                'data-link': true,
+                class: 'button button-primary',
+              },
+              '+ New work order',
+            ),
+          ]
+        : [],
   });
 }
 
-/** Re-renders the table with fresh data, keeping keyboard focus where it was. */
-function refreshPage(route, data) {
+/** Re-renders the table, keeping keyboard focus where it was. */
+async function refreshPage(route, data = shownPage?.data) {
+  if (!data) return;
+  const pinned = route.entity === 'work_orders' ? await loadPendingCreations() : [];
   const active = document.activeElement;
   const rowId = active?.closest?.('#table-container tr[data-id]')?.dataset.id;
   const pager = active?.closest?.('#table-container [data-pager]')?.dataset.pager;
-  displayPage(route, data);
+  displayPage(route, data, pinned);
   if (rowId) focusRow(tableContainer, rowId);
   else if (pager) focusPager(tableContainer, pager);
 }
 
-/** Table (+ detail panel for /<entity>/:id): local data first, then the server. */
+/** Table (+ detail panel, creation form): local data first, then the server. */
 async function showEntity(route, isCurrent) {
   const cfg = ENTITIES[route.entity];
   setActiveNav(route.entity);
@@ -178,11 +243,12 @@ async function showEntity(route, isCurrent) {
   if (sameTable) {
     selectRow(tableContainer, route.id ?? null);
   } else {
+    const pinned = route.entity === 'work_orders' ? await loadPendingCreations() : [];
     const cached = await readCachedPage(route.entity, route.page);
     if (!isCurrent()) return;
     if (cached) {
       fromCache = true;
-      displayPage(route, cached);
+      displayPage(route, cached, pinned);
     } else {
       if (shownPage?.entity !== route.entity) {
         renderPage(
@@ -205,17 +271,29 @@ async function showEntity(route, isCurrent) {
         const url = route.id
           ? detailUrl(route.entity, route.id, result.data.pages)
           : listUrl(route.entity, result.data.pages);
-        return navigate(url, { replace: true });
+        return navigate(url, { replace: true, force: true });
       }
-      displayPage(route, result.data);
+      displayPage(route, result.data, pinned);
     }
   }
 
-  if (route.name === 'detail') {
+  const onClose = () => navigate(listUrl(route.entity, route.page));
+  if (route.name === 'create') {
+    setSplitView(true);
+    openDetail = { entity: route.entity, id: 'new' };
+    await showCreate({ route, onClose });
+    if (isCurrent()) restoreFocus(() => detailContainer.querySelector('#f-title')?.focus());
+  } else if (route.name === 'detail' && typeof route.id === 'string') {
+    setSplitView(true);
+    openDetail = { entity: route.entity, id: route.id };
+    await showPendingCreation({ route, onClose });
+    if (isCurrent()) restoreFocus(() => detailContainer.querySelector('.detail-title')?.focus());
+  } else if (route.name === 'detail') {
     await showDetail(route, isCurrent);
   } else {
     const closedId = openDetail?.entity === route.entity ? openDetail.id : null;
     openDetail = null;
+    clearEditor();
     setSplitView(false);
     replaceChildren(detailContainer);
     restoreFocus(
@@ -228,9 +306,9 @@ async function showEntity(route, isCurrent) {
   // then prefetch the neighbours and evict the rest.
   if (fromCache) await revalidatePage(route, isCurrent);
   if (isCurrent() && shownPage) {
-    prefetchAround(route.entity, route.page, shownPage.pages, { openId: route.id ?? null }).catch(
-      () => {},
-    );
+    prefetchAround(route.entity, route.page, shownPage.pages, {
+      openId: typeof route.id === 'number' ? route.id : null,
+    }).catch(() => {});
   }
 }
 
@@ -246,36 +324,39 @@ async function revalidatePage(route, isCurrent) {
   }
   if (!isCurrent()) return;
   if (!result.structureChanged && result.changedIds.length === 0) return;
-  refreshPage(route, result.data);
-  if (openDetail && result.changedIds.includes(openDetail.id)) offerUpdate(route);
+  await refreshPage(route, result.data);
+  if (openDetail?.entity === route.entity && result.changedIds.includes(openDetail.id)) {
+    offerUpdate(route);
+  }
 }
 
 /** Shows the "Update available" badge in the detail panel (brief → Silent revalidation). */
 function offerUpdate(route) {
   showUpdateAvailable(detailContainer, async () => {
-    const record =
-      shownPage?.byId.get(route.id) ?? (await readCachedRecord(route.entity, route.id));
-    if (!record) return;
-    renderDetail(detailContainer, { entity: route.entity, record, onClose: closeDetail(route) });
+    flushDraft(); // unsaved edits stay available as a draft
+    clearEditor();
+    await showDetail(route, () => true);
     detailContainer.querySelector('.detail-title')?.focus();
     announce('The record now shows the latest version.');
   });
   announce('An update is available for the open record.');
 }
 
-const closeDetail = (route) => () => navigate(listUrl(route.entity, route.page));
-
 async function showDetail(route, isCurrent) {
   const cfg = ENTITIES[route.entity];
-  const onClose = closeDetail(route);
+  const onClose = () => navigate(listUrl(route.entity, route.page));
   setSplitView(true);
   openDetail = { entity: route.entity, id: route.id };
 
   // 1. Current page in memory, 2. IndexedDB, 3. server.
-  let record = shownPage?.byId.get(route.id);
+  const fromPage = shownPage?.entity === route.entity ? shownPage.byId.get(route.id) : undefined;
+  let record = fromPage && withPending(route.entity, fromPage);
   const onPage = Boolean(record);
-  record ??= await readCachedRecord(route.entity, route.id);
-  if (!isCurrent()) return;
+  if (!record) {
+    const cached = await readCachedRecord(route.entity, route.id);
+    if (!isCurrent()) return;
+    if (cached) record = withPending(route.entity, cached);
+  }
 
   if (!record) {
     renderDetailMessage(detailContainer, {
@@ -284,7 +365,10 @@ async function showDetail(route, isCurrent) {
       onClose,
     });
     try {
-      record = (await fetchAndStoreRecord(route.entity, route.id)).record;
+      record = withPending(
+        route.entity,
+        (await fetchAndStoreRecord(route.entity, route.id)).record,
+      );
     } catch (err) {
       if (!isCurrent()) return;
       const singular = cfg.singular.toLowerCase();
@@ -309,7 +393,8 @@ async function showDetail(route, isCurrent) {
       .catch(() => {});
   }
 
-  renderDetail(detailContainer, { entity: route.entity, record, onClose });
+  await showRecord({ route, record, onClose });
+  if (!isCurrent()) return;
   measureDetailOpening();
   restoreFocus(() => detailContainer.querySelector('.detail-title')?.focus());
 }
@@ -368,36 +453,123 @@ function revalidateCurrent({ force = false } = {}) {
   revalidatePage(route, () => seq === renderSeq);
 }
 
-function init() {
-  initNetwork();
-  initLayout({
-    onLogout: async () => {
-      await logout();
-      await DB.clearAll(); // D22: no local data left behind
-      resetViews();
-      navigate('/login');
-      announce('You are logged out.');
+/** Re-renders the open view after a queue result, unless the user is typing in a form. */
+function refreshAfterWrite(entity, recordId) {
+  const route = currentRoute();
+  const editor = currentEditor();
+  const isOpen = openDetail?.entity === entity && openDetail.id === recordId;
+  if (isOpen && !editor?.dirty) {
+    render(route);
+  } else if (shownPage?.entity === entity) {
+    refreshPage(route);
+  }
+}
+
+/** Puts a record returned by the server into the page on screen. */
+function updateShownRecord(entity, item) {
+  if (shownPage?.entity !== entity) return;
+  const index = shownPage.data.items.findIndex((r) => r.id === item.id);
+  if (index >= 0) {
+    shownPage.data.items[index] = item;
+    shownPage.byId.set(item.id, item);
+  }
+}
+
+/** Reactions to the sync queue (docs/architecture.md → Sync queue, response table). */
+function handleQueueResults() {
+  setQueueHandlers({
+    onSuccess(entry, item) {
+      updateShownRecord(entry.entity, item);
+      const singular = ENTITIES[entry.entity].singular;
+      if (entry.op === 'create') {
+        announce(`Work order ${item.number} created.`);
+        if (openDetail?.id === entry.record_id) {
+          navigate(detailUrl('work_orders', item.id, shownPage?.page ?? 1), {
+            replace: true,
+            force: true,
+          });
+        } else {
+          refreshAfterWrite(entry.entity, entry.record_id);
+        }
+        revalidateCurrent({ force: true });
+      } else {
+        announce(`${singular} saved.`);
+        refreshAfterWrite(entry.entity, entry.record_id);
+      }
+    },
+    onConflict(entry, body) {
+      if (body?.server_version) updateShownRecord(entry.entity, body.server_version);
+      announce(
+        body?.locked
+          ? 'Not saved: this record is waiting for a supervisor to resolve a conflict. Your edits are kept as a draft.'
+          : 'Conflict: someone changed this record before you. A supervisor will choose which version to keep.',
+      );
+      refreshAfterWrite(entry.entity, entry.record_id);
+    },
+    onRejected(entry, err) {
+      announce(`Not saved: ${err.message}`);
+      refreshAfterWrite(entry.entity, entry.record_id);
     },
   });
+  onQueueChange(() => {
+    setSyncStatus(pendingCount());
+    if (shownPage && !currentEditor()?.dirty) refreshPage(currentRoute());
+  });
+}
+
+async function onLogout() {
+  // Unsaved form: same choices as when leaving the record.
+  if (!(await leaveGuard('/login'))) return;
+  const waiting = pendingCount();
+  if (waiting > 0) {
+    const choice = await confirmDialog({
+      title: 'Changes not sent',
+      message: `${waiting} change${waiting === 1 ? ' has' : 's have'} not been sent to the server yet. If you log out now, ${waiting === 1 ? 'it' : 'they'} will be lost.`,
+      actions: [
+        { value: 'stay', label: 'Stay logged in', primary: true },
+        { value: 'logout', label: 'Log out anyway' },
+      ],
+      cancelValue: 'stay',
+    });
+    if (choice !== 'logout') return;
+  }
+  await logout();
+  resetViews();
+  await DB.clearAll(); // D22: no local data left behind
+  await loadQueue();
+  navigate('/login', { force: true });
+  announce('You are logged out.');
+}
+
+function init() {
+  initNetwork();
+  initLayout({ onLogout });
+  setRerender(() => render(currentRoute()));
+  setNavigationGuard(leaveGuard);
+  handleQueueResults();
 
   // Expired or revoked token: back to the login page, then to the same place.
   onUnauthorized(() => {
+    flushDraft();
     clearSession();
     const next = encodeURIComponent(location.pathname + location.search);
-    navigate(`/login?next=${next}`, { replace: true });
+    navigate(`/login?next=${next}`, { replace: true, force: true });
     announce('Your session has expired. Log in again.');
   });
 
-  // Escape closes the detail panel and returns to the table.
+  // Escape closes the detail panel and returns to the table (dialogs handle their own Escape).
   document.getElementById('main-content').addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !openDetail || event.defaultPrevented) return;
     event.preventDefault();
     navigate(listUrl(openDetail.entity, shownPage?.page ?? 1));
   });
 
-  // Revalidation triggers: window back in focus, network back.
+  // Unsaved work survives closing or reloading the tab.
+  window.addEventListener('beforeunload', onBeforeUnload);
+  window.addEventListener('pagehide', flushDraft);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') revalidateCurrent();
+    if (document.visibilityState === 'hidden') flushDraft();
+    else revalidateCurrent();
   });
   window.addEventListener('focus', () => revalidateCurrent());
   onNetworkChange((online) => {
@@ -411,6 +583,8 @@ function init() {
     });
   }
 
+  if (isLoggedIn()) startSession(currentUser());
+  startQueue();
   startRouter(render);
   render(currentRoute());
 }

@@ -12,7 +12,8 @@ export default [
       globals: globals.node,
     },
     rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // ignoreRestSiblings: `const { removed, ...rest } = obj` drops a field on purpose.
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
       eqeqeq: ['error', 'always'],
     },
   },

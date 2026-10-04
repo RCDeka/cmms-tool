@@ -5,6 +5,7 @@ import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js
 import { validate } from '../middleware/validate.js';
 import { ASSET_STATUSES, CATEGORIES, CRITICALITIES } from '../rules/enums.js';
 import { ASSET_SORTS } from '../services/assets.js';
+import { sendUpdateResult } from './write-response.js';
 
 const listQuery = z.strictObject({
   ...pageQueryFields,
@@ -20,8 +21,12 @@ const searchQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-/** @param {{ assets: ReturnType<import('../services/assets.js').createAssetService> }} deps */
-export function assetsRouter({ assets }) {
+/**
+ * @param {object} deps
+ * @param {ReturnType<import('../services/assets.js').createAssetService>} deps.assets
+ * @param {() => Date} deps.now
+ */
+export function assetsRouter({ assets, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
@@ -37,6 +42,10 @@ export function assetsRouter({ assets }) {
     const asset = assets.getById(req.valid.params.id);
     if (!asset) throw new HttpError(404, 'Asset not found');
     res.json(asset);
+  });
+
+  router.put('/:id', validate({ params: idParams }), (req, res) => {
+    sendUpdateResult(res, assets.update(req.valid.params.id, req.body, req.user, { now: now() }));
   });
 
   return router;

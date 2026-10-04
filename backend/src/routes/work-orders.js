@@ -5,6 +5,7 @@ import { HttpError } from '../lib/http-error.js';
 import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
 import { validate } from '../middleware/validate.js';
 import { WORK_ORDER_SORTS } from '../services/work-orders.js';
+import { sendUpdateResult } from './write-response.js';
 
 const listQuery = z.strictObject({
   ...pageQueryFields,
@@ -28,6 +29,12 @@ export function workOrdersRouter({ workOrders, timeZone, now }) {
     res.json(workOrders.list(req.valid.query));
   });
 
+  // All roles may create (D27); BR-W12 restricts technicians in the service.
+  router.post('/', (req, res) => {
+    const { created, item } = workOrders.create(req.body, req.user, { now: now(), timeZone });
+    res.status(created ? 201 : 200).json({ created, item });
+  });
+
   // Declared before /:id so "stats" is not taken for an id.
   router.get('/stats', validate({ query: statsQuery }), (req, res) => {
     res.json(workOrders.stats(req.valid.query.period, dateInZone(timeZone, now())));
@@ -37,6 +44,14 @@ export function workOrdersRouter({ workOrders, timeZone, now }) {
     const workOrder = workOrders.getById(req.valid.params.id);
     if (!workOrder) throw new HttpError(404, 'Work order not found');
     res.json(workOrder);
+  });
+
+  router.put('/:id', validate({ params: idParams }), (req, res) => {
+    const result = workOrders.update(req.valid.params.id, req.body, req.user, {
+      now: now(),
+      timeZone,
+    });
+    sendUpdateResult(res, result);
   });
 
   return router;

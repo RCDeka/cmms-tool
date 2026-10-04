@@ -3,6 +3,9 @@ import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
 import { isEmpty, renderValue } from './format.js';
 
+/** Row ids are numbers, or `tmp-<uuid>` strings for creations not yet on the server. */
+export const parseRowId = (value) => (/^\d+$/.test(value) ? Number(value) : value);
+
 /**
  * Renders a page of records with its pagination controls.
  * @param {HTMLElement} container
@@ -12,11 +15,18 @@ import { isEmpty, renderValue } from './format.js';
  * @param {number | null} options.selectedId row shown in the detail panel
  * @param {(id: number) => void} options.onOpen
  * @param {(page: number, control: string) => void} options.onPage
+ * @param {object[]} [options.pinned] records shown first (work orders waiting to be created)
+ * @param {HTMLElement[]} [options.actions] buttons next to the record count
  */
-export function renderTable(container, { entity, data, selectedId, onOpen, onPage }) {
+export function renderTable(
+  container,
+  { entity, data, selectedId, onOpen, onPage, pinned = [], actions = [] },
+) {
   const cfg = ENTITIES[entity];
   const titleId = `${cfg.prefix}-table-title`;
-  const rows = data.items.map((record) => renderRow(cfg, record, record.id === selectedId));
+  const rows = [...pinned, ...data.items].map((record) =>
+    renderRow(cfg, record, record.id === selectedId),
+  );
   // Roving tabindex: one row is in the tab order, arrow keys move between rows.
   const tabbable = rows.find((row) => row.classList.contains('is-selected')) ?? rows[0];
   if (tabbable) tabbable.tabIndex = 0;
@@ -27,7 +37,7 @@ export function renderTable(container, { entity, data, selectedId, onOpen, onPag
       onKeydown: (event) => onRowKeydown(event, onOpen),
       onClick: (event) => {
         const row = event.target.closest('tr[data-id]');
-        if (row && !event.target.closest('a, button')) onOpen(Number(row.dataset.id));
+        if (row && !event.target.closest('a, button')) onOpen(parseRowId(row.dataset.id));
       },
     },
     rows,
@@ -59,13 +69,14 @@ export function renderTable(container, { entity, data, selectedId, onOpen, onPag
       // The h1 already shows the section name; the h2 stays for screen readers and focus.
       h('h2', { id: titleId, class: 'table-title visually-hidden', tabindex: '-1' }, cfg.label),
       h('p', { class: 'table-count' }, `${data.total} ${data.total === 1 ? 'record' : 'records'}`),
+      actions,
     ),
     h(
       'p',
       { id: `${cfg.prefix}-table-help`, class: 'visually-hidden' },
       'Use the up and down arrow keys to move between rows, and Enter to open one.',
     ),
-    data.items.length
+    rows.length
       ? h('div', { class: 'table-scroll' }, table)
       : h('p', { class: 'empty-state' }, `No ${cfg.label.toLowerCase()} on this page.`),
     renderPagination(data, onPage),
@@ -82,6 +93,7 @@ function renderRow(cfg, record, selected) {
   if (selected) classes.push('is-selected');
   if (record.has_conflict) classes.push('has-conflict');
   if (cfg.key === 'assets' && record.status === 'BROKEN_DOWN') classes.push('is-broken-down');
+  if (record._pending || record._pendingCreate) classes.push('is-pending');
 
   const cells = cfg.columns.map((field, index) =>
     h(
@@ -89,6 +101,10 @@ function renderRow(cfg, record, selected) {
       { class: columnClass(cfg, field) },
       // Conflict: color + icon + text, never color alone (brief → Accessibility).
       index === 0 && record.has_conflict ? conflictMarker() : null,
+      index === 0 && record._pendingCreate ? pendingMarker('Pending creation') : null,
+      index === 0 && record._pending && !record._pendingCreate
+        ? pendingMarker('Pending sync')
+        : null,
       isEmpty(record[field]) ? '' : renderValue(field, cfg.fields[field], record[field]),
     ),
   );
@@ -113,6 +129,15 @@ function conflictMarker() {
   );
 }
 
+function pendingMarker(text) {
+  return h(
+    'span',
+    { class: 'badge badge-pending badge-tone-info' },
+    h('span', { 'aria-hidden': 'true' }, '⟳'),
+    text,
+  );
+}
+
 function onRowKeydown(event, onOpen) {
   const row = event.target.closest?.('tr[data-id]');
   if (!row) return;
@@ -133,7 +158,7 @@ function onRowKeydown(event, onOpen) {
     case 'Enter':
     case ' ':
       event.preventDefault();
-      onOpen(Number(row.dataset.id));
+      onOpen(parseRowId(row.dataset.id));
       return;
     default:
       return;
@@ -150,7 +175,10 @@ function focusRowElement(row) {
 }
 
 function findRow(container, id) {
-  return container.querySelector(`tr[data-id="${Number(id)}"]`);
+  const value = String(id);
+  // Ids are digits or tmp-<uuid>: safe inside the attribute selector.
+  if (!/^(\d+|tmp-[0-9a-f-]+)$/.test(value)) return null;
+  return container.querySelector(`tr[data-id="${value}"]`);
 }
 
 /** Marks a row as selected (or none) without re-rendering the table. */

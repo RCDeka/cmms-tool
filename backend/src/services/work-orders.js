@@ -1,4 +1,11 @@
-import { addDays } from '../lib/dates.js';
+import { z } from 'zod';
+import { addDays, dateInZone } from '../lib/dates.js';
+import { HttpError } from '../lib/http-error.js';
+import { fieldErrors } from '../middleware/validate.js';
+import { WORK_ORDER_FIELDS, WRITE_META } from '../rules/fields.js';
+import { forbiddenCreationFields } from '../rules/permissions.js';
+import { creationDate, nextWorkOrderNumber } from '../rules/work-order-creation.js';
+import { applyWorkOrderRules } from '../rules/work-order-status.js';
 import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/pagination.js';
 import {
   CATEGORIES,
@@ -7,6 +14,26 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
+import { parseUpdate, versionedUpdate } from './writes.js';
+
+/** POST /api/work-orders body (BR-W9). Status, number, dates and authorship are set by the server. */
+const createSchema = z.strictObject({
+  client_id: z.uuid(),
+  title: WORK_ORDER_FIELDS.title,
+  type: WORK_ORDER_FIELDS.type,
+  priority: WORK_ORDER_FIELDS.priority.optional(),
+  description: WORK_ORDER_FIELDS.description.optional(),
+  asset_id: WORK_ORDER_FIELDS.asset_id.optional(),
+  site: WORK_ORDER_FIELDS.site.optional(),
+  category: WORK_ORDER_FIELDS.category.optional(),
+  assignee_id: WORK_ORDER_FIELDS.assignee_id.optional(),
+  supervisor_id: WORK_ORDER_FIELDS.supervisor_id.optional(),
+  due_on: WORK_ORDER_FIELDS.due_on.optional(),
+  estimated_hours: WORK_ORDER_FIELDS.estimated_hours.optional(),
+  edited_at: WRITE_META.edited_at,
+});
+
+const ruleError = ({ rule, message }) => new HttpError(422, message, { rule });
 
 const FIELDS = [
   'id',
@@ -87,6 +114,48 @@ function countsFor(values, rows, key) {
 export function createWorkOrderService(db) {
   const count = db.prepare('SELECT count(*) FROM work_orders').pluck();
   const byId = db.prepare(`${SELECT} WHERE w.id = ?`);
+  const getById = (id) => {
+    const row = byId.get(id);
+    return row ? toWorkOrder(row) : null;
+  };
+  const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
+  const roleOf = db.prepare('SELECT role FROM users WHERE id = ?').pluck();
+  const idByClientId = db.prepare('SELECT id FROM work_orders WHERE client_id = ?').pluck();
+  const highestNumber = db
+    .prepare("SELECT max(number) FROM work_orders WHERE number LIKE 'WO-' || ? || '-%'")
+    .pluck();
+
+  /**
+   * BR-W2 (site follows the asset) and BR-W3 (eligible people) on the record as it will be.
+   * @param {object} after record after the change
+   * @param {object} sent fields sent by the client
+   * @returns {object} fields to add to the change (the asset's site)
+   */
+  function checkReferences(after, sent) {
+    const derived = {};
+    if (after.asset_id !== null && after.asset_id !== undefined) {
+      const asset = assetById.get(after.asset_id);
+      if (!asset) throw ruleError({ rule: 'BR-W2', message: 'This asset does not exist.' });
+      if ('site' in sent && sent.site !== asset.site) {
+        throw ruleError({ rule: 'BR-W2', message: "The site must be the asset's site." });
+      }
+      if (after.site !== asset.site) derived.site = asset.site;
+    }
+    if ('assignee_id' in sent && sent.assignee_id !== null) {
+      if (!['TECHNICIAN', 'SUPERVISOR'].includes(roleOf.get(sent.assignee_id))) {
+        throw ruleError({
+          rule: 'BR-W3',
+          message: 'This user cannot be assigned to a work order.',
+        });
+      }
+    }
+    if ('supervisor_id' in sent && sent.supervisor_id !== null) {
+      if (!['SUPERVISOR', 'ADMIN'].includes(roleOf.get(sent.supervisor_id))) {
+        throw ruleError({ rule: 'BR-W3', message: 'This user cannot supervise a work order.' });
+      }
+    }
+    return derived;
+  }
   const groupBy = (expression) =>
     db.prepare(
       `SELECT ${expression} AS value, count(*) AS count FROM work_orders
@@ -108,9 +177,106 @@ export function createWorkOrderService(db) {
     },
 
     /** Work order with its asset, or null. */
-    getById(id) {
-      const row = byId.get(id);
-      return row ? toWorkOrder(row) : null;
+    getById,
+
+    /**
+     * PUT /api/work-orders/:id: permissions, BR-V1 to BR-V4, BR-W2 to BR-W8.
+     * @returns {{ status: 'applied' | 'conflict' | 'locked', conflictId?: number, item: object }}
+     */
+    update(id, body, user, { now, timeZone }) {
+      const { changes, version, editedAt } = parseUpdate('work_orders', body, user);
+      const result = versionedUpdate(db, {
+        entity: 'work_orders',
+        id,
+        changes,
+        version,
+        editedAt,
+        user,
+        now: now.toISOString(),
+        prepare(current) {
+          const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
+          if (workflow.error) throw ruleError(workflow.error);
+          const derived = checkReferences({ ...current, ...workflow.changes }, changes);
+          return { ...workflow.changes, ...derived };
+        },
+      });
+      return { ...result, item: getById(id), changes, version };
+    },
+
+    /**
+     * POST /api/work-orders (BR-W9 to BR-W13). Replaying a client_id returns the existing
+     * work order instead of creating a second one (BR-W11, D26).
+     * @returns {{ created: boolean, item: object }}
+     */
+    create(body, user, { now, timeZone }) {
+      const parsed = createSchema.safeParse(body ?? {});
+      if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
+      const input = parsed.data;
+      if ((input.asset_id === undefined || input.asset_id === null) && !input.site) {
+        const message = 'An asset or a site is required';
+        throw new HttpError(400, 'Invalid body', { fields: { asset_id: message, site: message } });
+      }
+      const notAllowed = forbiddenCreationFields(user, input);
+      if (notAllowed.length) {
+        throw new HttpError(403, 'Technicians can only assign new work orders to themselves', {
+          fields: notAllowed,
+        });
+      }
+
+      const id = db
+        .transaction(() => {
+          const existing = idByClientId.get(input.client_id);
+          if (existing) return { id: existing, created: false };
+
+          const when = creationDate(input.edited_at, now, timeZone);
+          if (when.error) throw ruleError(when.error);
+          const { edited_at: _editedAt, ...fields } = input;
+          const row = {
+            priority: 'NORMAL',
+            description: null,
+            asset_id: null,
+            site: null,
+            category: null,
+            assignee_id: user.role === 'TECHNICIAN' ? user.id : null,
+            supervisor_id: null,
+            due_on: null,
+            estimated_hours: null,
+            ...fields,
+            status: 'OPEN',
+            created_on: when.date,
+            created_by: user.id,
+            updated_by: user.id,
+          };
+          if (user.role === 'TECHNICIAN') row.assignee_id = user.id;
+          Object.assign(row, checkReferences(row, fields));
+          if (row.asset_id !== null && !('category' in fields)) {
+            row.category = assetById.get(row.asset_id).category;
+          }
+          if (row.due_on && row.due_on < row.created_on) {
+            throw ruleError({
+              rule: 'BR-W8',
+              message: 'The due date cannot be earlier than the creation date.',
+            });
+          }
+
+          const year = row.created_on.slice(0, 4);
+          row.number = nextWorkOrderNumber(year, highestNumber.get(year));
+          const stamp = now.toISOString();
+          const newId = db
+            .prepare(
+              `INSERT INTO work_orders
+                (number, client_id, type, status, priority, title, description, asset_id, site,
+                 category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
+                 created_by, updated_by, created_at, updated_at)
+               VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
+                 @asset_id, @site, @category, @assignee_id, @supervisor_id, @created_on, @due_on,
+                 @estimated_hours, @created_by, @updated_by, @stamp, @stamp)`,
+            )
+            .run({ ...row, stamp }).lastInsertRowid;
+          return { id: Number(newId), created: true };
+        })
+        .immediate();
+      return { created: id.created, item: getById(id.id) };
     },
 
     /**

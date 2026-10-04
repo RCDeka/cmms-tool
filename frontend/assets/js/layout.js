@@ -109,3 +109,56 @@ export function renderPlaceholder(title, message) {
     ),
   );
 }
+
+/**
+ * Modal question with buttons (native <dialog>: focus stays inside, Escape cancels).
+ * @param {{ title: string, message: string,
+ *   actions: { value: string, label: string, primary?: boolean }[], cancelValue?: string }} options
+ * @returns {Promise<string>} value of the chosen action, or cancelValue for Escape
+ */
+export function confirmDialog({ title, message, actions, cancelValue = 'cancel' }) {
+  const dialog = $('confirm-dialog');
+  replaceChildren(
+    dialog,
+    h('h2', { id: 'confirm-title', class: 'dialog-title' }, title),
+    h('p', { id: 'confirm-message' }, message),
+    h(
+      'div',
+      { class: 'dialog-actions' },
+      actions.map((a) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: `button ${a.primary ? 'button-primary' : 'button-secondary'}`,
+            dataset: { value: a.value },
+          },
+          a.label,
+        ),
+      ),
+    ),
+  );
+  return new Promise((resolve) => {
+    const done = (value) => {
+      dialog.close();
+      resolve(value);
+    };
+    dialog.onclick = (event) => {
+      const button = event.target.closest('button[data-value]');
+      if (button) done(button.dataset.value);
+    };
+    dialog.oncancel = (event) => {
+      event.preventDefault();
+      done(cancelValue);
+    };
+    dialog.showModal();
+    (dialog.querySelector('.button-primary') ?? dialog.querySelector('button'))?.focus();
+  });
+}
+
+/** Status bar: number of writes waiting to be sent. */
+export function setSyncStatus(count) {
+  $('sync-status').textContent = count
+    ? `${count} change${count === 1 ? '' : 's'} waiting to sync`
+    : '';
+}

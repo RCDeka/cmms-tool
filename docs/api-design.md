@@ -95,8 +95,10 @@ Page<T>     { total, page, pages, items: T[] }
 
 ### PUT /api/assets/:id
 - Body: `{ ...changed fields..., "version": number, "edited_at"?: ISO }`. `edited_at` is when the user made the edit (used for queued offline edits); it defaults to now.
+- Checks, in this order: unknown field → 400; read-only field (`code`, `id`, timestamps, nested objects of the GET shape, …) or field the role may not edit → 403 with `details.fields`; missing `version`, no field to change, or invalid value → 400; record locked → 409; version mismatch → 409; business rule → 422.
+- Blank text in an optional field is stored as `null`.
 - `200 { "updated": true, "version": N+1, "item": Asset }`
-- `409` version mismatch (BR-V3):
+- `409` version mismatch (BR-V3). The conflict is stored, and `server_version` is the record as now stored (`has_conflict: true`):
   ```
   { "conflict": true, "conflict_id": 12,
     "server_version": { ...Asset as stored... },
@@ -134,7 +136,7 @@ Page<T>     { total, page, pages, items: T[] }
 - Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "site"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or `site` is required.
 - `201 { "created": true, "item": WorkOrder }`
 - `200 { "created": false, "item": WorkOrder }` when `client_id` was already used (replay, BR-W11).
-- Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+`site`; 403 technician assigning someone else; 404 asset not found; 422 rule violated (assignee not eligible, `due_on` before `created_on`, `edited_at` out of range).
+- Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+`site`; 403 technician assigning someone else; 422 rule violated: unknown asset or site different from the asset's (BR-W2), assignee or supervisor not eligible (BR-W3), `due_on` before `created_on` (BR-W8), `edited_at` out of range (BR-W9).
 
 ### GET /api/work-orders/:id
 - `200 WorkOrder` (with the linked asset). Errors: 404.

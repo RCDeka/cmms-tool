@@ -69,7 +69,7 @@ Acceptance: a technician edits a work order offline, comes back online and the e
 **Objective:** concurrent edits are detected, flagged accessibly and resolved by a supervisor.
 
 Tasks:
-- Backend: conflict creation (BR-V3), lock (BR-V4), `GET /api/conflicts`, `GET /api/conflicts/:id`, `PUT .../resolve-conflict` (BR-V5), divergent-field computation (BR-V6).
+- Backend: `GET /api/conflicts`, `GET /api/conflicts/:id`, `PUT .../resolve-conflict` (BR-V5), divergent-field computation (BR-V6). Conflict creation (BR-V3) and the lock (BR-V4) are already done in Phase 4 (D30).
 - Frontend: conflict row style + icon + badge, detail panel banner, `/conflicts` list and side-by-side arbitration with A / B / field-by-field merge.
 - Tests: unit test of the divergent-field diff; API tests for two clients editing the same version (second gets 409 with both versions), edit on a locked record (409 `locked`), each resolution choice, double resolution (409), technician denied (403).
 

@@ -99,3 +99,21 @@
   font-weight: 600;
   white-space: nowrap;
 }
+
+.table-header {
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.table-header .button {
+  text-decoration: none;
+}
+
+/* Changes waiting to sync: the row also shows a "Pending" badge with text. */
+.table-row.is-pending td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-info);
+}
+
+.badge-pending {
+  margin-right: var(--space-2);
+}

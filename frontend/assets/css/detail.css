@@ -60,3 +60,136 @@
 .detail-message {
   color: var(--color-text-muted);
 }
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Edit and creation forms: label column + control column, like the read-only fields. */
+.detail-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 35%) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  align-items: start;
+}
+
+.form-row > label,
+.form-row > .field-label {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: var(--font-size-small);
+  padding-top: 10px;
+}
+
+.form-row.is-readonly > .field-label {
+  padding-top: 0;
+}
+
+.form-row .field-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.form-control {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.detail-form input:not([type='checkbox']),
+.detail-form select,
+.detail-form textarea {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.detail-form textarea {
+  resize: vertical;
+}
+
+.detail-form select:disabled,
+.detail-form input:disabled {
+  background: var(--color-bg);
+  cursor: not-allowed;
+}
+
+.detail-form .checkbox {
+  width: 24px;
+  height: 24px;
+  margin: 10px 0;
+}
+
+.detail-form [aria-invalid='true'] {
+  border-color: var(--color-danger);
+  box-shadow: inset 0 0 0 1px var(--color-danger);
+}
+
+.required {
+  color: var(--color-danger);
+}
+
+.field-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+.field-error:empty,
+.form-summary:empty {
+  display: none;
+}
+
+.form-summary {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.form-help {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--color-surface);
+  /* Stays visible while the fields scroll underneath it. */
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -6px 12px -8px rgb(28 35 48 / 20%);
+}
+
+@media (max-width: 767px) {
+  .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-row > label,
+  .form-row > .field-label {
+    padding-top: 0;
+  }
+}

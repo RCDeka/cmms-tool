@@ -196,3 +196,50 @@ body.is-offline .ai-only {
   gap: var(--space-3);
   color: var(--color-danger);
 }
+
+.banner-info {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+.banner-danger {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.banner .button {
+  min-height: 36px;
+  margin-top: var(--space-1);
+}
+
+/* Confirmation dialog (native <dialog>) */
+.dialog {
+  width: min(92vw, 440px);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text);
+  box-shadow: 0 16px 48px rgb(28 35 48 / 25%);
+}
+
+.dialog::backdrop {
+  background: rgb(28 35 48 / 45%);
+}
+
+.dialog-title {
+  margin-bottom: var(--space-2);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+a.button {
+  text-decoration: none;
+}

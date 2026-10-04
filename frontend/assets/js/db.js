@@ -110,6 +110,16 @@ export async function put(store, value) {
   return (await init()).put(store, value);
 }
 
+/** One value by key from any store. */
+export async function get(store, key) {
+  return (await init()).get(store, key);
+}
+
+/** Deletes one value by key. */
+export async function remove(store, key) {
+  await (await init()).delete(store, key);
+}
+
 /** All entries of a store (drafts, sync_queue). */
 export async function getAll(store) {
   return (await init()).getAll(store);
@@ -136,6 +146,8 @@ export const DB = {
   getAll,
   getAllKeys,
   put,
+  get,
+  remove,
   clearAll,
   close,
 };

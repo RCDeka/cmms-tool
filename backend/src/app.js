@@ -76,7 +76,7 @@ export function createApp({
   app.use('/api/health', healthRouter(db));
   app.use('/api/auth', authRouter({ auth, authenticate: requireAuth, loginRateLimit }));
   app.use('/api', requireAuth);
-  app.use('/api/assets', assetsRouter({ assets }));
+  app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);
