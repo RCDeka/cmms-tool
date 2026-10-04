@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
 import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
+import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { WORK_ORDER_SORTS } from '../services/work-orders.js';
 import { sendUpdateResult } from './write-response.js';
@@ -53,6 +54,19 @@ export function workOrdersRouter({ workOrders, timeZone, now }) {
     });
     sendUpdateResult(res, result);
   });
+
+  router.put(
+    '/:id/resolve-conflict',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ params: idParams }),
+    (req, res) => {
+      const item = workOrders.resolveConflict(req.valid.params.id, req.body, req.user, {
+        now: now(),
+        timeZone,
+      });
+      res.json({ resolved: true, version: item.version, item });
+    },
+  );
 
   return router;
 }

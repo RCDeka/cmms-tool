@@ -7,11 +7,13 @@ import { authenticate } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
 import { assetsRouter } from './routes/assets.js';
 import { authRouter } from './routes/auth.js';
+import { conflictsRouter } from './routes/conflicts.js';
 import { healthRouter } from './routes/health.js';
 import { referenceRouter } from './routes/reference.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
 import { createAuthService } from './services/auth.js';
+import { createConflictService } from './services/conflicts.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createUserService } from './services/users.js';
 import { createWorkOrderService } from './services/work-orders.js';
@@ -46,6 +48,7 @@ export function createApp({
   const assets = createAssetService(db);
   const workOrders = createWorkOrderService(db);
   const referenceData = createReferenceDataService(db);
+  const conflicts = createConflictService(db, { assets, workOrders });
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -78,6 +81,7 @@ export function createApp({
   app.use('/api', requireAuth);
   app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
+  app.use('/api/conflicts', conflictsRouter({ conflicts }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);
 

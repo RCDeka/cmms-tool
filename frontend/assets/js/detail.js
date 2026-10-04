@@ -29,13 +29,16 @@ function header(title, onClose) {
   );
 }
 
-function conflictBanner() {
+function conflictBanner(consoleLink) {
   return h(
     'div',
     { class: 'banner banner-warning', role: 'note' },
     h('span', { 'aria-hidden': 'true' }, '⚠ '),
     h('strong', {}, 'Conflict'),
     ' — two versions of this record are waiting for a supervisor to arbitrate.',
+    consoleLink
+      ? [' ', h('a', { href: '/conflicts', 'data-link': true }, 'Open the conflict console')]
+      : null,
   );
 }
 
@@ -63,10 +66,11 @@ export function notice(tone, ...content) {
  * @param {HTMLElement[]} [options.notices] banners under the header
  * @param {HTMLElement[]} [options.actions] buttons or links above the fields
  * @param {HTMLElement} [options.body] replaces the read-only fields
+ * @param {boolean} [options.consoleLink] adds a link to the conflict console (supervisors)
  */
 export function renderDetail(
   container,
-  { entity, record, onClose, title, notices = [], actions = [], body = null },
+  { entity, record, onClose, title, notices = [], actions = [], body = null, consoleLink = false },
 ) {
   const cfg = ENTITIES[entity];
   const fields = cfg.detailFields
@@ -78,7 +82,7 @@ export function renderDetail(
   replaceChildren(
     container,
     header(title ?? cfg.title(record), onClose),
-    record.has_conflict ? conflictBanner() : null,
+    record.has_conflict ? conflictBanner(consoleLink) : null,
     notices,
     actions.length ? h('div', { class: 'detail-actions' }, actions) : null,
     body ?? h('dl', { class: 'detail-fields' }, fields),

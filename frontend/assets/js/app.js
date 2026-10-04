@@ -1,9 +1,11 @@
 // Entry point: wires the shell, the router and the views (docs/architecture.md).
 // Data flow: IndexedDB first, then quiet revalidation from the server (stale-while-revalidate).
 // Writes go through the sync queue (queue.js); editing and creation live in editor.js.
-import { onUnauthorized } from './api.js';
+import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
+import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import * as DB from './db.js';
+import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
 import { h, replaceChildren } from './dom.js';
 import {
@@ -11,6 +13,7 @@ import {
   currentEditor,
   enqueueLeftoverDrafts,
   flushDraft,
+  getRefs,
   leaveGuard,
   loadPendingCreations,
   onBeforeUnload,
@@ -46,7 +49,7 @@ import {
   setQueueHandlers,
   startQueue,
 } from './queue.js';
-import { loadRefs } from './refs.js';
+import { findAssetById, loadRefs } from './refs.js';
 import {
   currentRoute,
   detailUrl,
@@ -132,13 +135,16 @@ async function render(route) {
       );
     case 'conflicts':
     case 'conflict':
-      return hasRole('SUPERVISOR', 'ADMIN')
-        ? showPlaceholder('conflicts', 'Conflicts', 'Conflict arbitration is not available yet.')
-        : showPlaceholder(
-            null,
-            'Access denied',
-            'Only supervisors and administrators can open this page.',
-          );
+      if (!hasRole('SUPERVISOR', 'ADMIN')) {
+        return showPlaceholder(
+          null,
+          'Access denied',
+          'Only supervisors and administrators can open this page.',
+        );
+      }
+      return route.name === 'conflicts'
+        ? showConflictList(isCurrent)
+        : showConflict(route, isCurrent);
     default:
       return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
   }
@@ -173,6 +179,129 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
       .append(h('p', {}, h('a', { href: '/dashboard', 'data-link': true }, 'Go to the dashboard')));
   }
   tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+// --- Conflict console (supervisors and admins) ---------------------------------------------
+
+function leaveRecordViews(section, title) {
+  shownPage = null;
+  openDetail = null;
+  clearEditor();
+  setActiveNav(section);
+  setTitle(title);
+}
+
+function showConsoleError(err, retry) {
+  renderPage(
+    h(
+      'div',
+      { class: 'error-state', role: 'alert' },
+      h(
+        'p',
+        {},
+        err.status === 0 ? 'The conflict console needs a connection to the server.' : err.message,
+      ),
+      h('button', { type: 'button', class: 'button button-secondary', onClick: retry }, 'Retry'),
+    ),
+  );
+}
+
+async function showConflictList(isCurrent) {
+  leaveRecordViews('conflicts', 'Conflicts');
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading conflicts…'));
+  let items;
+  try {
+    ({ items } = await apiFetch('/conflicts'));
+  } catch (err) {
+    if (isCurrent()) showConsoleError(err, () => render(currentRoute()));
+    return;
+  }
+  if (!isCurrent()) return;
+  renderConflictList(tableContainer, items);
+  tableContainer.querySelector('.table-title')?.focus();
+}
+
+/** Names of people and assets that appear in a conflict. */
+async function conflictLookups(conflict) {
+  const assets = new Map();
+  if (conflict.entity_type === 'work_orders') {
+    const ids = [conflict.version_a.asset_id, conflict.version_b.asset_id].filter(Boolean);
+    for (const id of new Set(ids)) {
+      const asset = await findAssetById(id);
+      if (asset) assets.set(id, asset);
+    }
+  }
+  return { users: (await getRefs()).users, assets };
+}
+
+async function showConflict(route, isCurrent, error = '') {
+  leaveRecordViews('conflicts', 'Conflicts');
+  if (!error)
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the conflict…'));
+  let conflict;
+  try {
+    conflict = await apiFetch(`/conflicts/${route.id}`);
+  } catch (err) {
+    if (!isCurrent()) return;
+    if (err.status === 404) {
+      renderPage(
+        h(
+          'div',
+          { class: 'placeholder' },
+          h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Conflict not found'),
+          h('p', {}, h('a', { href: '/conflicts', 'data-link': true }, 'Back to the conflicts')),
+        ),
+      );
+    } else {
+      showConsoleError(err, () => render(currentRoute()));
+    }
+    return;
+  }
+  const lookups = await conflictLookups(conflict);
+  if (!isCurrent()) return;
+
+  renderPage();
+  renderArbitration(tableContainer, conflict, {
+    lookups,
+    error,
+    onResolve: async (choice, fields) => {
+      const answer = await confirmDialog({
+        title: 'Resolve this conflict?',
+        message: `${resolutionSummary(choice, conflict)} This cannot be undone.`,
+        actions: [
+          { value: 'resolve', label: 'Resolve', primary: true },
+          { value: 'cancel', label: 'Cancel' },
+        ],
+      });
+      if (answer !== 'resolve') return;
+      try {
+        const res = await apiFetch(
+          `${ENTITIES[conflict.entity_type].api}/${conflict.entity_id}/resolve-conflict`,
+          {
+            method: 'PUT',
+            body: { conflict_id: conflict.id, choice, ...(fields && { fields }) },
+          },
+        );
+        // The tables show the resolved record at once (no wait for revalidation).
+        await DB.saveRecord(storesOf(conflict.entity_type).records, res.item.id, {
+          ...res.item,
+          _fetched_at: new Date().toISOString(),
+        });
+        announce(`Conflict on ${conflict.label} resolved.`);
+        navigate('/conflicts', { force: true });
+      } catch (err) {
+        if (err.status === 409) {
+          announce('This conflict was already resolved by someone else.');
+          render(currentRoute());
+        } else {
+          const seq = renderSeq;
+          await showConflict(route, () => seq === renderSeq, err.message);
+          tableContainer.querySelector('[role="alert"]')?.focus();
+        }
+      }
+    },
+  });
+  tableContainer.querySelector('.arbitration-title')?.focus();
 }
 
 /** Renders a table page (with pending changes and pending creations) and remembers it. */

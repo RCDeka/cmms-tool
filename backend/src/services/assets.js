@@ -7,7 +7,7 @@ import {
   rankExpression,
 } from '../lib/pagination.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
-import { parseUpdate, versionedUpdate } from './writes.js';
+import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
 const FIELDS = [
   'id',
@@ -98,6 +98,12 @@ export function createAssetService(db) {
         now: now.toISOString(),
       });
       return { ...result, item: getById(id), changes, version };
+    },
+
+    /** PUT /api/assets/:id/resolve-conflict (BR-V5). */
+    resolveConflict(id, body, user, { now }) {
+      resolveConflict(db, { entity: 'assets', id, body, user, now: now.toISOString() });
+      return getById(id);
     },
 
     /**

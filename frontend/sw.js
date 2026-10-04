@@ -19,6 +19,7 @@ const SHELL_FILES = [
   '/assets/js/app.js',
   '/assets/js/auth.js',
   '/assets/js/config.js',
+  '/assets/js/conflicts.js',
   '/assets/js/db.js',
   '/assets/js/detail.js',
   '/assets/js/dom.js',

@@ -127,3 +127,13 @@ export const ENTITIES = {
 export function entityForSegment(segment) {
   return Object.values(ENTITIES).find((e) => e.ui === `/${segment}`);
 }
+
+/**
+ * Detail field and definition for an API field (asset_id → asset, assignee_id → assignee).
+ * @returns {{ field: string, def: object } | null}
+ */
+export function fieldForApi(entityKey, apiField) {
+  const { fields } = ENTITIES[entityKey];
+  const field = Object.keys(fields).find((f) => (fields[f].editField ?? f) === apiField);
+  return field ? { field, def: fields[field] } : null;
+}

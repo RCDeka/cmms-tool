@@ -14,7 +14,7 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
-import { parseUpdate, versionedUpdate } from './writes.js';
+import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
 /** POST /api/work-orders body (BR-W9). Status, number, dates and authorship are set by the server. */
 const createSchema = z.strictObject({
@@ -156,6 +156,17 @@ export function createWorkOrderService(db) {
     }
     return derived;
   }
+
+  /**
+   * Business rules of a change on the current row: workflow (BR-W4 to BR-W8) and references
+   * (BR-W2, BR-W3). Shared by updates and conflict resolutions. Returns the final changes.
+   */
+  function prepareChanges(current, changes, now, timeZone) {
+    const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
+    if (workflow.error) throw ruleError(workflow.error);
+    const derived = checkReferences({ ...current, ...workflow.changes }, changes);
+    return { ...workflow.changes, ...derived };
+  }
   const groupBy = (expression) =>
     db.prepare(
       `SELECT ${expression} AS value, count(*) AS count FROM work_orders
@@ -193,14 +204,22 @@ export function createWorkOrderService(db) {
         editedAt,
         user,
         now: now.toISOString(),
-        prepare(current) {
-          const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
-          if (workflow.error) throw ruleError(workflow.error);
-          const derived = checkReferences({ ...current, ...workflow.changes }, changes);
-          return { ...workflow.changes, ...derived };
-        },
+        prepare: (current) => prepareChanges(current, changes, now, timeZone),
       });
       return { ...result, item: getById(id), changes, version };
+    },
+
+    /** PUT /api/work-orders/:id/resolve-conflict (BR-V5); the chosen values follow BR-W2 to BR-W8. */
+    resolveConflict(id, body, user, { now, timeZone }) {
+      resolveConflict(db, {
+        entity: 'work_orders',
+        id,
+        body,
+        user,
+        now: now.toISOString(),
+        prepare: (current, changes) => prepareChanges(current, changes, now, timeZone),
+      });
+      return getById(id);
     },
 
     /**

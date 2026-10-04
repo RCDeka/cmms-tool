@@ -243,3 +243,86 @@ body.is-offline .ai-only {
 a.button {
   text-decoration: none;
 }
+
+/* Conflict console */
+.page-intro {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  max-width: 48rem;
+}
+
+.muted,
+.no-value {
+  color: var(--color-text-muted);
+}
+
+.no-value {
+  font-style: italic;
+}
+
+.arbitration-header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.arbitration-title {
+  overflow-wrap: anywhere;
+}
+
+.versions {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.versions dt {
+  font-weight: 600;
+}
+
+.compare-table caption {
+  padding: var(--space-3);
+  text-align: left;
+  font-weight: 600;
+}
+
+/* Row headers: not the sticky column-header style of .data-table th. */
+.compare-table tbody th[scope='row'] {
+  position: static;
+  background: inherit;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Divergent fields: amber background, and the "≠ Differs" badge says it in text too. */
+.compare-table tr.is-divergent {
+  background: var(--color-warning-highlight);
+}
+
+.badge-differs {
+  margin-left: var(--space-1);
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  margin-right: var(--space-3);
+  cursor: pointer;
+}
+
+.radio input {
+  width: 20px;
+  height: 20px;
+}
+
+.arbitration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}

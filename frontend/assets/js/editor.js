@@ -42,6 +42,11 @@ export function setRefs(promise) {
   refsPromise = promise;
 }
 
+/** Lists for dropdowns and names (sites, users). */
+export function getRefs() {
+  return refsPromise;
+}
+
 export function setRerender(fn) {
   rerender = fn;
 }
@@ -211,9 +216,10 @@ export async function showRecord({ route, record, onClose }) {
         ]
       : [];
 
+  const consoleLink = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (!editable.length) {
     editor = null;
-    renderDetail(detailContainer, { entity, record, onClose, notices, actions });
+    renderDetail(detailContainer, { entity, record, onClose, notices, actions, consoleLink });
     return;
   }
 

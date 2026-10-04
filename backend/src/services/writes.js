@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
 import { fieldErrors } from '../middleware/validate.js';
 import { BOOLEAN_FIELDS, EDITABLE_FIELDS, READ_ONLY_FIELDS, WRITE_META } from '../rules/fields.js';
+import { sameValue, snapshotToApi } from '../rules/conflict-diff.js';
 import { canEditRecord, forbiddenFields } from '../rules/permissions.js';
 import { decideWrite } from '../rules/versioning.js';
 
@@ -145,6 +146,85 @@ export function versionedUpdate(
          updated_at = @__now WHERE id = @__id`,
       ).run({ ...finalChanges, __user: user.id, __now: now, __id: id });
       return { status: 'applied' };
+    })
+    .immediate();
+}
+
+const resolutionBody = z.strictObject({
+  conflict_id: z.number().int().positive(),
+  choice: z.enum(['A', 'B', 'MERGE']),
+  fields: z.record(z.string(), z.unknown()).optional(),
+});
+
+/**
+ * Resolves an open conflict (BR-V5) in one IMMEDIATE transaction:
+ * A keeps the server version, B applies the client's changes, MERGE applies `fields`
+ * (the chosen value of each field of version B; fields left out keep version A).
+ * Then `version + 1`, `has_conflict = 0`, and the conflict is marked RESOLVED.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {object} options
+ * @param {'assets' | 'work_orders'} options.entity also the table name (from code)
+ * @param {number} options.id
+ * @param {unknown} options.body request body
+ * @param {{ id: number }} options.user
+ * @param {string} options.now ISO datetime
+ * @param {(current: object, changes: object) => object} [options.prepare] business rules
+ */
+export function resolveConflict(db, { entity, id, body, user, now, prepare }) {
+  const parsed = resolutionBody.safeParse(body ?? {});
+  if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
+  const { conflict_id: conflictId, choice, fields } = parsed.data;
+  if (choice === 'MERGE' && !fields) {
+    throw new HttpError(400, 'Invalid body', { fields: { fields: 'Required for MERGE' } });
+  }
+
+  return db
+    .transaction(() => {
+      const conflict = db.prepare('SELECT * FROM conflicts WHERE id = ?').get(conflictId);
+      if (!conflict || conflict.entity_type !== entity || conflict.entity_id !== id) {
+        throw new HttpError(404, 'Conflict not found');
+      }
+      if (conflict.status !== 'OPEN') throw new HttpError(409, 'This conflict is already resolved');
+      const current = db.prepare(`SELECT * FROM ${entity} WHERE id = ?`).get(id);
+      if (!current) throw new HttpError(404, 'Record not found');
+
+      const versionB = JSON.parse(conflict.client_changes);
+      let wanted = {};
+      if (choice === 'B') wanted = versionB;
+      if (choice === 'MERGE') {
+        const unknown = Object.keys(fields).filter((f) => !(f in versionB));
+        if (unknown.length) {
+          throw new HttpError(400, 'Only fields of the conflict can be merged', {
+            fields: Object.fromEntries(unknown.map((f) => [f, 'Not part of this conflict'])),
+          });
+        }
+        const schema = z.strictObject(
+          Object.fromEntries(Object.keys(fields).map((f) => [f, EDITABLE_FIELDS[entity][f]])),
+        );
+        const values = schema.safeParse(fields);
+        if (!values.success) throw new HttpError(400, 'Invalid body', fieldErrors(values.error));
+        wanted = values.data;
+      }
+
+      // Values equal to the current record are not changes (e.g. merging back to A).
+      const currentApi = snapshotToApi(entity, current);
+      const changes = Object.fromEntries(
+        Object.entries(wanted).filter(([f, v]) => !sameValue(currentApi[f], v)),
+      );
+      const finalChanges = toColumns(
+        entity,
+        Object.keys(changes).length && prepare ? prepare(current, changes) : changes,
+      );
+
+      const sets = Object.keys(finalChanges).map((k) => `${k} = @${k}, `);
+      db.prepare(
+        `UPDATE ${entity} SET ${sets.join('')}version = version + 1, has_conflict = 0,
+         updated_by = @__user, updated_at = @__now WHERE id = @__id`,
+      ).run({ ...finalChanges, __user: user.id, __now: now, __id: id });
+      db.prepare(
+        "UPDATE conflicts SET status = 'RESOLVED', resolution = ?, resolved_by = ?, resolved_at = ? WHERE id = ?",
+      ).run(choice, user.id, now, conflictId);
     })
     .immediate();
 }

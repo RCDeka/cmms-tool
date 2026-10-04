@@ -109,7 +109,8 @@ Page<T>     { total, page, pages, items: T[] }
 
 ### PUT /api/assets/:id/resolve-conflict
 - Roles: SUPERVISOR, ADMIN.
-- Body: `{ "conflict_id": number, "choice": "A" | "B" | "MERGE", "fields"?: { ... } }`. `fields` is required for `MERGE` and contains the final value of each divergent field.
+- Body: `{ "conflict_id": number, "choice": "A" | "B" | "MERGE", "fields"?: { ... } }`. `fields` is required for `MERGE`: the chosen value of fields of version B (other fields are refused with 400; fields left out keep version A). Values equal to the current record are not treated as changes.
+- Version B or merged values go through the same business rules as a normal update: for work orders, a version B that is no longer valid on top of version A (e.g. closing an order that version A put on hold) is refused with 422 and the conflict stays open.
 - `200 { "resolved": true, "version": N+1, "item": Asset }`
 - Errors: 400; 403; 404 conflict or record not found; 409 conflict already resolved; 422 merged values break a rule.
 
@@ -160,7 +161,8 @@ Page<T>     { total, page, pages, items: T[] }
 
 ### GET /api/conflicts/:id
 - Roles: SUPERVISOR, ADMIN.
-- `200 { ...list item..., "version_a": { ...server snapshot... }, "version_b": { ...client changes... }, "current": { ...current record... }, "divergent_fields": ["status", "comment"] }`
+- `200 { ...list item..., "base_version", "server_version", "version_a": { ...editable fields of the server record when the conflict happened... }, "version_b": { ...client changes... }, "current": { ...current record... }, "divergent_fields": ["status", "comment"] }`
+- List items also carry `status`, `resolution`, `resolved_by` and `resolved_at` (null while open). Errors: 403 for technicians, 404.
 
 ## Reference data and users (added)
 

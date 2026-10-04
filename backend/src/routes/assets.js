@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
 import { idParams, pageQueryFields, sortQueryFields } from '../lib/pagination.js';
+import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { ASSET_STATUSES, CATEGORIES, CRITICALITIES } from '../rules/enums.js';
 import { ASSET_SORTS } from '../services/assets.js';
@@ -47,6 +48,16 @@ export function assetsRouter({ assets, now }) {
   router.put('/:id', validate({ params: idParams }), (req, res) => {
     sendUpdateResult(res, assets.update(req.valid.params.id, req.body, req.user, { now: now() }));
   });
+
+  router.put(
+    '/:id/resolve-conflict',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ params: idParams }),
+    (req, res) => {
+      const item = assets.resolveConflict(req.valid.params.id, req.body, req.user, { now: now() });
+      res.json({ resolved: true, version: item.version, item });
+    },
+  );
 
   return router;
 }
