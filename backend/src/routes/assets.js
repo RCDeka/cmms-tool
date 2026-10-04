@@ -63,7 +63,7 @@ export function assetsRouter({ assets, now }) {
     requireRole('SUPERVISOR', 'ADMIN'),
     validate({ params: idParams, query: deleteQuery }),
     (req, res) => {
-      assets.remove(req.valid.params.id, req.valid.query.version);
+      assets.remove(req.valid.params.id, req.valid.query.version, req.user, { now: now() });
       res.status(204).end();
     },
   );

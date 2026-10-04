@@ -8,6 +8,7 @@ import { drawCategoryChart, renderDashboard } from './dashboard.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
+import { renderAuditLog, withPeople } from './history.js';
 import { h, replaceChildren } from './dom.js';
 import {
   clearEditor,
@@ -68,7 +69,7 @@ import {
   readCachedPage,
   readCachedRecord,
 } from './sync.js';
-import { focusPager, focusRow, renderTable, selectRow } from './table.js';
+import { focusPager, focusRow, renderPagination, renderTable, selectRow } from './table.js';
 
 const tableContainer = document.getElementById('table-container');
 const detailContainer = document.getElementById('detail-container');
@@ -132,6 +133,14 @@ async function render(route) {
       return showEntity(route, isCurrent);
     case 'dashboard':
       return showDashboard(isCurrent);
+    case 'audit':
+      return hasRole('SUPERVISOR', 'ADMIN')
+        ? showAuditLog(route, isCurrent)
+        : showPlaceholder(
+            null,
+            'Access denied',
+            'Only supervisors and administrators can open this page.',
+          );
     case 'conflicts':
     case 'conflict':
       if (!hasRole('SUPERVISOR', 'ADMIN')) {
@@ -241,6 +250,51 @@ async function showDashboard(isCurrent) {
       tableContainer.removeAttribute('aria-busy');
     }
   }
+}
+
+// --- Audit log (supervisors and admins) ------------------------------------------------------
+
+function auditUrl(entityType, page) {
+  const query = new URLSearchParams();
+  if (entityType) query.set('type', entityType);
+  if (page > 1) query.set('page', String(page));
+  const text = query.toString();
+  return `/audit-log${text ? `?${text}` : ''}`;
+}
+
+async function showAuditLog(route, isCurrent) {
+  leaveRecordViews('audit', 'Audit log');
+  if (!tableContainer.querySelector('.audit-table, .filter-row')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the audit log…'));
+  }
+  const query = new URLSearchParams({ page: String(route.page), size: '50' });
+  if (route.entityType) query.set('entity_type', route.entityType);
+  let data;
+  try {
+    data = await apiFetch(`/audit-log?${query}`);
+  } catch (err) {
+    if (isCurrent()) {
+      showConsoleError(err, () => render(currentRoute()));
+      if (err.status === 0) {
+        tableContainer.querySelector('.error-state p').textContent =
+          'The audit log needs a connection to the server.';
+      }
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  renderPage();
+  renderAuditLog(tableContainer, {
+    data,
+    entityType: route.entityType,
+    lookups: withPeople({ users: (await getRefs()).users, assets: new Map() }, data.people),
+    onFilter: (type) => navigate(auditUrl(type, 1)),
+    pagination: renderPagination(data, (page, control) => {
+      pendingFocus = { type: 'pager', control };
+      navigate(auditUrl(route.entityType, page));
+    }),
+  });
+  restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------

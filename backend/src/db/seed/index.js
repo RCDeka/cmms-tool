@@ -1,5 +1,8 @@
 import argon2 from 'argon2';
 import { addDays } from '../../lib/dates.js';
+import { auditLabel, creationChanges, diffChanges } from '../../rules/audit.js';
+import { snapshotToApi } from '../../rules/conflict-diff.js';
+import { recordAudit } from '../../services/audit.js';
 import { createRandom } from './random.js';
 import {
   ASSET_COMMENTS,
@@ -92,6 +95,7 @@ export async function seedDatabase(
     const users = insertUsers(db, hashes, timestamp, today);
     const assets = insertAssets(db, rng, timestamp, today);
     const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets);
+    insertHistory(db);
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return { users: users.length, assets: assets.length, workOrders, conflicts };
   })();
@@ -333,6 +337,116 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets) {
   return drafts.length;
 }
 
+/** Instant between two ISO datetimes (fraction 0 → a, 1 → b). */
+function between(a, b, fraction) {
+  const t = new Date(a).getTime();
+  return new Date(t + (new Date(b).getTime() - t) * fraction).toISOString();
+}
+
+/**
+ * Audit history matching the generated data (docs/data-model.md → audit_log): a creation
+ * entry for every asset and work order, then the status changes of each work order, spread
+ * between its creation and its last update.
+ */
+function insertHistory(db) {
+  const admin = db
+    .prepare("SELECT id FROM users WHERE role = 'ADMIN' ORDER BY id LIMIT 1")
+    .pluck()
+    .get();
+  for (const row of db.prepare('SELECT * FROM assets ORDER BY id').all()) {
+    const asset = snapshotToApi('assets', row);
+    const {
+      id,
+      version: _v,
+      has_conflict: _c,
+      updated_by: _u,
+      created_at: _ca,
+      updated_at: _ua,
+      ...fields
+    } = asset;
+    recordAudit(db, {
+      entityType: 'assets',
+      entityId: id,
+      action: 'CREATE',
+      changes: creationChanges(fields),
+      label: auditLabel('assets', asset),
+      userId: admin,
+      version: 1,
+      at: row.created_at,
+    });
+  }
+
+  for (const wo of db.prepare('SELECT * FROM work_orders ORDER BY id').all()) {
+    const label = auditLabel('work_orders', wo);
+    const worker = wo.assignee_id ?? wo.created_by;
+    const entry = (action, changes, userId, at) =>
+      recordAudit(db, {
+        entityType: 'work_orders',
+        entityId: wo.id,
+        action,
+        changes,
+        label,
+        userId,
+        version: 1,
+        at,
+      });
+
+    entry(
+      'CREATE',
+      creationChanges({
+        number: wo.number,
+        type: wo.type,
+        status: 'OPEN',
+        priority: wo.priority,
+        title: wo.title,
+        description: wo.description,
+        asset_id: wo.asset_id,
+        site: wo.site,
+        category: wo.category,
+        assignee_id: wo.assignee_id,
+        supervisor_id: wo.supervisor_id,
+        created_on: wo.created_on,
+        due_on: wo.due_on,
+        estimated_hours: wo.estimated_hours,
+      }),
+      wo.created_by,
+      wo.created_at,
+    );
+    if (wo.started_on) {
+      entry(
+        'UPDATE',
+        {
+          status: { from: 'OPEN', to: 'IN_PROGRESS' },
+          started_on: { from: null, to: wo.started_on },
+        },
+        worker,
+        between(wo.created_at, wo.updated_at, 0.4),
+      );
+    }
+    const last = wo.started_on ? 'IN_PROGRESS' : 'OPEN';
+    if (wo.status === 'ON_HOLD') {
+      entry('UPDATE', { status: { from: last, to: 'ON_HOLD' } }, worker, wo.updated_at);
+    } else if (wo.status === 'CLOSED') {
+      entry(
+        'UPDATE',
+        diffChanges(
+          { status: last },
+          {
+            status: 'CLOSED',
+            closed_on: wo.closed_on,
+            work_report: wo.work_report,
+            actual_hours: wo.actual_hours,
+          },
+        ),
+        worker,
+        wo.updated_at,
+      );
+    } else if (wo.status === 'CANCELLED') {
+      entry('UPDATE', { status: { from: last, to: 'CANCELLED' } }, wo.created_by, wo.updated_at);
+    }
+  }
+}
+
 /**
  * Dev demo: three records where a supervisor's change (version A) was saved first and a
  * technician's change based on the old version (version B) was rejected (BR-V3).
@@ -384,10 +498,26 @@ function insertConflicts(db, users, now) {
     const sets = Object.keys(c.server)
       .map((k) => `${k} = @${k}`)
       .join(', ');
+    // Read before the change, so the history shows the real old values.
+    const before = snapshotToApi(
+      c.table,
+      db.prepare(`SELECT * FROM ${c.table} WHERE id = ?`).get(c.id),
+    );
     db.prepare(
       `UPDATE ${c.table} SET ${sets}, version = 2, updated_by = @by, updated_at = @at WHERE id = @id`,
     ).run({ ...c.server, by: supervisor.id, at: serverAt, id: c.id });
     const snapshot = db.prepare(`SELECT * FROM ${c.table} WHERE id = ?`).get(c.id);
+    const label = auditLabel(c.table, snapshot);
+    recordAudit(db, {
+      entityType: c.table,
+      entityId: c.id,
+      action: 'UPDATE',
+      changes: diffChanges(before, c.server),
+      label,
+      userId: supervisor.id,
+      version: 2,
+      at: serverAt,
+    });
     insert.run(
       c.table,
       c.id,
@@ -403,6 +533,18 @@ function insertConflicts(db, users, now) {
       flaggedAt,
       c.id,
     );
+    const conflictId = db.prepare('SELECT max(id) FROM conflicts').pluck().get();
+    recordAudit(db, {
+      entityType: c.table,
+      entityId: c.id,
+      action: 'CONFLICT',
+      changes: diffChanges(snapshotToApi(c.table, snapshot), c.client),
+      note: { conflict_id: conflictId, base_version: 1 },
+      label,
+      userId: technician.id,
+      version: 2,
+      at: flaggedAt,
+    });
   }
   return cases.length;
 }

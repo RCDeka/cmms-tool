@@ -7,6 +7,7 @@ import { REPO_ROOT } from './config/index.js';
 import { authenticate } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
 import { assetsRouter } from './routes/assets.js';
+import { auditRouter, historyHandler } from './routes/audit.js';
 import { authRouter } from './routes/auth.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { dashboardRouter } from './routes/dashboard.js';
@@ -14,6 +15,7 @@ import { healthRouter } from './routes/health.js';
 import { referenceRouter } from './routes/reference.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
+import { createAuditService } from './services/audit.js';
 import { createAuthService } from './services/auth.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
@@ -53,6 +55,7 @@ export function createApp({
   const referenceData = createReferenceDataService(db);
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
+  const audit = createAuditService(db);
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -91,6 +94,13 @@ export function createApp({
   app.use('/api/health', healthRouter(db));
   app.use('/api/auth', authRouter({ auth, authenticate: requireAuth, loginRateLimit }));
   app.use('/api', requireAuth);
+  // History routes first: /:id/history must not be read as an id.
+  app.get('/api/assets/:id/history', ...historyHandler(audit, 'assets', assets.getById));
+  app.get(
+    '/api/work-orders/:id/history',
+    ...historyHandler(audit, 'work_orders', workOrders.getById),
+  );
+  app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api/conflicts', conflictsRouter({ conflicts }));

@@ -14,6 +14,8 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
+import { auditLabel, creationChanges } from '../rules/audit.js';
+import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
 /** POST /api/work-orders body (BR-W9). Status, number, dates and authorship are set by the server. */
@@ -306,6 +308,17 @@ export function createWorkOrderService(db) {
                  @estimated_hours, @created_by, @updated_by, @stamp, @stamp)`,
             )
             .run({ ...row, stamp }).lastInsertRowid;
+          const { created_by: _createdBy, updated_by: _updatedBy, ...logged } = row;
+          recordAudit(db, {
+            entityType: 'work_orders',
+            entityId: Number(newId),
+            action: 'CREATE',
+            changes: creationChanges(logged),
+            label: auditLabel('work_orders', row),
+            userId: user.id,
+            version: 1,
+            at: stamp,
+          });
           return { id: Number(newId), created: true };
         })
         .immediate();

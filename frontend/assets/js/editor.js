@@ -7,6 +7,7 @@ import { notice, renderDetail } from './detail.js';
 import { h } from './dom.js';
 import { formatDateTime } from './format.js';
 import { buildCreateForm, buildEditForm } from './form.js';
+import { historySection } from './history.js';
 import { announce, confirmDialog } from './layout.js';
 import { apiFetch } from './api.js';
 import { applyToPage, isOnline } from './network.js';
@@ -242,6 +243,7 @@ export async function showRecord({ route, record, onClose }) {
   if (!editable.length) {
     editor = null;
     renderDetail(detailContainer, { entity, record, onClose, notices, actions, consoleLink });
+    detailContainer.append(historySection(entity, record.id, historyLookups));
     applyToPage(detailContainer);
     return;
   }
@@ -286,12 +288,28 @@ export async function showRecord({ route, record, onClose }) {
     actions,
     body: ed.handle.form,
   });
+  detailContainer.append(historySection(entity, record.id, historyLookups));
   applyToPage(detailContainer);
   if (draft?.error && editable.length) {
     await ed.handle.setValues(draft.changes);
     ed.handle.setErrors(mapErrorFields(draft.error.fields), '');
     onInput();
   }
+}
+
+/** Names of people and assets that appear in history entries. */
+async function historyLookups(entries) {
+  const ids = new Set(
+    entries
+      .flatMap((e) => [e.changes.asset_id?.from, e.changes.asset_id?.to])
+      .filter((v) => v !== null && v !== undefined),
+  );
+  const assets = new Map();
+  for (const id of ids) {
+    const asset = await findAssetById(id);
+    if (asset) assets.set(id, asset);
+  }
+  return { users: (await refsPromise).users, assets };
 }
 
 /** Field errors from the API: { field: message } (400) — other shapes are ignored. */

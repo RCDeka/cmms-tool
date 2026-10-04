@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
 import { fieldErrors } from '../middleware/validate.js';
 import { BOOLEAN_FIELDS, EDITABLE_FIELDS, READ_ONLY_FIELDS, WRITE_META } from '../rules/fields.js';
+import { auditLabel, diffChanges } from '../rules/audit.js';
 import { sameValue, snapshotToApi } from '../rules/conflict-diff.js';
+import { recordAudit } from './audit.js';
 import { canEditRecord, forbiddenFields } from '../rules/permissions.js';
 import { decideWrite } from '../rules/versioning.js';
 
@@ -135,16 +137,44 @@ export function versionedUpdate(
           now,
           id,
         );
+        // The rejected edit stays visible in the history, marked as not applied.
+        recordAudit(db, {
+          entityType: entity,
+          entityId: id,
+          action: 'CONFLICT',
+          changes: diffChanges(snapshotToApi(entity, current), changes),
+          note: { conflict_id: conflictId, base_version: version },
+          label: auditLabel(entity, current),
+          userId: user.id,
+          version: current.version,
+          at: now,
+        });
         return { status: 'conflict', conflictId };
       }
 
-      const finalChanges = toColumns(entity, prepare ? prepare(current) : changes);
+      const apiChanges = prepare ? prepare(current) : changes;
+      const finalChanges = toColumns(entity, apiChanges);
       // Column names come from the editable-field whitelist, never from the request as is.
       const sets = Object.keys(finalChanges).map((k) => `${k} = @${k}`);
       db.prepare(
         `UPDATE ${entity} SET ${sets.join(', ')}, version = version + 1, updated_by = @__user,
          updated_at = @__now WHERE id = @__id`,
       ).run({ ...finalChanges, __user: user.id, __now: now, __id: id });
+      const before = snapshotToApi(entity, current);
+      const logged = diffChanges(before, apiChanges);
+      // Saving identical values changes nothing worth logging.
+      if (Object.keys(logged).length) {
+        recordAudit(db, {
+          entityType: entity,
+          entityId: id,
+          action: 'UPDATE',
+          changes: logged,
+          label: auditLabel(entity, { ...before, ...apiChanges }),
+          userId: user.id,
+          version: current.version + 1,
+          at: now,
+        });
+      }
       return { status: 'applied' };
     })
     .immediate();
@@ -212,10 +242,8 @@ export function resolveConflict(db, { entity, id, body, user, now, prepare }) {
       const changes = Object.fromEntries(
         Object.entries(wanted).filter(([f, v]) => !sameValue(currentApi[f], v)),
       );
-      const finalChanges = toColumns(
-        entity,
-        Object.keys(changes).length && prepare ? prepare(current, changes) : changes,
-      );
+      const applied = Object.keys(changes).length && prepare ? prepare(current, changes) : changes;
+      const finalChanges = toColumns(entity, applied);
 
       const sets = Object.keys(finalChanges).map((k) => `${k} = @${k}, `);
       db.prepare(
@@ -225,6 +253,17 @@ export function resolveConflict(db, { entity, id, body, user, now, prepare }) {
       db.prepare(
         "UPDATE conflicts SET status = 'RESOLVED', resolution = ?, resolved_by = ?, resolved_at = ? WHERE id = ?",
       ).run(choice, user.id, now, conflictId);
+      recordAudit(db, {
+        entityType: entity,
+        entityId: id,
+        action: 'RESOLVE',
+        changes: diffChanges(currentApi, applied),
+        note: { conflict_id: conflictId, choice },
+        label: auditLabel(entity, { ...currentApi, ...applied }),
+        userId: user.id,
+        version: current.version + 1,
+        at: now,
+      });
     })
     .immediate();
 }

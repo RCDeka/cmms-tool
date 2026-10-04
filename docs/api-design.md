@@ -175,6 +175,22 @@ Page<T>     { total, page, pages, items: T[] }
 - `200 { ...list item..., "base_version", "server_version", "version_a": { ...editable fields of the server record when the conflict happened... }, "version_b": { ...client changes... }, "current": { ...current record... }, "divergent_fields": ["status", "comment"] }`
 - List items also carry `status`, `resolution`, `resolved_by` and `resolved_at` (null while open). Errors: 403 for technicians, 404.
 
+## History and audit log (added, D37)
+
+### GET /api/assets/:id/history, GET /api/work-orders/:id/history
+- Roles: TECHNICIAN, SUPERVISOR, ADMIN (whoever can read the record).
+- `200 { "items": [AuditEntry], "people": { "<id>": UserRef } }`, newest first. `people` names the users referenced in the changes (`assignee_id`, `supervisor_id`), so every role sees names instead of ids.
+- The history of a deleted asset stays readable. Errors: 400 malformed id; 404 when the record never existed.
+
+```
+AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } }, note,
+             label, user: UserRef | null, version, at }
+```
+
+### GET /api/audit-log
+- Roles: SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `entity_type?` (`assets` | `work_orders` | `users`).
+- `200 { total, page, pages, items: [AuditEntry], people }`, newest first. Errors: 400; 403.
+
 ## Reference data and users (added)
 
 ### GET /api/reference-data
@@ -215,3 +231,4 @@ Page<T>     { total, page, pages, items: T[] }
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |
+| History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |

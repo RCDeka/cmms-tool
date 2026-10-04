@@ -209,7 +209,7 @@ export function focusPager(container, control) {
   else container.querySelector('.table-title')?.focus();
 }
 
-function renderPagination({ page, pages }, onPage) {
+export function renderPagination({ page, pages }, onPage) {
   const button = (name, label, arrow, target, arrowFirst) =>
     h(
       'button',

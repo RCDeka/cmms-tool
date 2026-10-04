@@ -140,6 +140,28 @@ Indexes: `number` (unique), `client_id` (unique), `status`, `asset_id`, `assigne
 
 Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'OPEN'` (at most one open conflict per record, D4); `status`.
 
+### audit_log (added, D37)
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`) | |
+| entity_id | INTEGER | no | | id of the record (kept after deletion) |
+| action | TEXT | no | CHECK IN (`CREATE`, `UPDATE`, `DELETE`, `CONFLICT`, `RESOLVE`) | |
+| changes | TEXT | no | JSON, default `{}` | `{ field: { from, to } }` in API values |
+| note | TEXT | yes | JSON | e.g. `{ conflict_id, choice }`; for `DELETE`, the last values (`snapshot`) |
+| label | TEXT | no | | record label at the time (`AST-0042 — Chiller`) |
+| user_id | INTEGER | yes | FK → users.id | author |
+| version | INTEGER | yes | | record version after the change |
+| at | TEXT | no | default now | |
+
+Indexes: (`entity_type`, `entity_id`, `at`), `at`.
+
+Rules:
+- BR-L1: Every change writes its entry **in the same transaction**: a change without its entry, or an entry without its change, cannot exist. Rows are never updated or deleted.
+- BR-L2: `UPDATE` entries list only fields whose value really changed; a save that changes nothing writes no entry. `CREATE` lists every field that has a value.
+- BR-L3: A rejected conflicting edit is logged as `CONFLICT` (changes proposed, not applied) by its author; its resolution as `RESOLVE` (changes applied, choice in `note`) by the supervisor.
+- BR-L4: The mock data comes with a matching history: creation of every asset and work order, and the status changes of each work order.
+
 ### schema_migrations
 | Column | Type | Notes |
 |---|---|---|

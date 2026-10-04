@@ -17,6 +17,9 @@ import {
   rankExpression,
 } from '../lib/pagination.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
+import { auditLabel, creationChanges } from '../rules/audit.js';
+import { snapshotToApi } from '../rules/conflict-diff.js';
+import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writes.js';
 
 /** POST /api/assets body: required fields as in the table, the rest optional (BR-A4). */
@@ -165,13 +168,25 @@ export function createAssetService(db) {
           };
           const columns = Object.keys(row);
           // Column names come from the schema above, never from the request as is.
-          return Number(
+          const newId = Number(
             db
               .prepare(
                 `INSERT INTO assets (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`,
               )
               .run(row).lastInsertRowid,
           );
+          const values = { code: row.code, ...fields };
+          recordAudit(db, {
+            entityType: 'assets',
+            entityId: newId,
+            action: 'CREATE',
+            changes: creationChanges(values),
+            label: auditLabel('assets', values),
+            userId: user.id,
+            version: 1,
+            at: row.created_at,
+          });
+          return newId;
         })
         .immediate();
       return getById(id);
@@ -181,14 +196,26 @@ export function createAssetService(db) {
      * DELETE /api/assets/:id?version=N (BR-A3): only assets without work orders, at the
      * version the user saw. Resolved conflicts of the asset go with it.
      */
-    remove(id, version) {
+    remove(id, version, user, { now }) {
       db.transaction(() => {
-        const row = db.prepare('SELECT id, version, has_conflict FROM assets WHERE id = ?').get(id);
+        const row = db.prepare('SELECT * FROM assets WHERE id = ?').get(id);
         if (!row) throw new HttpError(404, 'Asset not found');
         const blocker = deletionBlocker(row, { version, workOrders: workOrderCount.get(id) });
         if (blocker) throw new HttpError(409, blocker.message, { rule: blocker.rule });
         db.prepare("DELETE FROM conflicts WHERE entity_type = 'assets' AND entity_id = ?").run(id);
         db.prepare('DELETE FROM assets WHERE id = ?').run(id);
+        // The entry keeps the last values, so the log still says what was deleted.
+        const last = snapshotToApi('assets', row);
+        recordAudit(db, {
+          entityType: 'assets',
+          entityId: id,
+          action: 'DELETE',
+          note: { snapshot: last },
+          label: auditLabel('assets', last),
+          userId: user.id,
+          version: row.version,
+          at: now.toISOString(),
+        });
       }).immediate();
     },
 

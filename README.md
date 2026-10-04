@@ -25,6 +25,7 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 - **Assets and work orders**: paginated tables (50 rows), table + detail split view, search, editing with per-role permissions and work order status workflow.
 - **Work order creation**: from the work order list or directly from an asset, including offline (synced later without duplicates).
 - **Asset creation and deletion** (supervisors and admins, online): automatic or typed codes; only assets without work orders can be deleted.
+- **History and audit log**: every change is recorded with its author (field by field); each record shows its history, work orders their status timeline; supervisors and admins browse the global audit log.
 - **Local-first**: IndexedDB cache with prefetch of adjacent pages, silent revalidation, offline browsing and editing, sync queue.
 - **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a record).
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).

@@ -37,6 +37,14 @@ export function parseRoute(pathname, search = '') {
   if (first === 'login' && !second)
     return { name: 'login', page, next: safeNext(query.get('next')) };
   if (first === 'dashboard' && !second) return { name: 'dashboard', page };
+  if (first === 'audit-log' && !second) {
+    const type = query.get('type');
+    return {
+      name: 'audit',
+      page,
+      entityType: ['assets', 'work_orders'].includes(type) ? type : null,
+    };
+  }
   if (first === 'conflicts') {
     if (!second) return { name: 'conflicts', page };
     return ID.test(second)
