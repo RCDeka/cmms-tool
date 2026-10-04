@@ -145,9 +145,13 @@ export function focusSortButton(container, column) {
   return Boolean(button);
 }
 
-/** Columns hidden in split view get `col-secondary` (layout.css). */
+/**
+ * Every column gets `col-<field>` (fixed widths, table.css); columns hidden in split view also
+ * get `col-secondary` (layout.css).
+ */
 function columnClass(cfg, field) {
-  return cfg.splitColumns.includes(field) ? null : 'col-secondary';
+  const name = `col-${field.replaceAll('_', '-')}`;
+  return cfg.splitColumns.includes(field) ? name : `${name} col-secondary`;
 }
 
 function renderRow(cfg, record, selected) {

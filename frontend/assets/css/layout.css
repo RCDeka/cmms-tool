@@ -175,6 +175,8 @@ body:not(.is-logged-out) {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  /* Keeps the scrollbar's room, so content does not shift when it appears or disappears. */
+  scrollbar-gutter: stable;
   padding: var(--space-4) var(--space-6);
 }
 

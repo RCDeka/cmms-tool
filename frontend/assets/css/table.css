@@ -20,9 +20,48 @@
   border-radius: var(--radius);
 }
 
+/*
+ * Fixed layout: column widths do not depend on the rows shown, so filtering, sorting or
+ * changing page never moves the columns. The title / name column takes the remaining width.
+ */
 .data-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
+}
+
+#main-content:not(.split-view) .data-table {
+  min-width: 56rem;
+}
+
+.data-table .col-code,
+.data-table .col-number {
+  width: 8rem;
+}
+
+.data-table .col-site {
+  width: 15rem;
+}
+
+.data-table .col-category {
+  width: 10rem;
+}
+
+.data-table .col-criticality,
+.data-table .col-due-on {
+  width: 8.5rem;
+}
+
+.data-table .col-priority {
+  width: 7.5rem;
+}
+
+.data-table .col-status {
+  width: 10rem;
+}
+
+.data-table .col-assignee {
+  width: 11rem;
 }
 
 .data-table th,
