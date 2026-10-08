@@ -56,6 +56,7 @@ export function displayValue(entityKey, apiField, value, lookups) {
     const asset = lookups.assets.get(value);
     return asset ? `${asset.code} — ${asset.name}` : `Asset #${value}`;
   }
+  if (def.type === 'plan') return `Plan #${value}`;
   return renderValue(field, def, value);
 }
 

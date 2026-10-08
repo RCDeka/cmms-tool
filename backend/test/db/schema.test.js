@@ -59,6 +59,30 @@ const workOrder = (createdBy, o = {}) => ({
   created_by: createdBy,
   ...o,
 });
+let planSeq = 0;
+const plan = (createdBy, o = {}) => ({
+  code: `PM-${String(++planSeq).padStart(4, '0')}`,
+  title: 'Test plan',
+  type: 'PREVENTIVE',
+  category: 'HVAC',
+  site: 'Test site',
+  estimated_hours: 2,
+  frequency_weeks: 13,
+  anchor_week: '2026-W42',
+  tolerance_weeks: 3,
+  created_by: createdBy,
+  created_at: '2026-10-04T12:00:00.000Z',
+  updated_at: '2026-10-04T12:00:00.000Z',
+  ...o,
+});
+const occurrence = (planId, o = {}) => ({
+  plan_id: planId,
+  due_week: '2026-W42',
+  week: '2026-W42',
+  created_at: '2026-10-04T12:00:00.000Z',
+  updated_at: '2026-10-04T12:00:00.000Z',
+  ...o,
+});
 const conflict = (userId, o = {}) => ({
   entity_type: 'assets',
   entity_id: 1,
@@ -260,6 +284,46 @@ describe('CHECK constraints match src/rules/enums.js', () => {
           conflict(insert('users', user()), { entity_type: v, entity_id: ++userSeq }),
         ),
     ],
+    [
+      'maintenance_plans.type',
+      enums.PLAN_TYPES,
+      (v) => insert('maintenance_plans', plan(insert('users', user()), { type: v })),
+    ],
+    [
+      'maintenance_plans.category',
+      enums.CATEGORIES,
+      (v) => insert('maintenance_plans', plan(insert('users', user()), { category: v })),
+    ],
+    [
+      'maintenance_plans.schedule_mode',
+      enums.SCHEDULE_MODES,
+      (v) => insert('maintenance_plans', plan(insert('users', user()), { schedule_mode: v })),
+    ],
+    [
+      'maintenance_plans.performed_by',
+      enums.PERFORMERS,
+      (v) => insert('maintenance_plans', plan(insert('users', user()), { performed_by: v })),
+    ],
+    [
+      'plan_occurrences.status',
+      enums.OCCURRENCE_STATUSES,
+      (v) => {
+        const u = insert('users', user());
+        insert(
+          'plan_occurrences',
+          occurrence(insert('maintenance_plans', plan(u)), {
+            status: v,
+            ...(v === 'RELEASED' && { work_order_id: insert('work_orders', workOrder(u)) }),
+            ...(v === 'SKIPPED' && { skip_reason: 'Closed for works' }),
+          }),
+        );
+      },
+    ],
+    [
+      'audit_log.entity_type',
+      enums.AUDIT_ENTITY_TYPES,
+      (v) => insert('audit_log', { entity_type: v, entity_id: 1, action: 'UPDATE', label: 'x' }),
+    ],
   ];
 
   it.each(cases)('%s accepts every enum value and rejects others', (_name, values, run) => {
@@ -344,6 +408,71 @@ describe('integrity rules', () => {
     insert('conflicts', conflict(u));
     expect(() => insert('conflicts', conflict(u))).toThrow(/UNIQUE/);
     expect(() => insert('conflicts', conflict(u, { entity_type: 'work_orders' }))).not.toThrow();
+  });
+
+  it('keeps plans consistent: code, half hours, weeks, seasons (D48)', () => {
+    const u = insert('users', user());
+    expect(() => insert('maintenance_plans', plan(u, { code: 'PLAN-1' }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { estimated_hours: 1.25 }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { estimated_hours: 0 }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { anchor_week: '2026-42' }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { frequency_weeks: 105 }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { tolerance_weeks: 9 }))).toThrow(/CHECK/);
+    expect(() => insert('maintenance_plans', plan(u, { season_from_week: 14 }))).toThrow(/CHECK/);
+    expect(() =>
+      insert('maintenance_plans', plan(u, { season_from_week: 45, season_to_week: 10 })),
+    ).not.toThrow();
+    const p = insert('maintenance_plans', plan(u, { code: 'PM-9000' }));
+    expect(() => insert('maintenance_plans', plan(u, { code: 'PM-9000' }))).toThrow(/UNIQUE/);
+    expect(() => insert('work_orders', workOrder(u, { plan_id: p, planned_week: 'W42' }))).toThrow(
+      /CHECK/,
+    );
+    expect(() => insert('work_orders', workOrder(u, { plan_id: 9999 }))).toThrow(/FOREIGN KEY/);
+  });
+
+  it('links an occurrence to one work order only when released (BR-P6, BR-P7)', () => {
+    const u = insert('users', user());
+    const p = insert('maintenance_plans', plan(u));
+    const wo = insert('work_orders', workOrder(u, { plan_id: p }));
+    expect(() => insert('plan_occurrences', occurrence(p, { status: 'RELEASED' }))).toThrow(
+      /CHECK/,
+    );
+    expect(() => insert('plan_occurrences', occurrence(p, { work_order_id: wo }))).toThrow(/CHECK/);
+    expect(() => insert('plan_occurrences', occurrence(p, { status: 'SKIPPED' }))).toThrow(/CHECK/);
+    insert('plan_occurrences', occurrence(p, { status: 'RELEASED', work_order_id: wo }));
+    // One occurrence per due week, and one occurrence per work order.
+    expect(() => insert('plan_occurrences', occurrence(p))).toThrow(/UNIQUE/);
+    expect(() =>
+      insert(
+        'plan_occurrences',
+        occurrence(p, { due_week: '2027-W03', status: 'RELEASED', work_order_id: wo }),
+      ),
+    ).toThrow(/UNIQUE/);
+    // A visit skipped by cancelling its work order keeps the link.
+    expect(() =>
+      insert(
+        'plan_occurrences',
+        occurrence(p, {
+          due_week: '2027-W16',
+          status: 'SKIPPED',
+          skip_reason: 'Work order cancelled',
+          work_order_id: insert('work_orders', workOrder(u, { plan_id: p })),
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('keeps one row of planning settings with bounded values (P16)', () => {
+    expect(db.prepare('SELECT reserve_percent, daily_hours FROM planning_settings').all()).toEqual([
+      { reserve_percent: 30, daily_hours: 7 },
+    ]);
+    expect(() => insert('planning_settings', { id: 2, updated_at: 'x' })).toThrow(/CHECK/);
+    expect(() => db.prepare('UPDATE planning_settings SET reserve_percent = 81').run()).toThrow(
+      /CHECK/,
+    );
+    expect(() => db.prepare('UPDATE planning_settings SET max_block_hours = 3.25').run()).toThrow(
+      /CHECK/,
+    );
   });
 
   it('keeps resolution fields consistent with the conflict status', () => {

@@ -239,3 +239,140 @@ export const WORK_REPORTS = {
 };
 
 export const IMPROVEMENT_TITLES = ['Upgrade', 'Energy optimisation', 'Replacement study'];
+
+/**
+ * Maintenance plans of the mock dataset (D48): what is maintained (an asset subcategory),
+ * how often (weeks) and how long (hours per visit). `count` plans are made from each line, each
+ * on its own asset. Visits above 3 h 30 show the "will be split" warning; fire safety and part
+ * of security and plumbing are done by contractors, outside the internal load.
+ */
+export const PLAN_TEMPLATES = [
+  // HVAC
+  { sub: 'Air handling unit', title: 'Filter change and belt check', every: 4, hours: 3, count: 6 },
+  { sub: 'Fan coil unit', title: 'Fan coil cleaning round', every: 13, hours: 8, count: 5 },
+  { sub: 'Chiller', title: 'Quarterly chiller service', every: 13, hours: 4, count: 3 },
+  { sub: 'Chiller', title: 'Annual chiller overhaul', every: 52, hours: 8, count: 1 },
+  {
+    sub: 'Precision air conditioner',
+    title: 'Data hall cooling check',
+    every: 1,
+    hours: 3,
+    count: 2,
+  },
+  {
+    sub: 'Heat pump',
+    title: 'Heat pump check before summer',
+    every: 52,
+    hours: 3,
+    count: 2,
+    season: [14, 22],
+  },
+  {
+    sub: 'Extract fan',
+    title: 'Extract fan check',
+    every: 13,
+    hours: 1.5,
+    count: 2,
+    floating: true,
+  },
+  // Electrical
+  { sub: 'UPS', title: 'UPS battery test', every: 13, hours: 3, count: 3 },
+  { sub: 'Generator set', title: 'Generator test run', every: 4, hours: 2.5, count: 3 },
+  { sub: 'Generator set', title: 'Generator full load test', every: 52, hours: 5, count: 2 },
+  {
+    sub: 'Main LV switchboard',
+    title: 'Thermographic inspection',
+    every: 52,
+    hours: 6,
+    count: 3,
+    regulatory: true,
+  },
+  {
+    sub: 'Main LV switchboard',
+    title: 'Weekly switchboard walk-round',
+    every: 1,
+    hours: 3.5,
+    count: 4,
+  },
+  {
+    sub: 'Distribution board',
+    title: 'Distribution board tightening',
+    every: 26,
+    hours: 3.5,
+    count: 3,
+  },
+  {
+    sub: 'Lighting control panel',
+    title: 'Emergency lighting test',
+    every: 26,
+    hours: 3,
+    count: 3,
+    regulatory: true,
+  },
+  {
+    sub: 'Transformer',
+    title: 'Transformer inspection',
+    every: 52,
+    hours: 4,
+    count: 2,
+    regulatory: true,
+  },
+  // Fire safety
+  {
+    sub: 'Fire alarm control panel',
+    title: 'Fire alarm system check',
+    every: 26,
+    hours: 3,
+    count: 3,
+    regulatory: true,
+    contractor: 'Veritec Services',
+  },
+  {
+    sub: 'Sprinkler valve set',
+    title: 'Sprinkler valve check',
+    every: 1,
+    hours: 1,
+    count: 2,
+    regulatory: true,
+  },
+  {
+    sub: 'Gas suppression system',
+    title: 'Gas suppression inspection',
+    every: 26,
+    hours: 2,
+    count: 2,
+    regulatory: true,
+    contractor: 'Veritec Services',
+  },
+  // Plumbing
+  {
+    sub: 'Water heater',
+    title: 'Legionella flushing and temperature check',
+    every: 1,
+    hours: 1.5,
+    count: 3,
+    regulatory: true,
+  },
+  { sub: 'Booster pump', title: 'Booster pump service', every: 26, hours: 2.5, count: 1 },
+  {
+    sub: 'Backflow preventer',
+    title: 'Backflow preventer test',
+    every: 52,
+    hours: 1.5,
+    count: 2,
+    regulatory: true,
+    contractor: 'Nordis Maintenance',
+  },
+  // Network cabling
+  { sub: 'Network rack', title: 'Network room inspection', every: 13, hours: 2, count: 2 },
+  // Security
+  {
+    sub: 'CCTV camera',
+    title: 'CCTV maintenance visit',
+    every: 26,
+    hours: 2,
+    count: 1,
+    contractor: 'Brightline Systems',
+  },
+  { sub: 'Access control reader', title: 'Access control check', every: 13, hours: 1.5, count: 2 },
+];

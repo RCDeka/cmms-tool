@@ -23,6 +23,12 @@ export function formatDateTime(iso) {
   return dateTimeFormat.format(new Date(iso));
 }
 
+/** ISO week '2026-W43' → 'Week 43, 2026'. */
+export function formatWeek(week) {
+  const [year, n] = week.split('-W');
+  return `Week ${Number(n)}, ${year}`;
+}
+
 /** { first_name, last_name } → 'Julien Bernard'. */
 export function personName(ref) {
   return `${ref.first_name} ${ref.last_name}`;
@@ -62,6 +68,14 @@ export function renderValue(field, def, value) {
       return `${value} h`;
     case 'user':
       return personName(value);
+    case 'week':
+      return formatWeek(value);
+    case 'plan':
+      return h(
+        'a',
+        { href: `/planning/plans/${value.id}`, 'data-link': true },
+        `${value.code} — ${value.title}`,
+      );
     case 'asset':
       return h(
         'a',

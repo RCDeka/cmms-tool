@@ -30,5 +30,7 @@ export function creationChanges(values) {
 export function auditLabel(entityType, record) {
   if (entityType === 'assets') return `${record.code} — ${record.name}`;
   if (entityType === 'work_orders') return `${record.number} — ${record.title}`;
+  if (entityType === 'maintenance_plans') return `${record.code} — ${record.title}`;
+  if (entityType === 'planning_settings') return 'Planning settings';
   return `${record.first_name} ${record.last_name} (${record.username})`;
 }

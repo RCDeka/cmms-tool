@@ -1,0 +1,479 @@
+/* Year planner (D48): filters, tiles, the 52-week grid with its load strip, the plan panel and
+   the planning settings. Every state carries text or a symbol besides its color. */
+
+.planner-new {
+  margin-left: auto;
+}
+
+.planner-filters input[type='week'] {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+/* Tiles: same frame as the dashboard tiles, with text values. */
+.planner-tiles .kpi-grid {
+  margin: 0 0 var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.planner-tile-value {
+  font-size: 1.375rem;
+}
+
+.planner-tile-detail {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.planner-reserve {
+  margin: 0 0 var(--space-3);
+}
+
+/* Legend: chip styles and trade colors of the load strip. */
+.planner-legend {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-small);
+}
+
+.legend-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.legend-group > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legend-title {
+  font-weight: 600;
+}
+
+.legend-group .chip {
+  min-width: 28px;
+  min-height: 22px;
+  cursor: default;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-capacity {
+  width: 16px;
+  border-top: 2px dashed var(--color-text);
+}
+
+/* Trade colors: categorical slots 1–6 in trade order (validated palette). */
+.series-1 {
+  background: var(--color-chart-series-1);
+}
+.series-2 {
+  background: var(--color-chart-series-2);
+}
+.series-3 {
+  background: var(--color-chart-series-3);
+}
+.series-4 {
+  background: var(--color-chart-series-4);
+}
+.series-5 {
+  background: var(--color-chart-series-5);
+}
+.series-6 {
+  background: var(--color-chart-series-6);
+}
+
+/* The grid scrolls both ways; the plan column and the two header rows stay in place. */
+.planner-scroll {
+  position: relative;
+  overflow: auto;
+  max-height: 75vh;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.planner-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-size-small);
+}
+
+.planner-grid th,
+.planner-grid td {
+  padding: 0;
+  border-bottom: 1px solid var(--color-grid);
+}
+
+.plan-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 260px;
+  max-width: 300px;
+  padding: var(--space-1) var(--space-2) !important;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  text-align: left;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.planner-grid thead th,
+.planner-grid thead td {
+  position: sticky;
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+.planner-grid thead tr:first-child > * {
+  top: 0;
+  height: 40px;
+}
+
+.planner-grid .load-row > * {
+  top: 40px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.planner-grid thead .plan-cell {
+  z-index: 3;
+}
+
+.week-col {
+  min-width: 48px;
+  width: 48px;
+  text-align: center;
+  font-weight: 600;
+  vertical-align: bottom;
+  color: var(--color-text-muted);
+}
+
+.week-year {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.6875rem;
+}
+
+.week-col.year-start,
+.week-cell.year-start,
+.group-hours.year-start {
+  border-left: 2px solid var(--color-border);
+}
+
+/* The current week: tinted column, bold number. */
+.week-col.is-current {
+  color: var(--color-text);
+  box-shadow: inset 0 -3px 0 var(--color-brand-red);
+}
+
+.week-cell.is-current,
+.group-hours.is-current,
+.planner-grid thead .week-col.is-current {
+  background: var(--color-info-bg);
+}
+
+/* Load strip: stacked bar of planned hours by trade, the capacity line, the % written. */
+.load-title {
+  display: block;
+  font-weight: 600;
+}
+
+.load-cell {
+  height: 76px;
+  text-align: center;
+  vertical-align: bottom;
+  cursor: default;
+}
+
+.load-plot {
+  position: relative;
+  height: 48px;
+  margin: 2px 10px 0;
+}
+
+.load-bar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.load-segment {
+  display: block;
+  flex: none;
+  min-height: 1px;
+}
+
+/* 2 px surface gap between stacked segments; rounded data end on top. */
+.load-segment + .load-segment {
+  border-bottom: 2px solid var(--color-surface);
+}
+
+.load-segment:last-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.load-capacity {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  border-top: 2px dashed var(--color-text);
+}
+
+.load-value {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.load-cell.level-tight {
+  background: var(--color-warning-highlight);
+}
+
+.load-cell.level-tight .load-value {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.load-cell.level-over {
+  background: var(--color-danger-bg);
+}
+
+.load-cell.level-over .load-value {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.planner-tooltip {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  min-width: 11rem;
+  padding: var(--space-2) var(--space-3);
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-radius: var(--radius);
+  font-size: var(--font-size-small);
+  pointer-events: none;
+}
+
+.planner-tooltip[hidden] {
+  display: none;
+}
+
+/* Group rows: total internal hours per week. */
+.group-row > * {
+  background: var(--color-bg);
+  font-weight: 600;
+}
+
+.group-row .plan-cell {
+  background: var(--color-bg);
+}
+
+.group-hours {
+  height: 32px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-link {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.plan-link:hover {
+  color: var(--color-link-hover);
+  text-decoration: underline;
+}
+
+.plan-code {
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-meta {
+  display: block;
+  color: var(--color-text-muted);
+}
+
+.group-row .plan-meta,
+.load-row .plan-meta {
+  display: inline;
+  font-weight: 400;
+}
+
+.load-row .plan-meta {
+  display: block;
+}
+
+.plan-warning {
+  display: block;
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.week-cell {
+  height: 48px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Chips: one visit in its week, with its hours. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius);
+  background: var(--color-info-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.chip + .chip {
+  margin-top: 2px;
+}
+
+.chip:hover {
+  border-color: var(--color-brand-red);
+}
+
+.chip-released {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.chip-skipped {
+  border-color: var(--color-border);
+  background: var(--color-neutral-bg);
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.chip-contractor {
+  border: 2px dashed var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.chip-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.chip-moved {
+  border-style: double;
+  border-width: 3px;
+}
+
+.chip[aria-current='true'] {
+  outline: 3px solid var(--color-brand-red);
+  outline-offset: 1px;
+}
+
+.planner-figures {
+  margin-top: var(--space-4);
+}
+
+/* Plan panel. */
+.occurrence-box {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border-left: 4px solid var(--color-info);
+  background: var(--color-info-bg);
+  border-radius: var(--radius);
+}
+
+.occurrence-box h3,
+.plan-visits h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+}
+
+.plan-visits {
+  margin-top: var(--space-4);
+}
+
+.plan-visit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.plan-visit-week {
+  display: inline-block;
+  min-width: 8rem;
+}
+
+/* Planning settings. */
+.settings-page {
+  max-width: 44rem;
+}
+
+.settings-preview {
+  font-weight: 600;
+}
+
+.settings-form {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+/* Phones: one filter per line, full width; the grid keeps scrolling sideways. */
+@media (max-width: 600px) {
+  .planner-filters .filter-field {
+    flex: 1 1 100%;
+  }
+
+  .planner-filters .filter-field select,
+  .planner-filters .filter-field input {
+    width: 100%;
+    max-width: none;
+  }
+
+  .planner-filters .segmented {
+    display: flex;
+  }
+
+  .planner-filters .segmented-option {
+    flex: 1;
+  }
+
+  .plan-cell {
+    min-width: 180px;
+  }
+}

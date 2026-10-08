@@ -10,7 +10,7 @@ Tasks:
 - `backend/package.json` (ES modules, Node 24), ESLint + Prettier, Vitest + Supertest; scripts `dev`, `start`, `test`, `lint`, `db:migrate`, `db:seed`, `db:reset`.
 - Config module: load `.env`, validate with zod, fail fast on missing values.
 - SQLite connection with pragmas; migration runner; `001_init.sql` with every table, `CHECK`, index and foreign key from `docs/data-model.md`.
-- Deterministic seed (5 users, 500 assets, 200 work orders, optional conflicts; 6 users and 207 work orders since Phases 15–16).
+- Deterministic seed (5 users, 500 assets, 200 work orders, optional conflicts; 6 users and 207 work orders since Phases 15–16; 62 maintenance plans since Phase 17).
 - Express app: `helmet`, JSON limit, error handler, `GET /api/health`, static serving of `frontend/` with SPA fallback.
 - `frontend/package.json` (dev tools only: ESLint, Prettier, Vitest, jsdom, fake-indexeddb) and a placeholder `index.html`.
 
@@ -117,11 +117,11 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 
 - **Phase 16: review of staff requests (product owner, 2026-10-08)** — done (D47, BR-R6 to BR-R9). Acceptance: a new request is "Waiting for review" for the requester and counted on the supervisors' and admins' dashboard tile "Staff requests to review" (technicians have no tile); the tile opens the matching list; a request waiting for review can be neither assigned, started nor cancelled by a normal edit; a supervisor approves it only with a technician or supervisor assigned, or rejects it with a reason; the requester then sees "Approved" with the assignee, or "Rejected" with the reason; the count goes down; requests sent before the change are classified by the migration.
 
-## Planned phases: preventive maintenance (D48)
+## Preventive maintenance phases (D48)
 
-Specified in `docs/spec-preventive-maintenance.md` (section 11 holds the full acceptance criteria). Not started.
+Specified in `docs/spec-preventive-maintenance.md` (section 11 holds the full acceptance criteria).
 
-- **Phase 17: maintenance plans and the read-only year planner**: plans, occurrences, release of work orders 4 weeks ahead, 52-week grid grouped by site, building or trade, load strip and balancing tiles.
+- **Phase 17: maintenance plans and the read-only year planner** — done (D49, BR-P1 to BR-P9, BR-Y1 to BR-Y4; migration `008`). Acceptance: a supervisor creates a quarterly plan for an asset and sees its 4 visits on the timeline; the load strip shows planned hours vs capacity per trade; four weeks before a visit, exactly one work order exists for it, even if the release runs twice; contractor plans appear without changing the load; a plan visit above 3 h 30 is flagged; supervisors' hours count in the capacity of their trade; when an administrator lowers the reserve from 30 % to 20 %, every week's capacity rises accordingly and the change appears in the audit log; a supervisor cannot change the reserve (403). Deployment adds the daily release timer (`fast-cmms-pm-release.timer`).
 - **Phase 18: year planner editing**: drag a series or one occurrence with live impact, tolerance, regulatory and blocked-week rules, keyboard moves, undo.
 - **Phase 19: week scheduler and My week**: "to schedule" tray, day allocations per technician (30-minute steps, 7 h a day, blocks ≤ 3 h 30, splitting), travel and preparation time, locked appointments, open weekends, carry-over, technicians' week offline.
 - **Phase 20: balancing assistant**: "Suggest a smoother plan" within each plan's rules, shown before acceptance.

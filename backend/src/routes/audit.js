@@ -4,10 +4,11 @@ import { HttpError } from '../lib/http-error.js';
 import { idParams, pageQueryFields } from '../lib/pagination.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import { AUDIT_ENTITY_TYPES } from '../rules/enums.js';
 
 const listQuery = z.strictObject({
   ...pageQueryFields,
-  entity_type: z.enum(['assets', 'work_orders', 'users']).optional(),
+  entity_type: z.enum(AUDIT_ENTITY_TYPES).optional(),
 });
 
 /**

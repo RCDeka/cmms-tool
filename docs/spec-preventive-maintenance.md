@@ -1,6 +1,6 @@
 # Preventive Maintenance: Specification
 
-Status: **specified and confirmed, not implemented** (product owner discussion, 2026-10-08; decision D48). Phases 17 to 20 in `docs/roadmap-mvp.md`. When a phase is implemented, the parts of this document it covers move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, like every other feature, and this file keeps only what is still to build.
+Status: **specified and confirmed** (product owner discussion, 2026-10-08; decision D48). **Phase 17 is implemented** (2026-10-08): plans, occurrences, the release, the planning settings and the read-only year planner are described in `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which prevail over this file; D49 in `docs/decisions.md` lists where the implementation completes or departs from it (occurrence horizon, release author, a skipped visit keeping its work order, capacity filters, what moved to later phases). Phases 18 to 20 are still to build; the sections below are kept whole for them, as the two levels share their vocabulary and rules.
 
 ## 1. Goals
 

@@ -39,3 +39,26 @@ export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
 export const REVIEW_DECISIONS = ['APPROVE', 'REJECT'];
 
 export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];
+
+// Preventive maintenance (D48, docs/data-model.md → Preventive maintenance).
+
+/** Work order type of a plan's visits. */
+export const PLAN_TYPES = ['PREVENTIVE', 'REGULATORY'];
+
+/** FIXED plans keep their calendar; FLOATING ones restart from each closed visit (BR-P5). */
+export const SCHEDULE_MODES = ['FIXED', 'FLOATING'];
+
+export const PERFORMERS = ['INTERNAL', 'CONTRACTOR'];
+
+export const OCCURRENCE_STATUSES = ['PLANNED', 'RELEASED', 'SKIPPED'];
+
+/** Records whose changes are written to the audit log. */
+export const AUDIT_ENTITY_TYPES = [
+  'assets',
+  'work_orders',
+  'users',
+  'maintenance_plans',
+  'plan_occurrences',
+  'allocations',
+  'planning_settings',
+];

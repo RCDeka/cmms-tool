@@ -76,7 +76,16 @@ import {
   setQueueHandlers,
   startQueue,
 } from './queue.js';
-import { findAssetById, loadRefs } from './refs.js';
+import { findAssetById, findAssetByCode, loadRefs } from './refs.js';
+import {
+  checkPlanForm,
+  planBody,
+  planFieldErrors,
+  renderPlanForm,
+  renderPlanPanel,
+} from './plan-panel.js';
+import { planningUrl, renderPlanner, setPlannerPanel, timelineQuery } from './planning.js';
+import { renderPlanningSettings } from './planning-settings.js';
 import {
   renderRequestDetail,
   renderRequestForm,
@@ -170,6 +179,8 @@ async function render(route) {
 
   showLoggedIn(currentUser());
   if (isStaff()) return renderStaffRoute(route, isCurrent);
+  // The planner's timeline is reused only while the user stays on the planner.
+  if (!['planning', 'plan', 'planCreate'].includes(route.name)) plannerCache = null;
   switch (route.name) {
     case 'list':
     case 'detail':
@@ -205,6 +216,21 @@ async function render(route) {
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
     case 'account':
       return showAccount();
+    case 'planning':
+    case 'plan':
+      return showPlanning(route, isCurrent);
+    case 'planCreate':
+      return hasRole('SUPERVISOR', 'ADMIN')
+        ? showPlanning(route, isCurrent)
+        : showPlaceholder(
+            'planning',
+            'Access denied',
+            'Only supervisors and administrators can create plans.',
+          );
+    case 'planningSettings':
+      return hasRole('ADMIN')
+        ? showPlanningSettings(isCurrent)
+        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
     case 'feedback':
       return hasRole('ADMIN')
         ? showFeedbackLog(route, isCurrent)
@@ -730,6 +756,191 @@ async function showFeedbackLog(route, isCurrent) {
     }),
   });
   restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+}
+
+// --- Year planner (D48, online only) -------------------------------------------------------
+
+/** Timeline last shown, so opening or closing a plan panel does not fetch it again. */
+let plannerCache = null; // { query, data }
+
+/** URL of a plan panel over the planner, with the visit clicked. */
+function planUrl(filters, planId, occurrenceId = null) {
+  const url = planningUrl(filters, `/planning/plans/${planId}`);
+  if (!occurrenceId) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}occurrence=${occurrenceId}`;
+}
+
+async function showPlanning(route, isCurrent) {
+  leaveRecordViews('planning', 'Year planner');
+  const filters = route.filters ?? {};
+  const query = timelineQuery(filters);
+  const cached = plannerCache?.query === query ? plannerCache.data : null;
+  if (!tableContainer.querySelector('.planner')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the year planner…'));
+  }
+  let data;
+  let plan = null;
+  try {
+    [data, plan] = await Promise.all([
+      cached ?? apiFetch(`/planning/timeline?${query}`),
+      route.name === 'plan' ? apiFetch(`/plans/${route.id}`) : null,
+    ]);
+  } catch (err) {
+    if (!isCurrent()) return;
+    if (err.status === 404) {
+      return showPlaceholder('planning', 'Plan not found', 'This maintenance plan does not exist.');
+    }
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The year planner needs a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  plannerCache = { query, data };
+  const canEdit = hasRole('SUPERVISOR', 'ADMIN');
+  const { sites } = await getRefs();
+  if (!isCurrent()) return;
+
+  // Keep the grid where the user scrolled it when a panel opens or closes.
+  const previous = tableContainer.querySelector('.planner-scroll');
+  const scroll = previous ? { left: previous.scrollLeft, top: previous.scrollTop } : null;
+  const hadFocus = tableContainer.contains(document.activeElement);
+  renderPlanner(tableContainer, {
+    data,
+    filters,
+    sites,
+    canEdit,
+    isAdmin: hasRole('ADMIN'),
+    selectedId: route.occurrenceId ?? null,
+    onFilter: (next) => navigate(planningUrl(next)),
+    onOpen: (planId, occurrenceId) => navigate(planUrl(filters, planId, occurrenceId)),
+  });
+  const grid = tableContainer.querySelector('.planner-scroll');
+  if (scroll) Object.assign(grid, { scrollLeft: scroll.left, scrollTop: scroll.top });
+
+  const close = () => navigate(planningUrl(filters));
+  if (!setPlannerPanel(route.name, detailContainer)) {
+    if (!hadFocus) tableContainer.querySelector('#planner-tiles-heading')?.focus();
+    return;
+  }
+  const showForm = (current) => {
+    renderPlanForm(detailContainer, {
+      plan: current,
+      sites,
+      defaultWeek: data.current_week,
+      onClose: current ? () => render(currentRoute()) : close,
+      onSubmit: (raw, form, assetCode) => submitPlan(raw, form, assetCode, current, filters),
+    });
+    detailContainer.querySelector('#p-title')?.focus();
+  };
+  if (route.name === 'planCreate') {
+    setTitle('New maintenance plan');
+    return showForm(null);
+  }
+  setTitle(`${plan.code} — ${plan.title}`);
+  const occurrence = route.occurrenceId
+    ? (data.groups
+        .flatMap((g) => g.plans)
+        .find((p) => p.id === plan.id)
+        ?.occurrences.find((o) => o.id === route.occurrenceId) ??
+      plan.occurrences.find((o) => o.id === route.occurrenceId) ??
+      null)
+    : null;
+  renderPlanPanel(detailContainer, {
+    plan,
+    occurrence,
+    settings: data.settings,
+    canEdit,
+    onClose: close,
+    onEdit: () => showForm(plan),
+  });
+  detailContainer.querySelector('.detail-title')?.focus();
+}
+
+/** Create or save a plan from the side panel form. */
+async function submitPlan(raw, form, assetCode, plan, filters) {
+  let assetId = null;
+  if (assetCode) {
+    const asset = await findAssetByCode(assetCode);
+    if (!asset) {
+      return showErrors(
+        form,
+        { asset_code: 'No asset has this code' },
+        'Check the highlighted fields.',
+      );
+    }
+    assetId = asset.id;
+  }
+  const body = planBody(raw, { editing: Boolean(plan), assetId });
+  const errors = checkPlanForm(body, { hasAssetCode: Boolean(assetId) });
+  if (Object.keys(errors).length) {
+    return showErrors(form, errors, 'Check the highlighted fields.');
+  }
+  try {
+    const result = plan
+      ? await apiFetch(`/plans/${plan.id}`, {
+          method: 'PUT',
+          body: { ...body, version: plan.version },
+        })
+      : await apiFetch('/plans', { method: 'POST', body });
+    plannerCache = null;
+    announce(
+      plan
+        ? result.updated
+          ? 'Plan saved.'
+          : 'Nothing to save.'
+        : `Plan ${result.item.code} created.`,
+    );
+    const url = planUrl(filters, result.item.id);
+    if (url === location.pathname + location.search) render(currentRoute());
+    else navigate(url, { force: true });
+  } catch (err) {
+    showErrors(
+      form,
+      planFieldErrors(apiFieldErrors(err)),
+      err.status === 0 ? 'You are offline: the plan was not saved.' : err.message,
+    );
+  }
+}
+
+/** Planning settings (administrators, P16). */
+async function showPlanningSettings(isCurrent) {
+  leaveRecordViews('planning_settings', 'Planning settings');
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the settings…'));
+  let settings;
+  try {
+    settings = await apiFetch('/planning/settings');
+  } catch (err) {
+    if (!isCurrent()) return;
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The planning settings need a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  renderPlanningSettings(tableContainer, {
+    settings,
+    onSave: async (body, form) => {
+      if (!body) return showErrors(form, {}, 'Nothing to save: no value was changed.');
+      try {
+        await apiFetch('/planning/settings', { method: 'PUT', body });
+        plannerCache = null;
+        announce('Planning settings saved.');
+        render(currentRoute());
+      } catch (err) {
+        showErrors(
+          form,
+          apiFieldErrors(err),
+          err.status === 0 ? 'You are offline: the settings were not saved.' : err.message,
+        );
+      }
+    },
+  });
+  tableContainer.querySelector('.placeholder-title')?.focus();
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------

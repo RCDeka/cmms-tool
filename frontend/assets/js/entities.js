@@ -103,6 +103,9 @@ export const ENTITIES = {
       reviewed_by: { label: 'Reviewed by', type: 'user' },
       reviewed_at: { label: 'Reviewed', type: 'datetime' },
       review_note: { label: 'Reason for rejection' },
+      // Preventive visits (D48): set by the release of a plan's visit.
+      plan: { label: 'Maintenance plan', type: 'plan', editField: 'plan_id' },
+      planned_week: { label: 'Planned week', type: 'week' },
     },
     columns: ['number', 'title', 'site', 'priority', 'status', 'assignee', 'due_on'],
     splitColumns: ['number', 'title', 'status'],
@@ -120,6 +123,8 @@ export const ENTITIES = {
       'site',
       'location',
       'asset',
+      'plan',
+      'planned_week',
       'description',
       'assignee',
       'supervisor',

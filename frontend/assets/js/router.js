@@ -3,6 +3,8 @@ import { parseUserFilters } from './admin-users.js';
 import { ENTITIES, entityForSegment } from './entities.js';
 import { parseFeedbackFilters } from './feedback.js';
 import { filtersQuery, isPlainList, parseFilters } from './filters.js';
+import { AUDIT_TYPES } from './history.js';
+import { parsePlanningFilters } from './planning.js';
 
 const ID = /^[1-9]\d{0,15}$/;
 /** Work orders created offline have a temporary id until the server answers (D26). */
@@ -12,7 +14,8 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
  *   |'users'|'user'|'userCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
- *   |'notFound'} name
+ *   |'planning'|'plan'|'planCreate'|'planningSettings'|'notFound'} name
+ * @property {number} [occurrenceId] plan panel: the visit clicked on the year planner
  * @property {'open'|'all'} [scope] staff request list: unfinished requests, or all (D46)
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
@@ -50,6 +53,26 @@ export function parseRoute(pathname, search = '') {
       ? { name: 'user', id: Number(third), page, ...extra }
       : { name: 'notFound', page };
   }
+  if (first === 'admin' && second === 'planning' && !rest.length) {
+    return { name: 'planningSettings', page };
+  }
+  if (first === 'planning') {
+    // Year planner (D48): /planning, /planning/plans/new, /planning/plans/:id?occurrence=N.
+    const filters = parsePlanningFilters(query);
+    if (!second) return { name: 'planning', page, filters };
+    const [third, ...more] = rest;
+    if (second !== 'plans' || !third || more.length) return { name: 'notFound', page };
+    if (third === 'new') return { name: 'planCreate', page, filters };
+    if (!ID.test(third)) return { name: 'notFound', page };
+    const occurrenceId = positiveInt(query.get('occurrence'), null);
+    return {
+      name: 'plan',
+      id: Number(third),
+      page,
+      filters,
+      ...(occurrenceId && { occurrenceId }),
+    };
+  }
   if (first === 'admin' && second === 'feedback' && !rest.length) {
     const filters = parseFeedbackFilters(query);
     return { name: 'feedback', page, ...(filters.status && { filters }) };
@@ -64,7 +87,7 @@ export function parseRoute(pathname, search = '') {
     return {
       name: 'audit',
       page,
-      entityType: ['assets', 'work_orders', 'users'].includes(type) ? type : null,
+      entityType: AUDIT_TYPES.some((t) => t.value === type) ? type : null,
     };
   }
   if (first === 'conflicts') {

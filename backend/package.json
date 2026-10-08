@@ -17,7 +17,8 @@
     "db:seed": "node src/db/cli.js seed",
     "db:reset": "node src/db/cli.js reset",
     "db:backup": "node src/db/cli.js backup",
-    "feedback:export": "node src/db/cli.js feedback"
+    "feedback:export": "node src/db/cli.js feedback",
+    "pm:release": "node src/db/cli.js release"
   },
   "dependencies": {
     "argon2": "^0.45.1",

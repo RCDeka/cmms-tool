@@ -39,6 +39,7 @@ describe('deploy/systemd', () => {
   it.each([
     ['deploy/systemd/fast-cmms.service', 'src/server.js'],
     ['deploy/systemd/fast-cmms-backup.service', 'src/db/cli.js backup'],
+    ['deploy/systemd/fast-cmms-pm-release.service', 'src/db/cli.js release'],
   ])('%s starts a script that exists', (unit, command) => {
     const content = read(unit);
     expect(content).toContain(`ExecStart=/usr/bin/node ${command}`);

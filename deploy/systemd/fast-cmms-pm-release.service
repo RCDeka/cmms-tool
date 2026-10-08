@@ -1,0 +1,33 @@
+# Daily release of preventive work orders (install as
+# /etc/systemd/system/fast-cmms-pm-release.service). Started by fast-cmms-pm-release.timer;
+# run it by hand with: systemctl start fast-cmms-pm-release
+# Creates the work orders of the maintenance plan visits due within the release horizon
+# (4 weeks by default). Running it twice creates nothing more (BR-P6).
+[Unit]
+Description=Fast-CMMS release of preventive work orders
+After=fast-cmms.service
+
+[Service]
+Type=oneshot
+User=fast-cmms
+Group=fast-cmms
+WorkingDirectory=/opt/fast-cmms/backend
+EnvironmentFile=/etc/fast-cmms/fast-cmms.env
+ExecStart=/usr/bin/node src/db/cli.js release
+UMask=0077
+# Writes the live database in /var/lib/fast-cmms only.
+StateDirectory=fast-cmms
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

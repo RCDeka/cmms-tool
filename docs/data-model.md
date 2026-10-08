@@ -22,6 +22,10 @@ work_orders 1───* work_order_comments (work_order_id)
 users 1───* work_order_comments (user_id)
 assets 1───* work_orders (asset_id, optional)
 assets / work_orders 1───* conflicts (entity_type + entity_id)
+assets 1───* maintenance_plans (asset_id, optional)
+maintenance_plans 1───* plan_occurrences (plan_id)
+maintenance_plans 1───* work_orders (plan_id, optional)
+plan_occurrences 0..1───1 work_orders (work_order_id, set by the release)
 ```
 
 ## Enumerated values
@@ -38,6 +42,10 @@ assets / work_orders 1───* conflicts (entity_type + entity_id)
 | Conflict status | `OPEN`, `RESOLVED` |
 | Review status (D47) | `PENDING` (To review), `APPROVED` (Approved), `REJECTED` (Rejected) |
 | Conflict resolution | `A`, `B`, `MERGE` |
+| Plan type (D48) | `PREVENTIVE`, `REGULATORY` (the work order type of the visits) |
+| Schedule mode (D48) | `FIXED` (Fixed calendar), `FLOATING` (From the last visit) |
+| Performed by (D48) | `INTERNAL` (Internal team), `CONTRACTOR` (Contractor) |
+| Occurrence status (D48) | `PLANNED` (Planned), `RELEASED` (Work order created), `SKIPPED` (Skipped) |
 
 - Terminal work order statuses: `CLOSED`, `CANCELLED`. Non-terminal: `OPEN`, `IN_PROGRESS`, `ON_HOLD`.
 - `FIRE_SAFETY` is the fire detection and alarm system; `NETWORK_CABLING` covers voice, data and video cabling.
@@ -121,12 +129,14 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | reviewed_by | INTEGER | yes | FK → users.id | supervisor or admin who reviewed **(added, D47)** |
 | reviewed_at | TEXT | yes | | datetime of the review **(added, D47)** |
 | review_note | TEXT | yes | | reason of a rejection, shown to the requester **(added, D47)** |
+| plan_id | INTEGER | yes | FK → maintenance_plans.id | the plan of a preventive visit; set by the release, read-only **(added, D48)** |
+| planned_week | TEXT | yes | ISO week `YYYY-Www` | week the work is planned in; set by the release, read-only until the week scheduler **(added, D48)** |
 | version | INTEGER | no | default 1 | |
 | has_conflict | INTEGER | no | default 0 | |
 | updated_by | INTEGER | yes | FK → users.id | **(added, D2)** |
 | created_at / updated_at | TEXT | no | default now | |
 
-Indexes: `number` (unique), `client_id` (unique), `status`, `asset_id`, `assignee_id`, `created_on`, `updated_at`, (`created_by`, `created_at`) for "my requests", partial index on `review_status` `WHERE review_status = 'PENDING'` (dashboard tile).
+Indexes: `number` (unique), `client_id` (unique), `status`, `asset_id`, `assignee_id`, `created_on`, `updated_at`, (`created_by`, `created_at`) for "my requests", partial index on `review_status` `WHERE review_status = 'PENDING'` (dashboard tile), `plan_id`, `planned_week`.
 
 ### conflicts (added, D3)
 | Column | Type | Null | Constraints / default | Notes |
@@ -154,7 +164,7 @@ Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'O
 | Column | Type | Null | Constraints / default | Notes |
 |---|---|---|---|---|
 | id | INTEGER | no | PK | |
-| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`) | |
+| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`, `maintenance_plans`, `plan_occurrences`, `allocations`, `planning_settings`) | planning records since `008` (D48; `allocations` is reserved for Phase 19) |
 | entity_id | INTEGER | no | | id of the record (kept after deletion) |
 | action | TEXT | no | CHECK IN (`CREATE`, `UPDATE`, `DELETE`, `CONFLICT`, `RESOLVE`) | |
 | changes | TEXT | no | JSON, default `{}` | `{ field: { from, to } }` in API values |
@@ -215,7 +225,59 @@ Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role
 | name | TEXT PK | migration file name |
 | applied_at | TEXT | |
 
-> **Planned (D48):** preventive maintenance adds tables `maintenance_plans`, `plan_occurrences`, `allocations`, `capacity_overrides`, `schedule_weeks`, `blocked_weeks`, `planning_settings`, and `plan_id` / `planned_week` on `work_orders`. See `docs/spec-preventive-maintenance.md` §4–5; this document will hold them once implemented.
+### Preventive maintenance (added, D48, D49)
+Migration `008_preventive_maintenance.sql`. Weeks are **ISO weeks** (Monday to Sunday) written `YYYY-Www` (`2026-W43`), in `APP_TIMEZONE`; some years have 53 weeks (2026 does), and frequencies simply run through them. Week columns have `CHECK (… GLOB '[0-9][0-9][0-9][0-9]-W[0-5][0-9]')`; the API also refuses weeks that do not exist (`2027-W53`). The week scheduler's tables (`allocations`, `capacity_overrides`, `schedule_weeks`) and `blocked_weeks` come with Phases 18–19 (`docs/spec-preventive-maintenance.md` §4).
+
+#### maintenance_plans
+A recurring preventive task: what, where, which trade, how long, how often.
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| code | TEXT | no | UNIQUE, `PM-` + digits | automatic: `PM-` + the next number, at least 4 digits |
+| title | TEXT | no | 1–200 | "Quarterly service, Tower A chiller" |
+| description | TEXT | yes | ≤ 4000 | instructions for the technician |
+| type | TEXT | no | CHECK Plan type | work order type of the visits |
+| category | TEXT | no | CHECK Category | trade; defaults to the asset's |
+| asset_id | INTEGER | yes | FK → assets.id | the asset maintained, if one |
+| site | TEXT | no | | the asset's site when `asset_id` is set (BR-P9) |
+| building | TEXT | yes | | the asset's building when `asset_id` is set (BR-P9) |
+| location | TEXT | yes | ≤ 200 | free text, as on work orders |
+| estimated_hours | REAL | no | > 0, ≤ 200, multiple of 0.5 | per visit |
+| frequency_weeks | INTEGER | no | 1–104 | 1, 2, 4, 8, 13, 26, 52 are offered first |
+| anchor_week | TEXT | no | ISO week | first visit of the series |
+| end_week | TEXT | yes | ISO week, ≥ anchor (API) | contract end; open-ended when NULL |
+| schedule_mode | TEXT | no | CHECK Schedule mode, default `FIXED` | BR-P5 |
+| tolerance_weeks | INTEGER | no | 0–8 | default `min(8, floor(frequency_weeks / 4))`; used by moves (Phase 18) |
+| season_from_week, season_to_week | INTEGER | yes | 1–53, both or neither | allowed season; may wrap over the new year (45 → 10) |
+| performed_by | TEXT | no | CHECK Performed by, default `INTERNAL` | |
+| supplier | TEXT | yes | required by the API for `CONTRACTOR` | contractor name |
+| is_active | INTEGER | no | 0/1, default 1 | inactive plans keep their history and create nothing |
+| version | INTEGER | no | default 1 | optimistic check: 409 when stale, no conflict console |
+| created_by / updated_by | INTEGER | no / yes | FK → users.id | |
+| created_at / updated_at | TEXT | no | | |
+
+Indexes: `code` (unique), (`site`, `building`), `category`, `is_active`.
+
+#### plan_occurrences
+One visit of a plan in a week.
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| plan_id | INTEGER | no | FK → maintenance_plans.id | |
+| due_week | TEXT | no | ISO week | week given by the series |
+| week | TEXT | no | ISO week | planned week; differs from `due_week` once moved (Phase 18) |
+| status | TEXT | no | CHECK Occurrence status, default `PLANNED` | |
+| work_order_id | INTEGER | yes | FK → work_orders.id, UNIQUE | set by the release |
+| skip_reason | TEXT | yes | required when `SKIPPED` | |
+| moved_by / moved_at | | yes | | last single move (Phase 18) |
+| created_at / updated_at | TEXT | no | | |
+
+Constraints: UNIQUE (`plan_id`, `due_week`); `RELEASED` ⇒ `work_order_id` set; `PLANNED` ⇒ no `work_order_id` (a visit skipped by cancelling its work order keeps the link, D49). Indexes: `week`, (`plan_id`, `week`).
+
+#### planning_settings
+One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7; 0.5–12 in half hours), `reserve_percent` (30; 0–80), `release_weeks_ahead` (4; 1–12), `max_block_hours` (3.5; 0.5–8 in half hours), `version`, `updated_by`, `updated_at`. Every change is logged (`entity_type = planning_settings`).
 
 ## Business rules
 
@@ -280,6 +342,21 @@ Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role
 - BR-R8: Rejecting sets `status = CANCELLED`, `review_status = REJECTED` and `review_note` (the reason, 1 to 2000 characters, required).
 - BR-R9: Approving requires an `assignee_id` (BR-W3: an active technician or supervisor) and sets `review_status = APPROVED`; `supervisor_id` defaults to the reviewer. `type`, `priority`, `category` and `due_on` (BR-W8) may be set in the same request. Both decisions increment `version`, set `reviewed_by`, `reviewed_at`, `updated_by`, `updated_at`, and write one `UPDATE` audit entry with `note: { review: "APPROVED" | "REJECTED" }`, in one transaction.
 
+### Preventive maintenance (D48, D49)
+- BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
+- BR-P2: Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved; released and skipped ones keep their week. Deactivating removes every `PLANNED` occurrence.
+- BR-P5: `FIXED` plans keep their calendar. In a `FLOATING` plan, closing a visit's work order moves the anchor to the closing week + the frequency (logged on the plan) and replaces the planned visits.
+- BR-P6: The release creates the work order of every `PLANNED` occurrence of an active plan whose week is at most `release_weeks_ahead` weeks after the current week, one transaction per occurrence; a second run creates nothing (the occurrence is no longer `PLANNED`, and `work_order_id` is UNIQUE). The work order takes the plan's type, title (+ " – 2026-W43"), description, asset, site, location, trade and hours, with `status = OPEN`, `priority = NORMAL`, no assignee, `created_on` = today, `due_on` = the Friday of the week (today when late), `plan_id`, `planned_week`, and the plan's author (or the user who asked for the release) as `created_by`.
+- BR-P7 (part): cancelling a released visit's work order sets the occurrence `SKIPPED` with the reason "Work order WO-… cancelled". Skipping by hand comes with Phase 18.
+- BR-P8 (part): warnings, never refusals: a visit longer than `max_block_hours` (`LONG_VISIT`, "will be split"), a visit outside the plan's season (`OUT_OF_SEASON`), a week over capacity. Blocked weeks come with Phase 18.
+- BR-P9: With an asset, a plan's `site` and `building` are the asset's; sending others is refused (422), as is an unknown asset. The trade defaults to the asset's.
+
+### Year planner figures (D48)
+- BR-Y1: Planned hours of a week = estimated hours of the internal occurrences whose `week` is that week, released ones included, skipped ones excluded; per trade and per site.
+- BR-Y2: Weekly capacity = Σ over active technicians **and supervisors** of `daily_hours` × 5 working days, minus `reserve_percent`; per trade through `specialty` (`GENERAL` without one) and per site. The site and trade filters narrow it to those people (D49).
+- BR-Y3: Load = planned hours ÷ capacity; above 100 %: over capacity; 85 % to 100 %: tight; no load without capacity.
+- BR-Y4: Contractor visits are counted per week, never in the load.
+
 ### KPI definitions (dashboard)
 "Today" and "this month" use `APP_TIMEZONE` (D13).
 - Open work orders: `status = 'OPEN'`. In progress: `status = 'IN_PROGRESS'`.
@@ -303,4 +380,5 @@ Generated by `backend/src/db/seed/` with a fixed random seed (the output is the 
 - **207 work orders**: 200 generated ones and 7 requests of `user1` (D46), numbered together in creation order.
 - The **200 generated work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
 - The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), with a location, some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
+- **62 maintenance plans** (D48), each on its own asset (site, building and trade follow it), from `PLAN_TEMPLATES` in `seed/catalog.js`: every trade, both calendar modes, regulatory plans, 8 contractor plans (fire safety, backflow tests, CCTV), visits above 3 h 30, two seasonal plans (one placed outside its season), and one contract ending in a little over a year. Most long-period plans start 3, 16, 29 or 42 weeks after the current week, so the year has visible peaks (one week over capacity, two tight, about 41 % on average). Occurrences are stored up to the horizon; no work order is released by the seed: the daily job or the first opening of the planner does it. The plans use their own random stream, so the rest of the dataset is unchanged.
 - **0 conflicts** by default. A dev-only option (`npm run db:seed -- --with-conflicts`) creates 3 open conflicts to demonstrate the arbitration console.

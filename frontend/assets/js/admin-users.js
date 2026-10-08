@@ -182,7 +182,7 @@ export function renderUserList(container, { data, filters, selectedId, onFilter,
 }
 
 /** One labelled form row with its error line. */
-function row(id, label, control, { required = false, hint = null } = {}) {
+export function formRow(id, label, control, { required = false, hint = null } = {}) {
   control.id = id;
   control.setAttribute('aria-describedby', `${id}-error${hint ? ` ${id}-hint` : ''}`);
   return h(
@@ -278,31 +278,31 @@ function userFields(user, refs) {
 
   const elements = [
     username
-      ? row('u-username', 'Username', username, {
+      ? formRow('u-username', 'Username', username, {
           required: true,
           hint: 'Used to log in; cannot be changed later.',
         })
       : null,
-    row('u-first_name', 'First name', first, { required: true }),
-    row('u-last_name', 'Last name', last, { required: true }),
-    row('u-role', 'Role', role, { required: true }),
-    row('u-site', 'Site', site),
+    formRow('u-first_name', 'First name', first, { required: true }),
+    formRow('u-last_name', 'Last name', last, { required: true }),
+    formRow('u-role', 'Role', role, { required: true }),
+    formRow('u-site', 'Site', site),
     h(
       'datalist',
       { id: 'user-site-options' },
       (refs.sites ?? []).map((s) => h('option', { value: s })),
     ),
-    row('u-specialty', 'Specialty', specialty),
-    row('u-power_user', 'Auto-save', power, {
+    formRow('u-specialty', 'Specialty', specialty),
+    formRow('u-power_user', 'Auto-save', power, {
       hint: 'Changes are saved when leaving a record (power user).',
     }),
     active
-      ? row('u-is_active', 'Account active', active, {
+      ? formRow('u-is_active', 'Account active', active, {
           hint: 'Inactive users cannot log in; their sessions end at once.',
         })
       : null,
     password
-      ? row('u-password', 'Password', password, {
+      ? formRow('u-password', 'Password', password, {
           required: true,
           hint: `At least ${PASSWORD_MIN_LENGTH} characters. Give it to the user privately.`,
         })
@@ -323,7 +323,8 @@ function userFields(user, refs) {
   return { elements, read };
 }
 
-const panelHeader = (title, onClose) =>
+/** Header of a side panel: back (small screens), title, close. */
+export const panelHeader = (title, onClose) =>
   h(
     'div',
     { class: 'detail-header' },
@@ -416,7 +417,7 @@ export function renderUserPanel(
       readonly: true,
     }),
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
-    row('u-new-password', 'New password', newPassword, {
+    formRow('u-new-password', 'New password', newPassword, {
       hint: "The user's open sessions end at once.",
     }),
     h(

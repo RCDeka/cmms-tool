@@ -1,0 +1,458 @@
+// Side panel of the year planner: a plan with the visit clicked on the grid, and the plan form
+// (create, edit). Online only, like the planner (P18).
+import { formRow, panelHeader } from './admin-users.js';
+import { h, replaceChildren } from './dom.js';
+import { CATEGORIES, PERFORMERS, PLAN_TYPES, SCHEDULE_MODES } from './enums.js';
+import { formatDateTime, formatWeek, personName } from './format.js';
+import { valueLabel } from './labels.js';
+import { formatHours, occurrenceBadge, planWarningText } from './planning.js';
+
+/** Frequencies offered first (spec §4), in weeks. */
+export const FREQUENCIES = [1, 2, 4, 8, 13, 26, 52];
+
+/** "Every 13 weeks (quarterly)". Pure. */
+export function frequencyText(weeks) {
+  const names = {
+    1: 'weekly',
+    2: 'every other week',
+    4: 'monthly',
+    13: 'quarterly',
+    26: 'twice a year',
+    52: 'yearly',
+  };
+  return `Every ${weeks} week${weeks === 1 ? '' : 's'}${names[weeks] ? ` (${names[weeks]})` : ''}`;
+}
+
+/** Default tolerance, as the server computes it: a quarter of the period, at most 8. Pure. */
+export const defaultTolerance = (frequency) => Math.min(8, Math.floor(frequency / 4));
+
+/**
+ * Values of the plan form → API body. Empty optional fields are left out at creation and sent
+ * as null when editing (so a field can be cleared). Pure.
+ * @param {Record<string, string | boolean>} raw form values
+ * @param {{ editing: boolean, assetId: number | null }} options
+ */
+export function planBody(raw, { editing, assetId }) {
+  const text = (v) => (typeof v === 'string' ? v.trim() : v);
+  const number = (v) => (text(v) === '' || v === undefined ? null : Number(v));
+  const body = {
+    title: text(raw.title),
+    type: raw.type,
+    category: raw.category || null,
+    asset_id: assetId,
+    site: assetId ? undefined : text(raw.site) || null,
+    building: assetId ? undefined : text(raw.building) || null,
+    location: text(raw.location) || null,
+    estimated_hours: number(raw.estimated_hours),
+    frequency_weeks: number(raw.frequency_weeks),
+    anchor_week: text(raw.anchor_week),
+    end_week: text(raw.end_week) || null,
+    schedule_mode: raw.schedule_mode,
+    tolerance_weeks: number(raw.tolerance_weeks),
+    season_from_week: number(raw.season_from_week),
+    season_to_week: number(raw.season_to_week),
+    performed_by: raw.performed_by,
+    supplier: raw.performed_by === 'CONTRACTOR' ? text(raw.supplier) || null : null,
+    description: text(raw.description) || null,
+    ...(editing && { is_active: Boolean(raw.is_active) }),
+  };
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || (!editing && value === null)) delete body[key];
+  }
+  // Left empty: the trade stays (or comes from the asset), the tolerance stays (or follows
+  // the frequency).
+  if (body.category === null) delete body.category;
+  if (body.tolerance_weeks === null) delete body.tolerance_weeks;
+  return body;
+}
+
+/** Checks of the plan form before asking the server. Pure. */
+export function checkPlanForm(body, { hasAssetCode }) {
+  const errors = {};
+  if (!body.title) errors.title = 'Required';
+  if (!hasAssetCode && !body.site) errors.site = 'Choose an asset or a site';
+  if (!hasAssetCode && !body.category) errors.category = 'Required without an asset';
+  if (
+    !(body.estimated_hours > 0) ||
+    body.estimated_hours * 2 !== Math.round(body.estimated_hours * 2)
+  ) {
+    errors.estimated_hours = 'Hours in steps of half an hour';
+  }
+  if (
+    !Number.isInteger(body.frequency_weeks) ||
+    body.frequency_weeks < 1 ||
+    body.frequency_weeks > 104
+  ) {
+    errors.frequency_weeks = 'Between 1 and 104 weeks';
+  }
+  if (!/^\d{4}-W\d{2}$/.test(body.anchor_week ?? '')) errors.anchor_week = 'Choose a week';
+  if (body.end_week && body.anchor_week && body.end_week < body.anchor_week) {
+    errors.end_week = 'The end week cannot be before the first visit.';
+  }
+  if (((body.season_from_week ?? null) === null) !== ((body.season_to_week ?? null) === null)) {
+    errors[body.season_from_week ? 'season_to_week' : 'season_from_week'] =
+      'Give both ends of the season, or neither.';
+  }
+  if (body.performed_by === 'CONTRACTOR' && !body.supplier) {
+    errors.supplier = 'Name the contractor who performs the visits.';
+  }
+  return errors;
+}
+
+const field = (dt, dd) =>
+  dd === null || dd === undefined || dd === '' ? null : [h('dt', {}, dt), h('dd', {}, dd)];
+
+function occurrenceBox(plan, occurrence) {
+  return h(
+    'section',
+    { class: 'occurrence-box', 'aria-labelledby': 'occurrence-heading' },
+    h('h3', { id: 'occurrence-heading' }, `Visit of ${formatWeek(occurrence.week)}`),
+    h(
+      'dl',
+      { class: 'detail-fields' },
+      field('Status', occurrenceBadge(occurrence.status)),
+      field('Due week', formatWeek(occurrence.due_week)),
+      field(
+        'Planned week',
+        occurrence.week === occurrence.due_week
+          ? formatWeek(occurrence.week)
+          : `${formatWeek(occurrence.week)} (moved)`,
+      ),
+      field(
+        'Work order',
+        occurrence.work_order
+          ? h(
+              'a',
+              { href: `/work-orders/${occurrence.work_order.id}`, 'data-link': true },
+              `${occurrence.work_order.number} (${valueLabel('work_order_status', occurrence.work_order.status)})`,
+            )
+          : occurrence.status === 'PLANNED'
+            ? `Created ${plan.release_weeks_ahead ?? 4} weeks before the visit`
+            : null,
+      ),
+      field('Reason for skipping', occurrence.skip_reason),
+      field(
+        'Warning',
+        occurrence.warnings?.includes('OUT_OF_SEASON')
+          ? `⚠ Outside the season (weeks ${plan.season_from_week} to ${plan.season_to_week})`
+          : null,
+      ),
+    ),
+  );
+}
+
+/**
+ * Plan panel: the visit clicked (if any), the plan's details and its next visits.
+ * @param {HTMLElement} container
+ * @param {{ plan: object, occurrence: object | null, settings: object, canEdit: boolean,
+ *   onClose: () => void, onEdit: () => void }} options
+ */
+export function renderPlanPanel(
+  container,
+  { plan, occurrence, settings, canEdit, onClose, onEdit },
+) {
+  const warning = planWarningText(plan.warnings, settings);
+  replaceChildren(
+    container,
+    panelHeader(`${plan.code} — ${plan.title}`, onClose),
+    plan.is_active
+      ? null
+      : h('p', { class: 'detail-message' }, 'This plan is inactive: it creates no more visits.'),
+    occurrence
+      ? occurrenceBox({ ...plan, release_weeks_ahead: settings.release_weeks_ahead }, occurrence)
+      : null,
+    canEdit
+      ? h(
+          'div',
+          { class: 'detail-actions' },
+          h(
+            'button',
+            { type: 'button', class: 'button button-secondary online-only', onClick: onEdit },
+            'Edit plan',
+          ),
+        )
+      : null,
+    h(
+      'dl',
+      { class: 'detail-fields' },
+      field('Type', valueLabel('work_order_type', plan.type)),
+      field('Trade', valueLabel('category', plan.category)),
+      field(
+        'Asset',
+        plan.asset
+          ? h(
+              'a',
+              { href: `/assets/${plan.asset.id}`, 'data-link': true },
+              `${plan.asset.code} — ${plan.asset.name}`,
+            )
+          : null,
+      ),
+      field('Site', plan.site),
+      field('Building', plan.building),
+      field('Location', plan.location),
+      field('Hours per visit', [formatHours(plan.estimated_hours), warning ? ` ⚠ ${warning}` : '']),
+      field('Frequency', frequencyText(plan.frequency_weeks)),
+      field('First visit', formatWeek(plan.anchor_week)),
+      field('Last week', plan.end_week ? formatWeek(plan.end_week) : 'Open-ended'),
+      field('Calendar', valueLabel('schedule_mode', plan.schedule_mode)),
+      field('Tolerance', `± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'}`),
+      field(
+        'Season',
+        plan.season_from_week ? `Weeks ${plan.season_from_week} to ${plan.season_to_week}` : null,
+      ),
+      field(
+        'Done by',
+        plan.performed_by === 'CONTRACTOR' ? `Contractor: ${plan.supplier}` : 'Internal team',
+      ),
+      field('Instructions', plan.description),
+      field('Created by', plan.created_by ? personName(plan.created_by) : null),
+      field(
+        'Last modified',
+        `${formatDateTime(plan.updated_at)}${plan.updated_by ? ` by ${personName(plan.updated_by)}` : ''}`,
+      ),
+    ),
+    h(
+      'section',
+      { class: 'plan-visits', 'aria-labelledby': 'plan-visits-heading' },
+      h('h3', { id: 'plan-visits-heading' }, 'Next visits'),
+      plan.occurrences.length
+        ? h(
+            'ul',
+            { class: 'plan-visit-list' },
+            plan.occurrences.map((o) =>
+              h(
+                'li',
+                {},
+                h('span', { class: 'plan-visit-week' }, formatWeek(o.week)),
+                ' ',
+                occurrenceBadge(o.status),
+                o.work_order
+                  ? [
+                      ' ',
+                      h(
+                        'a',
+                        { href: `/work-orders/${o.work_order.id}`, 'data-link': true },
+                        o.work_order.number,
+                      ),
+                    ]
+                  : null,
+              ),
+            ),
+          )
+        : h('p', { class: 'muted' }, 'No visit planned.'),
+    ),
+  );
+}
+
+/**
+ * Plan form in the side panel: creation (`plan` null) or edition.
+ * @param {HTMLElement} container
+ * @param {{ plan: object | null, sites: string[], onClose: () => void,
+ *   onSubmit: (values: object, form: HTMLFormElement, assetCode: string) => void }} options
+ */
+export function renderPlanForm(container, { plan, sites, defaultWeek, onClose, onSubmit }) {
+  const editing = Boolean(plan);
+  const input = (name, attrs = {}) =>
+    h('input', { name, type: 'text', value: plan?.[name] ?? '', ...attrs });
+  const select = (name, options, { empty = null, value } = {}) => {
+    const control = h(
+      'select',
+      { name },
+      empty === null ? null : h('option', { value: '' }, empty),
+      options.map(([v, label]) => h('option', { value: v }, label)),
+    );
+    control.value = value ?? plan?.[name] ?? (empty === null ? options[0][0] : '');
+    return control;
+  };
+
+  const assetCode = h('input', {
+    name: 'asset_code',
+    type: 'text',
+    value: plan?.asset?.code ?? '',
+    autocapitalize: 'characters',
+    autocomplete: 'off',
+  });
+  const performer = select(
+    'performed_by',
+    PERFORMERS.map((p) => [p, valueLabel('performed_by', p)]),
+  );
+  const supplier = input('supplier', { maxlength: '150' });
+  const supplierRow = formRow('p-supplier', 'Contractor', supplier, { required: true });
+  supplierRow.hidden = performer.value !== 'CONTRACTOR';
+  performer.addEventListener('change', () => {
+    supplierRow.hidden = performer.value !== 'CONTRACTOR';
+  });
+  const siteList = h(
+    'datalist',
+    { id: 'p-site-list' },
+    sites.map((s) => h('option', { value: s })),
+  );
+  const frequencyList = h(
+    'datalist',
+    { id: 'p-frequency-list' },
+    FREQUENCIES.map((f) => h('option', { value: String(f) }, frequencyText(f))),
+  );
+  const active = editing
+    ? h('input', { name: 'is_active', type: 'checkbox', checked: plan.is_active })
+    : null;
+
+  const form = h(
+    'form',
+    {
+      class: 'detail-form plan-form',
+      novalidate: true,
+      onSubmit: (event) => {
+        event.preventDefault();
+        const raw = Object.fromEntries(new FormData(form));
+        if (active) raw.is_active = active.checked;
+        onSubmit(raw, form, assetCode.value.trim());
+      },
+    },
+    h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
+    h('p', { class: 'form-help' }, 'Fields marked * are required.'),
+    formRow('p-title', 'What is done', input('title', { maxlength: '200' }), {
+      required: true,
+      hint: 'e.g. "Quarterly service, Tower A chiller"',
+    }),
+    formRow(
+      'p-type',
+      'Type',
+      select(
+        'type',
+        PLAN_TYPES.map((t) => [t, valueLabel('work_order_type', t)]),
+      ),
+      {
+        required: true,
+        hint: 'Regulatory visits have a legal deadline.',
+      },
+    ),
+    formRow('p-asset_code', 'Asset code', assetCode, {
+      hint: 'The site, building and trade then follow the asset.',
+    }),
+    formRow('p-site', 'Site', input('site', { list: 'p-site-list', maxlength: '200' }), {
+      hint: 'Without an asset.',
+    }),
+    formRow('p-building', 'Building', input('building', { maxlength: '100' })),
+    formRow(
+      'p-category',
+      'Trade',
+      select(
+        'category',
+        CATEGORIES.map((c) => [c, valueLabel('category', c)]),
+        { empty: "The asset's trade" },
+      ),
+    ),
+    formRow('p-location', 'Location', input('location', { maxlength: '200' })),
+    formRow(
+      'p-estimated_hours',
+      'Hours per visit',
+      input('estimated_hours', {
+        type: 'number',
+        min: '0.5',
+        max: '200',
+        step: '0.5',
+        inputmode: 'decimal',
+      }),
+      {
+        required: true,
+        hint: 'In half hours. Above 3 h 30 the visit will be split into several blocks.',
+      },
+    ),
+    formRow(
+      'p-frequency_weeks',
+      'Every (weeks)',
+      input('frequency_weeks', {
+        type: 'number',
+        min: '1',
+        max: '104',
+        step: '1',
+        list: 'p-frequency-list',
+      }),
+      { required: true, hint: '1, 2, 4, 8, 13 (quarterly), 26 or 52 (yearly).' },
+    ),
+    formRow(
+      'p-anchor_week',
+      'First visit',
+      input('anchor_week', {
+        type: 'week',
+        value: plan?.anchor_week ?? defaultWeek,
+        placeholder: '2026-W45',
+      }),
+      {
+        required: true,
+        hint: editing
+          ? 'Changing it moves every planned visit.'
+          : 'The next visits follow every period.',
+      },
+    ),
+    formRow(
+      'p-end_week',
+      'Last week',
+      input('end_week', { type: 'week', placeholder: '2027-W52' }),
+      {
+        hint: 'End of the contract. Empty: no end.',
+      },
+    ),
+    formRow(
+      'p-schedule_mode',
+      'Calendar',
+      select(
+        'schedule_mode',
+        SCHEDULE_MODES.map((m) => [m, valueLabel('schedule_mode', m)]),
+      ),
+      { hint: '"From the last visit": the next visits restart from the week a visit is closed.' },
+    ),
+    formRow(
+      'p-tolerance_weeks',
+      'Tolerance (weeks)',
+      input('tolerance_weeks', { type: 'number', min: '0', max: '8', step: '1' }),
+      { hint: 'How far one visit may move. Empty: a quarter of the period, at most 8.' },
+    ),
+    formRow(
+      'p-season_from_week',
+      'Season from week',
+      input('season_from_week', { type: 'number', min: '1', max: '53', step: '1' }),
+    ),
+    formRow(
+      'p-season_to_week',
+      'Season to week',
+      input('season_to_week', { type: 'number', min: '1', max: '53', step: '1' }),
+      { hint: 'e.g. 14 to 22 for checks before summer. May run over the new year (45 to 10).' },
+    ),
+    formRow('p-performed_by', 'Done by', performer, { required: true }),
+    supplierRow,
+    formRow(
+      'p-description',
+      'Instructions',
+      h('textarea', { name: 'description', rows: '3', maxlength: '4000' }, plan?.description ?? ''),
+    ),
+    active
+      ? formRow('p-is_active', 'Active', active, {
+          hint: 'An inactive plan keeps its history and creates no more visits.',
+        })
+      : null,
+    siteList,
+    frequencyList,
+    h(
+      'div',
+      { class: 'form-actions' },
+      h(
+        'button',
+        { type: 'submit', class: 'button button-primary online-only' },
+        editing ? 'Save' : 'Create plan',
+      ),
+      h('button', { type: 'button', class: 'button button-secondary', onClick: onClose }, 'Cancel'),
+    ),
+  );
+  replaceChildren(
+    container,
+    panelHeader(editing ? `Edit ${plan.code}` : 'New maintenance plan', onClose),
+    form,
+  );
+}
+
+/** Server errors on the form: `asset_id` is typed as an asset code. Pure. */
+export function planFieldErrors(fields) {
+  const { asset_id: asset, ...rest } = fields;
+  return asset ? { ...rest, asset_code: asset } : rest;
+}

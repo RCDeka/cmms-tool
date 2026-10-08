@@ -6,6 +6,7 @@ import { h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { PLANNING_FIELD_LABELS, planningFieldValue } from './planning.js';
 
 const ACTION_LABELS = {
   CREATE: 'Created',
@@ -39,6 +40,35 @@ export function userFieldValue(field, value) {
   if (field === 'specialty') return valueLabel('category', value);
   return String(value);
 }
+
+/**
+ * Records that are not a table entity (no field definitions in entities.js): their labels
+ * and values. User accounts are for admins only (D39); planning records come with D48.
+ */
+const OTHER_RECORDS = {
+  users: { labels: USER_FIELD_LABELS, value: userFieldValue, url: (id) => `/admin/users/${id}` },
+  maintenance_plans: {
+    labels: PLANNING_FIELD_LABELS,
+    value: planningFieldValue,
+    url: (id) => `/planning/plans/${id}`,
+  },
+  plan_occurrences: { labels: PLANNING_FIELD_LABELS, value: planningFieldValue, url: null },
+  planning_settings: {
+    labels: PLANNING_FIELD_LABELS,
+    value: planningFieldValue,
+    url: () => '/admin/planning',
+  },
+};
+
+/** Record types of the audit log filter, in display order. */
+export const AUDIT_TYPES = [
+  { value: 'assets', label: 'Assets' },
+  { value: 'work_orders', label: 'Work orders' },
+  { value: 'maintenance_plans', label: 'Maintenance plans' },
+  { value: 'plan_occurrences', label: 'Plan visits' },
+  { value: 'planning_settings', label: 'Planning settings' },
+  { value: 'users', label: 'User accounts', adminOnly: true },
+];
 
 /** Adds the people named by the server to the lookups (names instead of "User #id"). */
 export function withPeople(lookups, people = {}) {
@@ -75,12 +105,12 @@ function changeList(entityKey, entry, lookups) {
     { class: 'change-list' },
     fields.map((field) => {
       const { from, to } = entry.changes[field];
-      const isUser = entityKey === 'users';
-      const label = isUser
-        ? (USER_FIELD_LABELS[field] ?? field)
+      const other = OTHER_RECORDS[entityKey];
+      const label = other
+        ? (other.labels[field] ?? field)
         : (fieldForApi(entityKey, field)?.def.label ?? field);
       const show = (value) =>
-        isUser ? userFieldValue(field, value) : displayValue(entityKey, field, value, lookups);
+        other ? other.value(field, value) : displayValue(entityKey, field, value, lookups);
       return h(
         'li',
         {},
@@ -162,8 +192,11 @@ export function historySection(entityKey, id, getLookups) {
 function recordLink(entry) {
   const label = entry.label;
   if (entry.action === 'DELETE') return label;
-  const base = entry.entity_type === 'users' ? '/admin/users' : ENTITIES[entry.entity_type].ui;
-  return h('a', { href: `${base}/${entry.entity_id}`, 'data-link': true }, label);
+  const other = OTHER_RECORDS[entry.entity_type];
+  const url = other
+    ? other.url?.(entry.entity_id)
+    : `${ENTITIES[entry.entity_type].ui}/${entry.entity_id}`;
+  return url ? h('a', { href: url, 'data-link': true }, label) : label;
 }
 
 /**
@@ -180,9 +213,9 @@ export function renderAuditLog(
     'select',
     { id: 'audit-type', onChange: (event) => onFilter(event.target.value || null) },
     h('option', { value: '' }, 'All records'),
-    h('option', { value: 'assets' }, 'Assets'),
-    h('option', { value: 'work_orders' }, 'Work orders'),
-    withUsers ? h('option', { value: 'users' }, 'User accounts') : null,
+    AUDIT_TYPES.filter((t) => withUsers || !t.adminOnly).map((t) =>
+      h('option', { value: t.value }, t.label),
+    ),
   );
   filter.value = entityType ?? '';
   const rows = data.items.map((entry) =>

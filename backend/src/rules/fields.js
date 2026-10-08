@@ -1,9 +1,13 @@
 // Field value schemas for writes (docs/data-model.md → Tables; docs/api-design.md → PUT).
 import { z } from 'zod';
+import { isWeek } from '../lib/iso-week.js';
 import {
   ASSET_STATUSES,
   CATEGORIES,
   CRITICALITIES,
+  PERFORMERS,
+  PLAN_TYPES,
+  SCHEDULE_MODES,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
@@ -71,6 +75,47 @@ export const WORK_ORDER_FIELDS = {
   work_report: optionalText(4000),
 };
 
+/** ISO week 'YYYY-Www' that exists (2026 has a week 53, 2027 has not). */
+export const isoWeek = z
+  .string()
+  .regex(/^\d{4}-W\d{2}$/, 'Expected a week as YYYY-Www')
+  .refine(isWeek, 'Not a valid week');
+
+/** Hours in half-hour steps (P4). */
+const halfHours = (max) =>
+  z.number().positive().max(max).multipleOf(0.5, 'Use steps of half an hour');
+
+/** Editable maintenance plan fields and their value schemas (D48). */
+export const PLAN_FIELDS = {
+  title: requiredText(200),
+  description: optionalText(4000),
+  type: z.enum(PLAN_TYPES),
+  category: z.enum(CATEGORIES),
+  asset_id: optionalId,
+  site: requiredText(200),
+  building: optionalText(100),
+  location: optionalText(200),
+  estimated_hours: halfHours(200),
+  frequency_weeks: z.number().int().min(1).max(104),
+  anchor_week: isoWeek,
+  end_week: z.preprocess(blankToNull, isoWeek.nullable()),
+  schedule_mode: z.enum(SCHEDULE_MODES),
+  tolerance_weeks: z.number().int().min(0).max(8),
+  season_from_week: z.number().int().min(1).max(53).nullable(),
+  season_to_week: z.number().int().min(1).max(53).nullable(),
+  performed_by: z.enum(PERFORMERS),
+  supplier: optionalText(150),
+  is_active: z.boolean(),
+};
+
+/** Planning settings, administrators only (P16). */
+export const PLANNING_SETTINGS_FIELDS = {
+  daily_hours: halfHours(12),
+  reserve_percent: z.number().int().min(0).max(80),
+  release_weeks_ahead: z.number().int().min(1).max(12),
+  max_block_hours: halfHours(8),
+};
+
 export const EDITABLE_FIELDS = { assets: ASSET_FIELDS, work_orders: WORK_ORDER_FIELDS };
 
 /**
@@ -97,6 +142,10 @@ export const READ_ONLY_FIELDS = {
     'reviewed_by',
     'reviewed_at',
     'review_note',
+    // Set by the release of a plan's visit (D48).
+    'plan_id',
+    'planned_week',
+    'plan',
   ],
 };
 

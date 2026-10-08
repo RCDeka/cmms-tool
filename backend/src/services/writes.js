@@ -77,11 +77,13 @@ export function toColumns(entity, changes) {
  * @param {string} options.now ISO datetime
  * @param {(current: object) => object} [options.prepare] checks business rules on the current
  *   row and returns the final changes (throw HttpError to refuse); runs only when applying
+ * @param {(current: object, changes: object) => void} [options.afterWrite] follow-up writes in
+ *   the same transaction, once the changes are applied (e.g. a plan's visit, BR-P5)
  * @returns {{ status: 'applied' } | { status: 'conflict' | 'locked', conflictId: number }}
  */
 export function versionedUpdate(
   db,
-  { entity, id, changes, version, editedAt, user, now, prepare },
+  { entity, id, changes, version, editedAt, user, now, prepare, afterWrite },
 ) {
   // `entity` comes from code (never user input) and is also the table name.
   return db
@@ -175,6 +177,7 @@ export function versionedUpdate(
           at: now,
         });
       }
+      afterWrite?.(current, apiChanges);
       return { status: 'applied' };
     })
     .immediate();
@@ -200,8 +203,9 @@ const resolutionBody = z.strictObject({
  * @param {{ id: number }} options.user
  * @param {string} options.now ISO datetime
  * @param {(current: object, changes: object) => object} [options.prepare] business rules
+ * @param {(current: object, changes: object) => void} [options.afterWrite] follow-up writes
  */
-export function resolveConflict(db, { entity, id, body, user, now, prepare }) {
+export function resolveConflict(db, { entity, id, body, user, now, prepare, afterWrite }) {
   const parsed = resolutionBody.safeParse(body ?? {});
   if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
   const { conflict_id: conflictId, choice, fields } = parsed.data;
@@ -264,6 +268,7 @@ export function resolveConflict(db, { entity, id, body, user, now, prepare }) {
         version: current.version + 1,
         at: now,
       });
+      afterWrite?.(current, applied);
     })
     .immediate();
 }

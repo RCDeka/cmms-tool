@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 
 This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
-> **Status:** MVP complete (phases 0–7). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. Phases 0–6: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Phase 7 added the accessibility, performance and security passes, backups and the deployment guide below. Phases 8–15 followed (see `docs/roadmap-mvp.md`), the latest being a simple interface for bank staff to submit and follow maintenance requests.
+> **Status:** MVP complete (phases 0–7). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. Phases 0–6: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Phase 7 added the accessibility, performance and security passes, backups and the deployment guide below. Phases 8–17 followed (see `docs/roadmap-mvp.md`): staff requests with a supervisor review, and the start of preventive maintenance: maintenance plans, the daily release of their work orders, and a 52-week year planner showing the load against the team's capacity.
 
 ## Tech stack
 
@@ -63,6 +63,7 @@ cd backend  && npm run lint          # ESLint + Prettier check (npm run format t
 cd backend  && npm run db:migrate    # apply new migrations (also done at server start)
 cd backend  && npm run db:reset -- --with-conflicts   # reseed with 3 demo conflicts
 cd backend  && npm run db:backup                       # backup into BACKUP_DIR (keeps 14 days)
+cd backend  && npm run pm:release                      # create the work orders of plan visits due (daily job)
 cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
 cd frontend && npm install && npm test               # frontend logic tests
 ```
@@ -132,14 +133,16 @@ sudo nano /etc/fast-cmms/fast-cmms.env
 - `SEED_PASSWORD`: only if you load the demo data (step 5); at least 10 characters.
 - Changing `JWT_SECRET` later logs every user out.
 
-### 4. Start the service and the backups
+### 4. Start the service, the backups and the daily release
 
 ```bash
 sudo cp /opt/fast-cmms/deploy/systemd/fast-cmms.service \
         /opt/fast-cmms/deploy/systemd/fast-cmms-backup.service \
-        /opt/fast-cmms/deploy/systemd/fast-cmms-backup.timer /etc/systemd/system/
+        /opt/fast-cmms/deploy/systemd/fast-cmms-backup.timer \
+        /opt/fast-cmms/deploy/systemd/fast-cmms-pm-release.service \
+        /opt/fast-cmms/deploy/systemd/fast-cmms-pm-release.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now fast-cmms fast-cmms-backup.timer
+sudo systemctl enable --now fast-cmms fast-cmms-backup.timer fast-cmms-pm-release.timer
 
 systemctl status fast-cmms --no-pager            # active (running)
 curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
@@ -194,6 +197,7 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Update to the latest version | `cd /opt/fast-cmms && sudo git pull && cd backend && sudo npm ci --omit=dev && sudo systemctl restart fast-cmms` (new migrations run at start) |
 | Backup now | `sudo systemctl start fast-cmms-backup && ls /var/backups/fast-cmms` |
 | Next scheduled backups | `systemctl list-timers fast-cmms-backup` |
+| Release preventive work orders now | `sudo systemctl start fast-cmms-pm-release && journalctl -u fast-cmms-pm-release -n 3` |
 | Restore a backup | see below |
 
 Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`). Copy them off the server too (e.g. `rsync` to another machine): a backup on the same disk does not survive the loss of the VPS.
@@ -244,7 +248,7 @@ sudo systemctl start fast-cmms
 └── deploy/
     ├── fast-cmms.env.example production settings template
     ├── nginx/                site config + security headers snippet
-    └── systemd/              API service, backup service and nightly timer
+    └── systemd/              API service, backup and preventive release services with their timers
 ```
 
 ## Documentation

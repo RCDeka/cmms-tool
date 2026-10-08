@@ -36,8 +36,11 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `POST /feedback` (suggest an improvement) | yes | yes | yes | yes |
 | `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
 | Conflict console and resolution | no | no | yes | yes |
+| Read plans, the year planner and the planning settings (D48) | no | yes | yes | yes |
+| `POST /plans`, `PUT /plans/:id`, `POST /planning/release` | no | no | yes | yes |
+| `PUT /planning/settings` (reserve, daily capacity, release horizon, longest block) | no | no | no | yes |
 
-Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard` and `/api/audit-log` (403), whatever the method (D46).
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans` and `/api/planning` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -64,12 +67,21 @@ WorkOrder   { id, number, type, status, priority, title, description,
               estimated_hours, actual_hours, work_report,
               client_id, created_by: UserRef,
               review_status, reviewed_by: UserRef|null, reviewed_at, review_note,
+              plan_id, plan: { id, code, title } | null, planned_week,
               version, has_conflict, updated_by: UserRef|null, created_at, updated_at }
 Page<T>     { total, page, pages, items: T[] }
 Request     { id, number, status, priority, title, description, site, location, category,
               created_on, due_on, started_on, closed_on, work_report, client_id,
               review_status, review_note, reviewed_at, assignee: UserRef|null, comment_count, last_comment_at, created_at, updated_at }
 Comment     { id, work_order_id, body, user: UserRef, user_role, created_at }
+Plan        { id, code, title, description, type, category, asset_id,
+              asset: { id, code, name } | null, site, building, location, estimated_hours,
+              frequency_weeks, anchor_week, end_week, schedule_mode, tolerance_weeks,
+              season_from_week, season_to_week, performed_by, supplier, is_active, version,
+              created_by: UserRef, updated_by: UserRef|null, created_at, updated_at,
+              next_week, warnings: ['LONG_VISIT']? }
+Occurrence  { id, due_week, week, status, skip_reason,
+              work_order: { id, number, status } | null, warnings: ['OUT_OF_SEASON']? }
 ```
 
 `password_hash` is never returned.
@@ -198,7 +210,8 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Reject: `{ "decision": "REJECT", "version": number, "reason": string (1–2000) }`. The work order becomes `CANCELLED`.
 - `200 { "reviewed": true, "version": N+1, "item": WorkOrder }`.
 - Errors: 400 invalid body (missing `assignee_id` or `reason`, unknown field); 403; 404; 409 already reviewed (`BR-R6`), changed since (`BR-V1`) or open conflict (`BR-V4`); 422 not a staff request (`BR-R6`), assignee or supervisor not eligible (`BR-W3`), due date before creation (`BR-W8`).
-- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403). While a request is `PENDING`, that `PUT` refuses `status` and `assignee_id` changes (422 `BR-R7`).
+- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403), as are `plan_id`, `plan` and `planned_week` (set by the release, D48).
+- A plan's visit follows its work order: cancelling it skips the occurrence (BR-P7), closing it restarts a floating plan (BR-P5). While a request is `PENDING`, that `PUT` refuses `status` and `assignee_id` changes (422 `BR-R7`).
 
 ### GET /api/work-orders/:id/comments, POST /api/work-orders/:id/comments (added, D46)
 - Roles: TECHNICIAN, SUPERVISOR, ADMIN, on any work order.
@@ -257,7 +270,7 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 ```
 
 ### GET /api/audit-log
-- Roles: SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `entity_type?` (`assets` | `work_orders` | `users`).
+- Roles: SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `entity_type?` (`assets` | `work_orders` | `users` | `maintenance_plans` | `plan_occurrences` | `allocations` | `planning_settings`).
 - Changes to user accounts (`users`) are for administrators: supervisors don't get them in the list, and asking for `entity_type=users` answers 403 (D39). Password entries carry only `note: { password_reset: true }` or `{ password_changed: true }`.
 - `200 { total, page, pages, items: [AuditEntry], people }`, newest first. Errors: 400; 403.
 
@@ -331,9 +344,55 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
-## Planned: preventive maintenance (D48)
+## Maintenance plans and the year planner (added, D48, D49)
 
-`/api/plans`, `/api/plan-occurrences`, `/api/planning/*`, `/api/schedule/*` and `/api/my-week`, specified in `docs/spec-preventive-maintenance.md` §6. Not implemented yet.
+Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. Occurrence moves and skips, blocked weeks (Phase 18), the week scheduler and My week (Phase 19) and the balancing assistant (Phase 20) are specified in `docs/spec-preventive-maintenance.md` §6.
+
+### GET /api/plans
+- Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, building, location or supplier), `site?` (`|`-separated), `building?` (`|`), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
+- `200 Page<Plan>`; `next_week` is the first visit from the current week on (skipped ones excluded).
+
+### POST /api/plans
+- Roles: SUPERVISOR, ADMIN.
+- Body: `{ "title", "type", "estimated_hours", "frequency_weeks", "anchor_week", "asset_id"?, "site"?, "building"?, "category"?, "location"?, "description"?, "end_week"?, "schedule_mode"?, "tolerance_weeks"?, "season_from_week"?, "season_to_week"?, "performed_by"?, "supplier"? }`. `asset_id` or `site` is required; `category` is required without an asset (it defaults to the asset's); `tolerance_weeks` defaults to `min(8, floor(frequency_weeks / 4))`.
+- `201 { "created": true, "item": Plan + { occurrences: Occurrence[] } }`: the code is automatic (`PM-0063`) and the visits are stored up to the horizon (BR-P1). `occurrences` lists the next 8 visits from the current week.
+- Errors: 400 (unknown field, `estimated_hours` not in half hours, end before the anchor, half a season, contractor without `supplier`, neither asset nor site); 403; 422 `BR-P9` (unknown asset, or a site or building other than the asset's).
+
+### GET /api/plans/:id, PUT /api/plans/:id
+- `GET` → `200 Plan + { occurrences }` (next 8 visits). Errors: 400 malformed id, 404.
+- `PUT` (SUPERVISOR, ADMIN): any field of the creation body and `is_active`, with `version` (required). `200 { "updated": boolean, "item" }` (`updated: false` when nothing changed). A change of `anchor_week`, `frequency_weeks`, `end_week` or `is_active` replaces the planned visits (BR-P2). Errors: 400 (no field, invalid value); 403; 404; 409 `BR-V1` (changed since the user opened it); 422 `BR-P9`.
+
+### GET /api/planning/timeline
+- Query: `from?` (first week, default the current week) **or** `year?` (calendar year: weeks 1 to 52 or 53 of that year; both → 400), `weeks?` (1–53, default 52; ignored with `year`), `group_by?` (`site` default, `building`, `category`), and the plan filters `q?`, `site?`, `building?`, `category?`, `type?`, `performed_by?`. The range must start between 104 weeks before and 52 weeks after the current week (400 otherwise). Only active plans are shown.
+- Runs the release first (BR-P6), so the chips show every work order due.
+- `200`:
+  ```
+  { "from": "2026-W41", "to": "2027-W39", "current_week": "2026-W41", "group_by": "site",
+    "weeks": [{ "week": "2026-W41", "monday": "2026-10-05" }, ...],
+    "settings": { daily_hours, reserve_percent, release_weeks_ahead, max_block_hours, version, updated_by, updated_at },
+    "capacity": { "weekly": 98, "by_category": { "HVAC": 24.5, "ELECTRICAL": 49, "GENERAL": 24.5 } },
+    "figures": [{ "week", "planned_hours", "by_category": { "HVAC": 40 }, "by_site": {...},
+                  "capacity", "load", "level": "OK" | "TIGHT" | "OVER" | null,
+                  "contractor_visits", "sites_visited" }, ...],
+    "tiles": { "workload": { average_load, peak_load, weeks_over, weeks_tight },
+               "trade_balance": [{ category, planned_hours, capacity_hours, load }],
+               "peak_week": { week, load, planned_hours, capacity, excess_hours } | null,
+               "site_spread": { average, peak },
+               "contractor_visits": { total, peak, peak_week } },
+    "groups": [{ "key", "site"? , "building"?, "category"?, "hours": [per week, internal only],
+                 "plans": [{ id, code, title, type, category, site, building, estimated_hours,
+                             frequency_weeks, anchor_week, tolerance_weeks, schedule_mode,
+                             performed_by, supplier, warnings, occurrences: Occurrence[] }] }] }
+  ```
+- `load` is null without capacity (e.g. a trade nobody has as specialty). Errors: 400.
+
+### POST /api/planning/release
+- Roles: SUPERVISOR, ADMIN. Releases now (BR-P6), in the name of the user. `200 { "released": 3, "work_order_ids": [...] }`; a second call answers `{ "released": 0, "work_order_ids": [] }`.
+- The daily job `npm run pm:release` does the same in the name of each plan's author.
+
+### GET /api/planning/settings, PUT /api/planning/settings
+- `GET` (every maintenance role) → `200 { daily_hours, reserve_percent, release_weeks_ahead, max_block_hours, version, updated_by: UserRef|null, updated_at, capacity_people }` (`capacity_people`: active technicians and supervisors).
+- `PUT` (ADMIN only, 403 for supervisors): `{ "reserve_percent"?: 0–80, "daily_hours"?: 0.5–12 (half hours), "release_weeks_ahead"?: 1–12, "max_block_hours"?: 0.5–8 (half hours), "version" }`. `200 { "updated": boolean, "item" }`; the change applies at once to every figure and is logged (`entity_type = planning_settings`). Errors: 400; 403; 409 `BR-V1`.
 
 ## Future AI endpoints (not in the MVP)
 
@@ -352,3 +411,4 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
+| Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `GET /api/planning/timeline`, `POST /api/planning/release`, `GET/PUT /api/planning/settings` |

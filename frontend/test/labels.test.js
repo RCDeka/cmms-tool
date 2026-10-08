@@ -15,8 +15,15 @@ describe('enums', () => {
     'WORK_ORDER_STATUSES',
     'TERMINAL_WORK_ORDER_STATUSES',
     'WORK_ORDER_PRIORITIES',
+    'PLAN_TYPES',
+    'SCHEDULE_MODES',
+    'OCCURRENCE_STATUSES',
   ])('%s matches the backend', (name) => {
     expect(frontend[name]).toEqual(backend[name]);
+  });
+
+  it('PERFORMERS matches the backend', () => {
+    expect(frontend.PERFORMERS).toEqual(backend.PERFORMERS);
   });
 });
 

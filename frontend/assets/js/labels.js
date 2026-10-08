@@ -38,6 +38,11 @@ export const VALUE_LABELS = {
   },
   work_order_priority: { LOW: 'Low', NORMAL: 'Normal', HIGH: 'High', URGENT: 'Urgent' },
   review_status: { PENDING: 'To review', APPROVED: 'Approved', REJECTED: 'Rejected' },
+  // Preventive maintenance (D48).
+  schedule_mode: { FIXED: 'Fixed calendar', FLOATING: 'From the last visit' },
+  performed_by: { INTERNAL: 'Internal team', CONTRACTOR: 'Contractor' },
+  occurrence_status: { PLANNED: 'Planned', RELEASED: 'Work order created', SKIPPED: 'Skipped' },
+  planning_group: { site: 'Site', building: 'Building', category: 'Trade' },
 };
 
 /**

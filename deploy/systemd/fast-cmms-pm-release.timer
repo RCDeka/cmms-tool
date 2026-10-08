@@ -1,0 +1,14 @@
+# Releases the preventive work orders every morning (install as
+# /etc/systemd/system/fast-cmms-pm-release.timer and enable with:
+# systemctl enable --now fast-cmms-pm-release.timer).
+[Unit]
+Description=Daily release of Fast-CMMS preventive work orders
+
+[Timer]
+# After the nightly backup (02:30), before the teams start.
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

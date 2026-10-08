@@ -36,12 +36,13 @@ describe('seedDatabase', () => {
   });
   afterAll(() => ctx.cleanup());
 
-  it('creates 6 users, 500 assets, 207 work orders (7 staff requests) and no conflict', () => {
+  it('creates 6 users, 500 assets, 207 work orders (7 staff requests), 62 plans and no conflict', () => {
     expect(ctx.counts).toEqual({
       users: 6,
       assets: 500,
       workOrders: 207,
       requests: 7,
+      plans: 62,
       conflicts: 0,
     });
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
@@ -176,6 +177,55 @@ describe('seedDatabase', () => {
     }
   });
 
+  it('creates maintenance plans of every trade, mode and kind (D48)', () => {
+    const distinct = (col) =>
+      all(`SELECT DISTINCT ${col} v FROM maintenance_plans`)
+        .map((r) => r.v)
+        .sort();
+    expect(distinct('category')).toEqual([...CATEGORIES].sort());
+    expect(distinct('schedule_mode')).toEqual(['FIXED', 'FLOATING']);
+    expect(distinct('type')).toEqual(['PREVENTIVE', 'REGULATORY']);
+    expect(count("SELECT count(*) FROM maintenance_plans WHERE performed_by = 'CONTRACTOR'")).toBe(
+      8,
+    );
+    expect(
+      count('SELECT count(*) FROM maintenance_plans WHERE estimated_hours > 3.5'),
+    ).toBeGreaterThan(0);
+    expect(count('SELECT count(*) FROM maintenance_plans WHERE season_from_week IS NOT NULL')).toBe(
+      2,
+    );
+    // Plans follow their asset (BR-P9) and are logged at creation.
+    expect(
+      count(
+        `SELECT count(*) FROM maintenance_plans p JOIN assets a ON a.id = p.asset_id
+         WHERE p.site <> a.site OR p.building IS NOT a.building OR p.category <> a.category`,
+      ),
+    ).toBe(0);
+    expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'maintenance_plans'")).toBe(
+      62,
+    );
+  });
+
+  it('stores two years of occurrences and releases nothing (the daily job does)', () => {
+    expect(count('SELECT min(week) FROM plan_occurrences')).toBe('2026-W40');
+    // Horizon: 104 weeks after the current week.
+    expect(count('SELECT max(week) FROM plan_occurrences') <= '2028-W39').toBe(true);
+    expect(count("SELECT count(*) FROM plan_occurrences WHERE status <> 'PLANNED'")).toBe(0);
+    expect(count('SELECT count(*) FROM work_orders WHERE plan_id IS NOT NULL')).toBe(0);
+  });
+
+  it('piles visits up in some weeks, so the planner has peaks to balance', () => {
+    const hours = all(
+      `SELECT o.week, sum(p.estimated_hours) h FROM plan_occurrences o
+       JOIN maintenance_plans p ON p.id = o.plan_id
+       WHERE p.performed_by = 'INTERNAL' AND o.week BETWEEN '2026-W40' AND '2027-W38'
+       GROUP BY o.week`,
+    ).map((r) => r.h);
+    // Weekly capacity of the 4 technicians and supervisors: 4 × 35 h − 30 % = 98 h.
+    expect(Math.max(...hours)).toBeGreaterThan(98);
+    expect(Math.min(...hours)).toBeLessThan(40);
+  });
+
   it('refuses to seed a database that already has data', async () => {
     await expect(
       seedDatabase(db, { password: TEST_PASSWORD, today: TODAY, now: NOW }),
@@ -192,6 +242,8 @@ describe('seedDatabase options', () => {
         'SELECT * FROM assets ORDER BY id',
         'SELECT * FROM work_orders ORDER BY id',
         'SELECT id, username, role, site FROM users ORDER BY id',
+        'SELECT * FROM maintenance_plans ORDER BY id',
+        'SELECT * FROM plan_occurrences ORDER BY id',
       ]) {
         expect(a.db.prepare(sql).all()).toEqual(b.db.prepare(sql).all());
       }

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/assets/css/table.css" />
     <link rel="stylesheet" href="/assets/css/detail.css" />
     <link rel="stylesheet" href="/assets/css/components.css" />
+    <link rel="stylesheet" href="/assets/css/planning.css" />
     <script type="module" src="/assets/js/app.js"></script>
     <!-- Fetch the whole module graph in parallel instead of level by level. -->
     <link rel="modulepreload" href="/assets/js/account.js" />
@@ -35,6 +36,9 @@
     <link rel="modulepreload" href="/assets/js/layout.js" />
     <link rel="modulepreload" href="/assets/js/login.js" />
     <link rel="modulepreload" href="/assets/js/network.js" />
+    <link rel="modulepreload" href="/assets/js/plan-panel.js" />
+    <link rel="modulepreload" href="/assets/js/planning.js" />
+    <link rel="modulepreload" href="/assets/js/planning-settings.js" />
     <link rel="modulepreload" href="/assets/js/preload.js" />
     <link rel="modulepreload" href="/assets/js/queue.js" />
     <link rel="modulepreload" href="/assets/js/refs.js" />
@@ -75,6 +79,9 @@
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
           <a href="/work-orders" data-link data-nav="work_orders">Work orders</a>
         </li>
+        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+          <a href="/planning" data-link data-nav="planning">Year planner</a>
+        </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
           <a href="/conflicts" data-link data-nav="conflicts">Conflicts</a>
         </li>
@@ -86,6 +93,9 @@
         </li>
         <li data-roles="ADMIN" hidden>
           <a href="/admin/feedback" data-link data-nav="feedback">Suggestions</a>
+        </li>
+        <li data-roles="ADMIN" hidden>
+          <a href="/admin/planning" data-link data-nav="planning_settings">Planning settings</a>
         </li>
       </ul>
       <div class="user-box">

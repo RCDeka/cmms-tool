@@ -54,6 +54,9 @@ const WORK_ORDER_KEYS = [
   'reviewed_by',
   'reviewed_at',
   'review_note',
+  'plan_id',
+  'plan',
+  'planned_week',
   'created_at',
   'updated_at',
 ].sort();

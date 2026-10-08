@@ -28,8 +28,9 @@ backend/src/
   middleware/          auth (JWT), require-role, validate (zod), error handler
   routes/              one router per resource: thin, no SQL
   services/            SQL (prepared statements) + transactions + calling rules
-  rules/               pure functions: enums, permissions, work-order-status, versioning, conflict diff, kpi
-  lib/                 small helpers (dates in APP_TIMEZONE, pagination)
+  rules/               pure functions: enums, permissions, work-order-status, versioning, conflict diff, kpi,
+                       planning (occurrence series, warnings, capacity, weekly figures and tiles)
+  lib/                 small helpers (dates in APP_TIMEZONE, ISO weeks, pagination)
 ```
 
 Request flow: `route → validate → service → rules → SQL`. Errors are thrown as `HttpError(status, message, details)` and formatted by the error handler.
@@ -40,7 +41,7 @@ Request flow: `route → validate → service → rules → SQL`. Errors are thr
 frontend/
   index.html                  shell: sidebar, status bar, #main-content, #table-container, #detail-container
   sw.js                       service worker (must sit at the root for its scope)
-  assets/css/                 base, layout, table, detail, components (brief) + dashboard, conflicts
+  assets/css/                 base, layout, table, detail, components (brief), planning (year planner)
   assets/js/
     app.js                    entry point: init DB, auth, router, network, queue flush
     config.js                 APP_NAME, API base, timeout, page size
@@ -69,6 +70,9 @@ frontend/
     requests.js               staff pages: open / all requests, request form, request page (D46)
     comments.js               work order conversation (staff request page, work order panel)
     review.js                 review box of a staff request: approve and assign, or reject (D47)
+    planning.js               year planner: filters in the URL, tiles, load strip, 52-week grid (D48)
+    plan-panel.js             plan panel (the visit clicked, details, next visits) and plan form
+    planning-settings.js      planning settings page (administrators) with the capacity preview
     dom.js                    escapeHtml, element helpers
   assets/vendor/              idb, chart.js (vendored, D17)
   test/                       Vitest + fake-indexeddb + jsdom
@@ -109,6 +113,9 @@ export const ENTITIES = {
 | `/requests/all?page=N` | all my requests (STAFF) |
 | `/requests/new` | request form (STAFF) |
 | `/requests/:id` | a request: progress, next step, details, history, comments (STAFF; the maintenance team is sent to `/work-orders/:id`) |
+| `/planning?from=…\|year=…&group=…&site=…&category=…&type=…&performed_by=…&q=…` | year planner (maintenance roles, online only, D48) |
+| `/planning/plans/new`, `/planning/plans/:id?occurrence=N` | planner + plan form or plan panel (split view; `occurrence`: the visit clicked) (creation: SUPERVISOR, ADMIN) |
+| `/admin/planning` | planning settings (ADMIN, online only) |
 
 Staff members only reach `/requests…` and `/account`; any other page sends them to `/requests`. The maintenance roles get a short notice on `/requests` and `/requests/new`.
 
@@ -225,9 +232,11 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - Display (accessibility: never color alone): amber row background + ⚠ icon + text badge "Conflict" in the table. Banner and badge in the detail panel.
 - Console `/conflicts`: list with the record, the author and timestamp of each version. The detail view shows the two versions side by side, highlights divergent fields (BR-V6) and offers **Accept version A**, **Accept version B**, **Merge manually** (choose the value per divergent field).
 
-## Planned: preventive maintenance (D48)
+## Preventive maintenance (D48, D49)
 
-Two new screens, `/planning` (year planner, 52 weeks) and `/schedule` (week scheduler, days × technicians), plus `/my-week` for technicians (readable offline). Both planning screens are online only. See `docs/spec-preventive-maintenance.md` §7–9.
+- **Year planner** (`/planning`, Phase 17): reads `GET /api/planning/timeline`, which releases the work orders due first (BR-P6). Online only (P18): nothing is cached in IndexedDB; offline, the page says it needs a connection. The timeline is kept in memory while the user stays on the planner, so opening or closing a plan panel does not fetch it again (a filter change, a save or leaving the planner does). Plans are created and edited in the side panel (`POST`/`PUT /api/plans`), never queued offline.
+- **Release job**: `npm run pm:release` (`node src/db/cli.js release`), run daily by `deploy/systemd/fast-cmms-pm-release.timer` (04:00, after the backup).
+- **Planned**: `/schedule` (week scheduler, days × technicians) and `/my-week` for technicians (readable offline), Phases 18–20, `docs/spec-preventive-maintenance.md` §7–9.
 
 ## AI readiness (future)
 

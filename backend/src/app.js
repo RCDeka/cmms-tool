@@ -14,6 +14,8 @@ import { conflictsRouter } from './routes/conflicts.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { healthRouter } from './routes/health.js';
+import { planningRouter } from './routes/planning.js';
+import { plansRouter } from './routes/plans.js';
 import { referenceRouter } from './routes/reference.js';
 import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
 import { workOrdersRouter } from './routes/work-orders.js';
@@ -24,6 +26,8 @@ import { createCommentService } from './services/comments.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
 import { createFeedbackService } from './services/feedback.js';
+import { createPlanService } from './services/plans.js';
+import { createPlanningService } from './services/planning.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createRequestService } from './services/requests.js';
 import { createUserService } from './services/users.js';
@@ -71,6 +75,8 @@ export function createApp({
   const feedback = createFeedbackService(db);
   const comments = createCommentService(db);
   const requests = createRequestService(db, { workOrders, comments });
+  const plans = createPlanService(db);
+  const planning = createPlanningService(db, { workOrders });
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -112,7 +118,15 @@ export function createApp({
   // Staff members only submit and follow their own requests (D46): the maintenance data is
   // closed to them. 403 rather than 404, like any other role restriction.
   app.use(
-    ['/api/assets', '/api/work-orders', '/api/conflicts', '/api/dashboard', '/api/audit-log'],
+    [
+      '/api/assets',
+      '/api/work-orders',
+      '/api/conflicts',
+      '/api/dashboard',
+      '/api/audit-log',
+      '/api/plans',
+      '/api/planning',
+    ],
     requireRole(...MAINTENANCE_ROLES),
   );
   app.use('/api/requests', requestsRouter({ requests, comments, timeZone: config.timeZone, now }));
@@ -129,6 +143,8 @@ export function createApp({
   app.use('/api/assets', assetsRouter({ assets, now }));
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api/conflicts', conflictsRouter({ conflicts }));
+  app.use('/api/plans', plansRouter({ plans, timeZone: config.timeZone, now }));
+  app.use('/api/planning', planningRouter({ planning, timeZone: config.timeZone, now }));
   app.use('/api/dashboard', dashboardRouter({ dashboard, timeZone: config.timeZone, now }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);

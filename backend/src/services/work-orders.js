@@ -20,6 +20,7 @@ import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
 import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
+import { followWorkOrder } from './occurrences.js';
 import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
 /** POST /api/work-orders body (BR-W9). Status, number, dates and authorship are set by the server. */
@@ -89,6 +90,8 @@ const FIELDS = [
   'review_status',
   'reviewed_at',
   'review_note',
+  'plan_id',
+  'planned_week',
   'created_at',
   'updated_at',
 ];
@@ -96,14 +99,15 @@ const FIELDS = [
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
     a.id AS a__id, a.code AS a__code, a.name AS a__name, a.site AS a__site, a.status AS a__status,
     ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')},
-    ${userRefColumns('rv')}
+    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title
   FROM work_orders w
   LEFT JOIN assets a ON a.id = w.asset_id
   LEFT JOIN users asg ON asg.id = w.assignee_id
   LEFT JOIN users sup ON sup.id = w.supervisor_id
   LEFT JOIN users cb ON cb.id = w.created_by
   LEFT JOIN users ub ON ub.id = w.updated_by
-  LEFT JOIN users rv ON rv.id = w.reviewed_by`;
+  LEFT JOIN users rv ON rv.id = w.reviewed_by
+  LEFT JOIN maintenance_plans pl ON pl.id = w.plan_id`;
 
 /** Whitelisted sort keys (docs/api-design.md → GET /api/work-orders). */
 export const WORK_ORDER_SORTS = {
@@ -140,6 +144,8 @@ export function toWorkOrder(row) {
   wo.created_by = userRef(row, 'cb');
   wo.updated_by = userRef(row, 'ub');
   wo.reviewed_by = userRef(row, 'rv');
+  wo.plan =
+    row.plan_id === null ? null : { id: row.plan_id, code: row.pl__code, title: row.pl__title };
   return wo;
 }
 
@@ -276,6 +282,52 @@ export function createWorkOrderService(db) {
       `SELECT ${expression} AS value, count(*) AS count FROM work_orders
        WHERE created_on BETWEEN @from AND @to GROUP BY value`,
     );
+  /**
+   * Inserts a new work order with its number (BR-W10) and its CREATE audit entry. Call inside
+   * a transaction. `row` holds every column except the number and the timestamps.
+   * @returns {number} id
+   */
+  function insert(row, { userId, stamp }) {
+    const year = row.created_on.slice(0, 4);
+    const values = {
+      client_id: null,
+      plan_id: null,
+      planned_week: null,
+      ...row,
+      number: nextWorkOrderNumber(year, highestNumber.get(year)),
+    };
+    const id = Number(
+      db
+        .prepare(
+          `INSERT INTO work_orders
+            (number, client_id, type, status, priority, title, description, asset_id, site,
+             location, category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
+             created_by, updated_by, review_status, plan_id, planned_week, created_at, updated_at)
+           VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
+             @asset_id, @site, @location, @category, @assignee_id, @supervisor_id, @created_on,
+             @due_on, @estimated_hours, @created_by, @updated_by, @review_status, @plan_id,
+             @planned_week, @stamp, @stamp)`,
+        )
+        .run({ ...values, stamp }).lastInsertRowid,
+    );
+    const { created_by: _createdBy, updated_by: _updatedBy, ...logged } = values;
+    recordAudit(db, {
+      entityType: 'work_orders',
+      entityId: id,
+      action: 'CREATE',
+      changes: creationChanges(logged),
+      label: auditLabel('work_orders', values),
+      userId,
+      version: 1,
+      at: stamp,
+    });
+    return id;
+  }
+
+  /** BR-P5, BR-P7: a plan's visit follows its work order (same transaction). */
+  const afterWrite = (user, now, timeZone) => (current, changes) =>
+    followWorkOrder(db, current, changes, { userId: user.id, stamp: now.toISOString(), timeZone });
+
   const byCategory = groupBy(`coalesce(category, 'UNSPECIFIED')`);
   const byStatus = groupBy('status');
   const byType = groupBy('type');
@@ -295,6 +347,8 @@ export function createWorkOrderService(db) {
 
     /** Work order with its asset, or null. */
     getById,
+
+    insert,
 
     /** The most recently updated work orders (dashboard → Recent activity). */
     recent(limit) {
@@ -321,6 +375,7 @@ export function createWorkOrderService(db) {
         user,
         now: now.toISOString(),
         prepare: (current) => prepareChanges(current, changes, now, timeZone),
+        afterWrite: afterWrite(user, now, timeZone),
       });
       return { ...result, item: getById(id), changes, version };
     },
@@ -334,6 +389,7 @@ export function createWorkOrderService(db) {
         user,
         now: now.toISOString(),
         prepare: (current, changes) => prepareChanges(current, changes, now, timeZone),
+        afterWrite: afterWrite(user, now, timeZone),
       });
       return getById(id);
     },
@@ -396,32 +452,7 @@ export function createWorkOrderService(db) {
             });
           }
 
-          const year = row.created_on.slice(0, 4);
-          row.number = nextWorkOrderNumber(year, highestNumber.get(year));
-          const stamp = now.toISOString();
-          const newId = db
-            .prepare(
-              `INSERT INTO work_orders
-                (number, client_id, type, status, priority, title, description, asset_id, site,
-                 location, category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
-                 created_by, updated_by, review_status, created_at, updated_at)
-               VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
-                 @asset_id, @site, @location, @category, @assignee_id, @supervisor_id, @created_on, @due_on,
-                 @estimated_hours, @created_by, @updated_by, @review_status, @stamp, @stamp)`,
-            )
-            .run({ ...row, stamp }).lastInsertRowid;
-          const { created_by: _createdBy, updated_by: _updatedBy, ...logged } = row;
-          recordAudit(db, {
-            entityType: 'work_orders',
-            entityId: Number(newId),
-            action: 'CREATE',
-            changes: creationChanges(logged),
-            label: auditLabel('work_orders', row),
-            userId: user.id,
-            version: 1,
-            at: stamp,
-          });
-          return { id: Number(newId), created: true };
+          return { id: insert(row, { userId: user.id, stamp: now.toISOString() }), created: true };
         })
         .immediate();
       return { created: id.created, item: getById(id.id) };

@@ -1,14 +1,18 @@
 import argon2 from 'argon2';
 import { addDays } from '../../lib/dates.js';
+import { addWeeks, formatWeek, weekOfDate, weekParts } from '../../lib/iso-week.js';
 import { auditLabel, creationChanges, diffChanges } from '../../rules/audit.js';
 import { snapshotToApi } from '../../rules/conflict-diff.js';
 import { recordAudit } from '../../services/audit.js';
+import { generateOccurrences } from '../../services/occurrences.js';
+import { defaultTolerance, nextPlanCode } from '../../rules/planning.js';
 import { createRandom } from './random.js';
 import {
   ASSET_COMMENTS,
   CATEGORIES,
   EXTERNAL_TECHNICIANS,
   IMPROVEMENT_TITLES,
+  PLAN_TEMPLATES,
   SITES,
   SUPPLIERS,
   WORK_REPORTS,
@@ -18,6 +22,13 @@ const RANDOM_SEED = 20261004;
 // Staff requests use their own random stream, so adding them left the rest of the dataset
 // unchanged (D46).
 const REQUESTS_RANDOM_SEED = 20261008;
+// Maintenance plans too (D48).
+const PLANS_RANDOM_SEED = 20261009;
+/**
+ * Weeks after the current one where most long-period visits are placed, so the year planner
+ * shows peaks to balance: a quarterly plan placed in the first comes back in each of the others.
+ */
+const HOT_OFFSETS = [3, 16, 29, 42];
 const ASSET_COUNT = 500;
 const WORK_ORDER_COUNT = 200;
 // Exact counts so the dataset is predictable (about 4 % broken down, docs/data-model.md).
@@ -240,12 +251,19 @@ export async function seedDatabase(
     const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests);
     insertRequestComments(db, [...users, ...staff], today, now);
     insertHistory(db);
+    const plans = insertPlans(
+      db,
+      today,
+      users,
+      makeTimestamp(createRandom(PLANS_RANDOM_SEED), now),
+    );
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return {
       users: users.length + staff.length,
       assets: assets.length,
       workOrders,
       requests: requests.length,
+      plans,
       conflicts,
     };
   })();
@@ -568,6 +586,112 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
     stmt.run({ ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
   }
   return drafts.length;
+}
+
+/**
+ * Maintenance plans from PLAN_TEMPLATES, each on its own asset, with their creation in the
+ * audit log and their occurrences up to the horizon. Most long-period plans start in the same
+ * weeks (HOT_OFFSETS), so some weeks are over capacity. Work orders are not released here: the
+ * daily job or the first opening of the planner does it (BR-P6).
+ * @returns {number} plans created
+ */
+function insertPlans(db, today, users, timestamp) {
+  const rng = createRandom(PLANS_RANDOM_SEED);
+  const currentWeek = weekOfDate(today);
+  const authors = users.filter((u) => u.role === 'SUPERVISOR');
+  const assets = db
+    .prepare(
+      "SELECT id, code, site, building, floor, subcategory FROM assets WHERE status <> 'OUT_OF_SERVICE' ORDER BY id",
+    )
+    .all();
+  const used = new Set();
+  const insert = db.prepare(`INSERT INTO maintenance_plans
+    (code, title, description, type, category, asset_id, site, building, location, estimated_hours,
+     frequency_weeks, anchor_week, end_week, schedule_mode, tolerance_weeks, season_from_week,
+     season_to_week, performed_by, supplier, created_by, updated_by, created_at, updated_at)
+    VALUES (@code, @title, @description, @type, @category, @asset_id, @site, @building, @location,
+     @estimated_hours, @frequency_weeks, @anchor_week, @end_week, @schedule_mode, @tolerance_weeks,
+     @season_from_week, @season_to_week, @performed_by, @supplier, @created_by, @created_by,
+     @created_at, @created_at)`);
+
+  let count = 0;
+  for (const t of PLAN_TEMPLATES) {
+    for (let i = 0; i < t.count; i++) {
+      const fitting = assets.filter((a) => a.subcategory === t.sub);
+      const asset = rng.pick(
+        fitting.filter((a) => !used.has(a.id)).length
+          ? fitting.filter((a) => !used.has(a.id))
+          : fitting,
+      );
+      used.add(asset.id);
+      const category = db.prepare('SELECT category FROM assets WHERE id = ?').pluck().get(asset.id);
+      // A seasonal plan: the first in its season next spring, the others where they fall
+      // (outside the season: the planner warns).
+      const anchor =
+        t.season && i === 0
+          ? nextSeasonWeek(currentWeek, t.season[0])
+          : addWeeks(currentWeek, anchorOffset(rng, t.every));
+      const plan = {
+        code: nextPlanCode(count),
+        title: `${t.title}, ${asset.building} ${asset.floor}`,
+        description: `Preventive visit of ${asset.code} (${asset.subcategory}) following the maintenance checklist.`,
+        type: t.regulatory ? 'REGULATORY' : 'PREVENTIVE',
+        category,
+        asset_id: asset.id,
+        site: asset.site,
+        building: asset.building,
+        location: null,
+        estimated_hours: t.hours,
+        frequency_weeks: t.every,
+        anchor_week: anchor,
+        // One contract ends in a little over a year.
+        end_week: t.contractor && i === 0 ? addWeeks(currentWeek, 60) : null,
+        schedule_mode: t.floating ? 'FLOATING' : 'FIXED',
+        tolerance_weeks: defaultTolerance(t.every),
+        season_from_week: t.season?.[0] ?? null,
+        season_to_week: t.season?.[1] ?? null,
+        performed_by: t.contractor ? 'CONTRACTOR' : 'INTERNAL',
+        supplier: t.contractor ?? null,
+        created_by: rng.pick(authors).id,
+        created_at: timestamp(addDays(today, -rng.int(20, 120))),
+      };
+      const id = Number(insert.run(plan).lastInsertRowid);
+      const { created_by: author, created_at: at, code: _code, ...fields } = plan;
+      recordAudit(db, {
+        entityType: 'maintenance_plans',
+        entityId: id,
+        action: 'CREATE',
+        changes: creationChanges({ code: plan.code, ...fields, is_active: true }),
+        label: auditLabel('maintenance_plans', plan),
+        userId: author,
+        version: 1,
+        at,
+      });
+      generateOccurrences(
+        db,
+        { ...plan, id, is_active: 1 },
+        { currentWeek, stamp: plan.created_at },
+      );
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/** Weeks from now to a plan's first visit: often one of the busy weeks, else anywhere. */
+function anchorOffset(rng, every) {
+  if (every === 1) return 0;
+  if (rng.chance(0.6)) {
+    const hot = HOT_OFFSETS.filter((o) => o < every);
+    return every >= 26 ? rng.pick(hot) : HOT_OFFSETS[0] % every;
+  }
+  return rng.int(0, every - 1);
+}
+
+/** The next week numbered `n` from the current week on. */
+function nextSeasonWeek(currentWeek, n) {
+  const { year, week } = weekParts(currentWeek);
+  return formatWeek(week <= n ? year : year + 1, n);
 }
 
 /** Instant between two ISO datetimes (fraction 0 → a, 1 → b). */
