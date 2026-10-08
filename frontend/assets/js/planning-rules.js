@@ -8,35 +8,32 @@ const WEEK = /^(\d{4})-W(\d{2})$/;
 export const TIGHT_LOAD = 0.85;
 export const GENERAL = 'GENERAL';
 
-const isoWeekday = (date) => new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
-const addDays = (date, days) => {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
+const WEEK_MS = 7 * DAY_MS;
+// Weeks are computed on UTC times, never on date strings: a drag recomputes many series.
+const weekdayOf = (time) => new Date(time).getUTCDay() || 7;
+const timeOf = (date) =>
+  Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+function weekOfTime(time) {
+  const thursday = time + (4 - weekdayOf(time)) * DAY_MS;
+  const year = new Date(thursday).getUTCFullYear();
+  const n = Math.floor((thursday - Date.UTC(year, 0, 1)) / WEEK_MS) + 1;
+  return `${year}-W${String(n).padStart(2, '0')}`;
+}
+function mondayTime(week) {
+  const [, year, n] = WEEK.exec(week);
+  const jan4 = Date.UTC(Number(year), 0, 4);
+  return jan4 + (1 - weekdayOf(jan4) + (Number(n) - 1) * 7) * DAY_MS;
+}
 
 /** ISO week of a date 'YYYY-MM-DD'. */
-export function weekOfDate(date) {
-  const thursday = addDays(date, 4 - isoWeekday(date));
-  const year = Number(thursday.slice(0, 4));
-  const day = Math.round((Date.parse(`${thursday}T00:00:00Z`) - Date.UTC(year, 0, 1)) / DAY_MS);
-  return `${year}-W${String(Math.floor(day / 7) + 1).padStart(2, '0')}`;
-}
+export const weekOfDate = (date) => weekOfTime(timeOf(date));
 
 /** Monday of a week. */
-export function mondayOf(week) {
-  const [, year, n] = WEEK.exec(week);
-  const jan4 = `${year}-01-04`;
-  return addDays(jan4, 1 - isoWeekday(jan4) + (Number(n) - 1) * 7);
-}
+export const mondayOf = (week) => new Date(mondayTime(week)).toISOString().slice(0, 10);
 
-export const addWeeks = (week, n) => weekOfDate(addDays(mondayOf(week), n * 7));
+export const addWeeks = (week, n) => weekOfTime(mondayTime(week) + n * WEEK_MS);
 
-export const weeksBetween = (a, b) =>
-  Math.round(
-    (Date.parse(`${mondayOf(b)}T00:00:00Z`) - Date.parse(`${mondayOf(a)}T00:00:00Z`)) /
-      (7 * DAY_MS),
-  );
+export const weeksBetween = (a, b) => Math.round((mondayTime(b) - mondayTime(a)) / WEEK_MS);
 
 /** Week number of a week ('2026-W43' → 43). */
 export const weekNumber = (week) => Number(WEEK.exec(week)[2]);
@@ -248,47 +245,14 @@ export function previewPlanVisits(plan, move, { weeks, currentWeek }) {
 }
 
 /**
- * Figures and tiles of the timeline as if `move` were applied to `planId` (live impact).
+ * Figures and tiles of the timeline with each plan's visits as `visitsOf(plan)` gives them.
  * @param {object} data timeline response
  */
-export function previewFigures(data, planId, move, categories) {
-  const weeks = data.weeks.map((w) => w.week);
-  const occurrences = [];
-  for (const group of data.groups) {
-    for (const plan of group.plans) {
-      const visits =
-        plan.id === planId
-          ? previewPlanVisits(plan, move, { weeks, currentWeek: data.current_week })
-          : plan.occurrences;
-      for (const o of visits) {
-        occurrences.push({
-          week: o.week,
-          status: o.status,
-          estimated_hours: plan.estimated_hours,
-          category: plan.category,
-          site: plan.site,
-          performed_by: plan.performed_by,
-        });
-      }
-    }
-  }
-  const capacity = { total: data.capacity.weekly, by_category: data.capacity.by_category };
-  const figures = weeklyFigures(weeks, occurrences, capacity);
-  return { figures, tiles: planningTiles(figures, capacity, categories) };
-}
-
-/**
- * Figures and tiles of the timeline with some visits in other weeks: the balancing proposal,
- * or the part of it the user keeps (Phase 20).
- * @param {object} data timeline response
- * @param {{ occurrence_id: number, to: string }[]} moves
- */
-export function previewMoves(data, moves, categories) {
-  const weekOf = new Map(moves.map((m) => [m.occurrence_id, m.to]));
+function figuresWith(data, visitsOf, categories) {
   const occurrences = data.groups.flatMap((group) =>
     group.plans.flatMap((plan) =>
-      plan.occurrences.map((o) => ({
-        week: weekOf.get(o.id) ?? o.week,
+      visitsOf(plan).map((o) => ({
+        week: o.week,
         status: o.status,
         estimated_hours: plan.estimated_hours,
         category: plan.category,
@@ -304,4 +268,35 @@ export function previewMoves(data, moves, categories) {
     capacity,
   );
   return { figures, tiles: planningTiles(figures, capacity, categories) };
+}
+
+/**
+ * Figures and tiles of the timeline as if `move` were applied to `planId` (live impact).
+ * @param {object} data timeline response
+ */
+export function previewFigures(data, planId, move, categories) {
+  const weeks = data.weeks.map((w) => w.week);
+  return figuresWith(
+    data,
+    (plan) =>
+      plan.id === planId
+        ? previewPlanVisits(plan, move, { weeks, currentWeek: data.current_week })
+        : plan.occurrences,
+    categories,
+  );
+}
+
+/**
+ * Figures and tiles of the timeline with some visits in other weeks: the balancing proposal,
+ * or the part of it the user keeps (Phase 20).
+ * @param {object} data timeline response
+ * @param {{ occurrence_id: number, to: string }[]} moves
+ */
+export function previewMoves(data, moves, categories) {
+  const weekOf = new Map(moves.map((m) => [m.occurrence_id, m.to]));
+  return figuresWith(
+    data,
+    (plan) => plan.occurrences.map((o) => ({ ...o, week: weekOf.get(o.id) ?? o.week })),
+    categories,
+  );
 }

@@ -7,6 +7,7 @@ import { BOOLEAN_FIELDS, EDITABLE_FIELDS, READ_ONLY_FIELDS, WRITE_META } from '.
 import { auditLabel, diffChanges } from '../rules/audit.js';
 import { sameValue, snapshotToApi } from '../rules/conflict-diff.js';
 import { recordAudit } from './audit.js';
+import { CONFLICT_RESOLUTIONS } from '../rules/enums.js';
 import { canEditRecord, forbiddenFields } from '../rules/permissions.js';
 import { decideWrite } from '../rules/versioning.js';
 
@@ -185,7 +186,7 @@ export function versionedUpdate(
 
 const resolutionBody = z.strictObject({
   conflict_id: z.number().int().positive(),
-  choice: z.enum(['A', 'B', 'MERGE']),
+  choice: z.enum(CONFLICT_RESOLUTIONS),
   fields: z.record(z.string(), z.unknown()).optional(),
 });
 

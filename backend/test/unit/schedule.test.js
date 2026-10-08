@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocationBlocker,
-  appointmentEnd,
   appointmentsOverlap,
   blockChangeBlocker,
   compareBlocks,
@@ -125,8 +124,6 @@ describe('appointments (P6, BR-S6)', () => {
     expect(appointmentsOverlap(a, { locked_start: '09:00', hours: 1.5 })).toBe(true);
     expect(appointmentsOverlap(a, { locked_start: '12:00', hours: 1 })).toBe(false);
     expect(appointmentsOverlap(a, { locked_start: '08:00', hours: 2 })).toBe(false);
-    expect(appointmentEnd('10:00', 2.5)).toBe('12:30');
-    expect(appointmentEnd('22:30', 1.5)).toBe('24:00');
   });
 
   it('refuses to move, resize or remove a locked block; a note is fine', () => {

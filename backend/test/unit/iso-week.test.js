@@ -56,3 +56,35 @@ describe('ISO weeks', () => {
     expect(weekRange('2026-W41', 52)).toHaveLength(52);
   });
 });
+
+describe('ISO weeks on UTC times (D56)', () => {
+  // The former implementation, on date strings: the reference.
+  const DAY = 86_400_000;
+  const addDays = (date, days) => {
+    const d = new Date(`${date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  const weekday = (date) => new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
+  const reference = (date) => {
+    const thursday = addDays(date, 4 - weekday(date));
+    const year = Number(thursday.slice(0, 4));
+    const day = Math.round((Date.parse(`${thursday}T00:00:00Z`) - Date.UTC(year, 0, 1)) / DAY);
+    return `${year}-W${String(Math.floor(day / 7) + 1).padStart(2, '0')}`;
+  };
+
+  it('gives the same week as the reference for every day of 1999 to 2041', () => {
+    for (let date = '1999-01-01'; date < '2042-01-01'; date = addDays(date, 1)) {
+      if (weekOfDate(date) !== reference(date)) throw new Error(`${date}: ${weekOfDate(date)}`);
+    }
+  });
+
+  it('round-trips every week of 2000 to 2040 through its Monday and through addWeeks', () => {
+    for (const week of weekRange('2000-W01', 2140)) {
+      expect(weekOfDate(mondayOf(week))).toBe(week);
+      expect(weekday(mondayOf(week))).toBe(1);
+      expect(addWeeks(addWeeks(week, 61), -61)).toBe(week);
+      expect(weeksBetween(week, addWeeks(week, 37))).toBe(37);
+    }
+  });
+});

@@ -75,26 +75,6 @@
   border-top: 2px dashed var(--color-text);
 }
 
-/* Trade colors: categorical slots 1–6 in trade order (validated palette). */
-.series-1 {
-  background: var(--color-chart-series-1);
-}
-.series-2 {
-  background: var(--color-chart-series-2);
-}
-.series-3 {
-  background: var(--color-chart-series-3);
-}
-.series-4 {
-  background: var(--color-chart-series-4);
-}
-.series-5 {
-  background: var(--color-chart-series-5);
-}
-.series-6 {
-  background: var(--color-chart-series-6);
-}
-
 /* The grid scrolls both ways; the plan column and the two header rows stay in place. */
 .planner-scroll {
   position: relative;

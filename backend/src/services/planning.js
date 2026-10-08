@@ -29,7 +29,7 @@ import {
 import { suggestMoves } from '../rules/balancing.js';
 import { recordAudit } from './audit.js';
 import { userRef, userRefColumns } from './mappers.js';
-import { generateOccurrences, occurrenceLabel } from './occurrences.js';
+import { occurrenceLabel, topUpOccurrences } from './occurrences.js';
 import { planFilters } from './plans.js';
 
 const settingsSchema = z.strictObject({
@@ -74,7 +74,6 @@ export function createPlanningService(db, { workOrders }) {
     `SELECT s.*, ${userRefColumns('ub')} FROM planning_settings s
      LEFT JOIN users ub ON ub.id = s.updated_by WHERE s.id = 1`,
   );
-  const activePlans = db.prepare('SELECT * FROM maintenance_plans WHERE is_active = 1');
 
   /** People who count as capacity (P17): active technicians and supervisors. */
   function capacityPeople({ site, category } = {}) {
@@ -275,9 +274,7 @@ export function createPlanningService(db, { workOrders }) {
       const today = dateInZone(timeZone, now);
       const currentWeek = weekOfDate(today);
       const stamp = now.toISOString();
-      db.transaction(() => {
-        for (const plan of activePlans.all()) generateOccurrences(db, plan, { currentWeek, stamp });
-      }).immediate();
+      topUpOccurrences(db, { currentWeek, stamp });
 
       const limit = addWeeks(currentWeek, settings().release_weeks_ahead);
       const due = db

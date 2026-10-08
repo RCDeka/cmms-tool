@@ -44,6 +44,44 @@ export function generateOccurrences(db, plan, { currentWeek, stamp }) {
 }
 
 /**
+ * Daily top-up of every active plan (BR-P1): stores the occurrences missing from the current
+ * week to the horizon. It reads what is stored first and writes only when something is
+ * missing (as time passes, a new week at the end of the horizon), so a planner or scheduler
+ * load, which runs it, takes no write lock in the usual case. Returns the number added.
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ currentWeek: string, stamp: string }} context
+ */
+export function topUpOccurrences(db, { currentWeek, stamp }) {
+  const horizon = addWeeks(currentWeek, HORIZON_WEEKS);
+  const plans = db.prepare('SELECT * FROM maintenance_plans WHERE is_active = 1').all();
+  const stored = new Map(plans.map((p) => [p.id, new Set()]));
+  for (const row of db
+    .prepare(
+      `SELECT o.plan_id, o.due_week FROM plan_occurrences o
+       JOIN maintenance_plans p ON p.id = o.plan_id
+       WHERE p.is_active = 1 AND o.due_week >= ?`,
+    )
+    .all(currentWeek)) {
+    stored.get(row.plan_id).add(row.due_week);
+  }
+  const missing = plans.flatMap((plan) =>
+    seriesWeeks(plan, currentWeek, horizon)
+      .filter((week) => !stored.get(plan.id).has(week))
+      .map((week) => [plan.id, week]),
+  );
+  if (!missing.length) return 0;
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO plan_occurrences (plan_id, due_week, week, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  // OR IGNORE: another request may have added the same weeks meanwhile.
+  db.transaction(() => {
+    for (const [planId, week] of missing) insert.run(planId, week, week, stamp, stamp);
+  }).immediate();
+  return missing.length;
+}
+
+/**
  * BR-P2: after a change of the series (anchor, frequency, end) or of `is_active`, the
  * occurrences still planned and never moved are replaced by the new series (D51):
  * - a visit moved by hand follows a moved series by the same number of weeks, keeping its own

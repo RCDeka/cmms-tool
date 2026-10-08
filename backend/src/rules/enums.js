@@ -36,8 +36,6 @@ export const CONFLICT_ENTITY_TYPES = ['assets', 'work_orders'];
 /** Review of a staff request by a supervisor (D47); NULL for other work orders. */
 export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
 
-export const REVIEW_DECISIONS = ['APPROVE', 'REJECT'];
-
 export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];
 
 // Preventive maintenance (D48, docs/data-model.md → Preventive maintenance).

@@ -112,12 +112,6 @@ export function appointmentsOverlap(a, b) {
   return startA < startB + b.hours * 60 && startB < startA + a.hours * 60;
 }
 
-/** End of an appointment, 'HH:MM' (24:00 at the latest). */
-export function appointmentEnd(start, hours) {
-  const end = toMinutes(start) + hours * 60;
-  return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
-}
-
 /**
  * Why a work order cannot receive blocks, or null (BR-S2, BR-S4).
  * @param {{ status: string, review_status: string | null, estimated_hours: number | null }} wo

@@ -5,6 +5,7 @@
 import { badgeClass, h, replaceChildren } from './dom.js';
 import { formatDate, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { historyButton } from './planning.js';
 import { addWeeks } from './planning-rules.js';
 import { appointmentText, dayWarningTexts, formatDuration, leftText } from './schedule-rules.js';
 
@@ -494,23 +495,6 @@ function tilesSection(data) {
         ),
       ),
     ),
-  );
-}
-
-/** Undo or Redo button, naming the change it would undo or redo (D54). */
-function historyButton(label, entry, onClick, key) {
-  return h(
-    'button',
-    {
-      type: 'button',
-      class: 'button button-secondary online-only',
-      disabled: !entry,
-      title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
-      'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
-      onClick,
-    },
-    label,
-    entry ? h('span', { class: 'visually-hidden' }, `: ${entry}`) : null,
   );
 }
 

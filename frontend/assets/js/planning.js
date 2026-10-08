@@ -544,7 +544,7 @@ function loadRow(data, tooltip) {
         'div',
         { class: 'load-bar', 'aria-hidden': 'true' },
         loadSegments(f, scale).map((s) => {
-          const seg = h('span', { class: `load-segment series-${s.slot}` });
+          const seg = h('span', { class: `load-segment chart-series-${s.slot}` });
           seg.style.height = `${s.share * 100}%`;
           return seg;
         }),
@@ -743,7 +743,7 @@ function legend(canEdit) {
         h(
           'span',
           {},
-          h('span', { class: `legend-swatch series-${i + 1}`, 'aria-hidden': 'true' }),
+          h('span', { class: `legend-swatch chart-series-${i + 1}`, 'aria-hidden': 'true' }),
           valueLabel('category', c),
         ),
       ),
@@ -921,29 +921,36 @@ function showProposal(container, data, moves) {
   }
 }
 
+/**
+ * Undo or Redo button, naming the change it would replay (planner and week scheduler).
+ * @param {'Undo' | 'Redo'} label
+ * @param {string | null} entry text of the change, null when there is none
+ */
+export function historyButton(label, entry, onClick, key) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'button button-secondary online-only',
+      disabled: !entry,
+      title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
+      'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
+      onClick,
+    },
+    label,
+    entry ? h('span', { class: 'visually-hidden' }, `: ${entry}`) : null,
+  );
+}
+
 /** Undo / Redo, the blocked weeks, and the hint on how to move visits. */
 function toolbar({ filters, canEdit, history, message }) {
-  const button = (label, entry, onClick, key) =>
-    h(
-      'button',
-      {
-        type: 'button',
-        class: 'button button-secondary online-only',
-        disabled: !entry,
-        title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
-        'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
-        onClick,
-      },
-      label,
-      entry ? h('span', { class: 'visually-hidden' }, `: ${entry}`) : null,
-    );
   return h(
     'div',
     { class: 'planner-toolbar' },
     canEdit && history
       ? [
-          button('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
-          button('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
+          historyButton('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
+          historyButton('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
         ]
       : null,
     h(

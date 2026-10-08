@@ -18,17 +18,21 @@ const DRAG_THRESHOLD = 6;
 /** Distance from the grid's edge where a drag scrolls it sideways. */
 const EDGE = 48;
 
-/** Plans and visits of the timeline by id. Pure. */
+/** Plans and visits of the timeline by id, and the plan of each visit. Pure. */
 export function timelineIndex(data) {
   const plans = new Map();
   const visits = new Map();
+  const planOf = new Map();
   for (const group of data.groups) {
     for (const plan of group.plans) {
       plans.set(plan.id, plan);
-      for (const o of plan.occurrences) visits.set(o.id, o);
+      for (const o of plan.occurrences) {
+        visits.set(o.id, o);
+        planOf.set(o.id, plan);
+      }
     }
   }
-  return { plans, visits };
+  return { plans, visits, planOf };
 }
 
 /**
@@ -40,7 +44,7 @@ export function timelineIndex(data) {
  */
 export function evaluateMove(data, index, { occurrenceId, kind, week }) {
   const occurrence = index.visits.get(occurrenceId);
-  const plan = [...index.plans.values()].find((p) => p.occurrences.includes(occurrence));
+  const plan = index.planOf.get(occurrenceId);
   const same = week === occurrence.week;
   if (kind === 'series') {
     const anchor = addWeeks(plan.anchor_week, weeksBetween(occurrence.week, week));

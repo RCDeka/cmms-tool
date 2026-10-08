@@ -10,11 +10,6 @@ import { statusOptions } from './rules.js';
 const MULTILINE = new Set(['description', 'comment', 'work_report']);
 const MAX_LENGTH = { title: 200, name: 200, comment: 2000, description: 4000, work_report: 4000 };
 
-/** API field edited by a detail field (asset → asset_id, assignee → assignee_id, …). */
-export function editFieldOf(entity, field) {
-  return ENTITIES[entity].fields[field].editField ?? field;
-}
-
 /** Detail field definition for an API field (asset_id → the asset definition). */
 function defForApiField(entity, apiField) {
   const { fields } = ENTITIES[entity];

@@ -297,6 +297,23 @@ describe('CHECK constraints match src/rules/enums.js', () => {
         ),
     ],
     [
+      'conflicts.resolution',
+      enums.CONFLICT_RESOLUTIONS,
+      (v) => {
+        const u = insert('users', user());
+        insert(
+          'conflicts',
+          conflict(u, {
+            entity_id: ++userSeq,
+            status: 'RESOLVED',
+            resolution: v,
+            resolved_by: u,
+            resolved_at: '2026-10-04T11:00:00.000Z',
+          }),
+        );
+      },
+    ],
+    [
       'maintenance_plans.type',
       enums.PLAN_TYPES,
       (v) => insert('maintenance_plans', plan(insert('users', user()), { type: v })),

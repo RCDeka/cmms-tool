@@ -515,6 +515,9 @@ a.button {
 .chart-series-5 {
   background: var(--color-chart-series-5);
 }
+.chart-series-6 {
+  background: var(--color-chart-series-6);
+}
 
 .dashboard-card {
   margin: 0;
