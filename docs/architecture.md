@@ -45,7 +45,12 @@ frontend/
   assets/css/                 base, layout, table, detail, components (brief), planning (year planner),
                               schedule (week scheduler, My week)
   assets/js/
-    app.js                    entry point: init DB, auth, router, network, queue flush
+    app.js                    entry point: init DB, auth, router, network, queue flush; the record
+                              views, dashboard, staff, admin and conflict pages
+    planner-page.js           year planner pages: fetching, panels, moves with Undo / Redo, balancing
+                              proposal, planning settings (state kept while the user stays on it)
+    schedule-page.js          week scheduler and My week pages: fetching, changes through
+                              schedule-history.js, panels, the week saved on the device
     config.js                 APP_NAME, API base, timeout, page size
     entities.js               entity config map (D18), table columns, detail fields
     enums.js, labels.js       enum codes, UI labels for fields and values
