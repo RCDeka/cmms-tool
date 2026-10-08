@@ -26,6 +26,7 @@ import {
   weeklyCapacity,
   weeklyFigures,
 } from '../rules/planning.js';
+import { suggestMoves } from '../rules/balancing.js';
 import { recordAudit } from './audit.js';
 import { userRef, userRefColumns } from './mappers.js';
 import { generateOccurrences, occurrenceLabel } from './occurrences.js';
@@ -293,6 +294,35 @@ export function createPlanningService(db, { workOrders }) {
     },
 
     /**
+     * POST /api/planning/suggestions (Phase 20): moves of single visits, each within its
+     * plan's rules, that smooth the weeks shown for these filters, with the figures before and
+     * after. Nothing is saved: accepted moves are sent as ordinary visit moves.
+     */
+    suggestions(query, context) {
+      const timeline = this.timeline({ ...query, group_by: 'site' }, context);
+      const proposed = suggestMoves(timeline);
+      const plans = new Map(timeline.groups.flatMap((g) => g.plans).map((p) => [p.id, p]));
+      const moves = proposed.map((m) => {
+        const plan = plans.get(m.plan_id);
+        const occurrence = plan.occurrences.find((o) => o.id === m.occurrence_id);
+        return {
+          ...m,
+          ...pick(plan, ['code', 'title', 'type', 'category', 'site', 'estimated_hours']),
+          due_week: occurrence.due_week,
+          version: occurrence.version,
+        };
+      });
+      return {
+        from: timeline.from,
+        to: timeline.to,
+        current_week: timeline.current_week,
+        moves,
+        before: { figures: timeline.figures, tiles: timeline.tiles },
+        after: figuresWith(timeline, new Map(moves.map((m) => [m.occurrence_id, m.to]))),
+      };
+    },
+
+    /**
      * GET /api/planning/timeline: active plans grouped in rows, their occurrences in the
      * weeks shown, and the figures of each week (BR-Y1 to BR-Y4) for the filters in use.
      */
@@ -423,6 +453,27 @@ export function createPlanningService(db, { workOrders }) {
       };
     },
   };
+}
+
+/**
+ * Figures and tiles of a timeline with some visits in other weeks (the balancing proposal).
+ * @param {object} timeline GET /api/planning/timeline answer
+ * @param {Map<number, string>} weekOf new week by occurrence id
+ */
+function figuresWith(timeline, weekOf) {
+  const weeks = timeline.weeks.map((w) => w.week);
+  const capacity = { total: timeline.capacity.weekly, by_category: timeline.capacity.by_category };
+  const occurrences = timeline.groups.flatMap((g) =>
+    g.plans.flatMap((p) =>
+      p.occurrences.map((o) => ({
+        week: weekOf.get(o.id) ?? o.week,
+        status: o.status,
+        ...pick(p, ['estimated_hours', 'category', 'site', 'performed_by']),
+      })),
+    ),
+  );
+  const figures = weeklyFigures(weeks, occurrences, capacity);
+  return { figures, tiles: planningTiles(figures, capacity, CATEGORIES) };
 }
 
 const pick = (object, keys) => Object.fromEntries(keys.map((k) => [k, object[k]]));

@@ -27,8 +27,10 @@ const PLANS_RANDOM_SEED = 20261009;
 /**
  * Weeks after the current one where most long-period visits are placed, so the year planner
  * shows peaks to balance: a quarterly plan placed in the first comes back in each of the others.
+ * The first lies beyond the release horizon (4 weeks), so its visits can still be moved by the
+ * balancing assistant (Phase 20, D53).
  */
-const HOT_OFFSETS = [3, 16, 29, 42];
+const HOT_OFFSETS = [5, 18, 31, 44];
 const ASSET_COUNT = 500;
 const WORK_ORDER_COUNT = 200;
 // Exact counts so the dataset is predictable (about 4 % broken down, docs/data-model.md).

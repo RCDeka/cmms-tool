@@ -117,7 +117,7 @@ Every column title of the asset and work order tables is a button. A click sorts
 - **Plan panel** (split view): the visit clicked (status badge, due and planned week, its work order link, warnings), **Edit plan** (supervisors, admins), the plan's details and its next 8 visits. **Plan form**: plain labels ("What is done", "Every (weeks)", "First visit"), an asset code or a site and building, the frequencies 1, 2, 4, 8, 13, 26, 52 offered, week pickers, and the contractor field shown only for contractor plans. Buttons that need the server are `.online-only`.
 - **Planning settings** (`/admin/planning`): four fields with hints, and before saving the effect on the next 52 weeks ("Capacity of the next 52 weeks: 5,096 h → 5,824 h").
 - The work order panel shows **Maintenance plan** (a link to the plan) and **Planned week** for released visits.
-- Still to come (Phase 20, `docs/spec-preventive-maintenance.md` §7): the balancing assistant.
+- The balancing assistant: see below (Phase 20).
 
 ## Year planner editing (Phase 18)
 
@@ -147,3 +147,10 @@ Every column title of the asset and work order tables is a button. A click sorts
 
 - Week switcher like the scheduler, the week's total ("13 h scheduled of 35 h"), and offline the info banner "Offline: your week as saved on this device on …. Changes need a connection."
 - One card per day (Monday to Friday and open weekend days): the date (and "· Leave" when off), the total vs capacity and the sites, warnings, then the blocks: appointments first ("🔒 10:00–12:00 · locked by Julien Bernard"), then the others in the person's order. Each block: the work order as a link (it opens offline too), length · site · building · location, the note; **Move up** / **Move down** (not on appointments, disabled at the ends), and a start time with **Lock at this time**, or **Unlock the time**. Every button is `.online-only` and disabled while offline.
+
+## Balancing assistant (D53, Phase 20)
+
+- **Suggest a smoother plan**: a secondary button of the planner toolbar, after Blocked weeks (supervisors and admins, `.online-only`). It opens the panel "Suggested moves" for the weeks and filters shown.
+- **Panel**: one sentence saying how many visits could move and within which rules ("Nothing is saved until you accept"), then a before → after table (*Peak week load*, *Weeks over capacity*, *Tight weeks*, *Busiest week of one trade*; lower values in green bold with "(lower)" for screen readers), **Tick all** / **Untick all**, and the moves, each a checkbox (ticked at first) with "PM-0011 · Week 46 → Week 47", the plan's title, trade, hours and "§ regulatory", and "Due Week 46. Load now: Week 46 107%, Week 47 27%." Then **Accept N moves** (primary, disabled when none is ticked) and **Discard**. Without any possible move, a sentence says the weeks are already as smooth as the plans allow.
+- **On the grid**: each ticked move shows a dashed ghost chip in the week it would go to and fades the visit leaving; the tiles (dashed frame) and the load strip ("Load (preview)") show the figures with the ticked moves. Unticking a move updates all three at once.
+- **Accept**: the moves are sent one by one; the message line then says "Balancing: 29 visits moved." (and how many were refused, with the first reason), the panel closes, and **Undo** ("Undo: Balancing: 29 visits moved") puts them all back in one step.

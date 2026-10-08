@@ -84,10 +84,17 @@ import {
   renderBlockedWeeksPanel,
   renderPlanForm,
   renderPlanPanel,
+  renderSuggestionsPanel,
 } from './plan-panel.js';
-import { planningUrl, renderPlanner, setPlannerPanel, timelineQuery } from './planning.js';
+import {
+  planningUrl,
+  renderPlanner,
+  setPlannerPanel,
+  suggestionsBody,
+  timelineQuery,
+} from './planning.js';
 import { attachPlannerEditing } from './planner-editing.js';
-import { previewFigures } from './planning-rules.js';
+import { previewFigures, previewMoves } from './planning-rules.js';
 import { CATEGORIES } from './enums.js';
 import { formatWeek } from './format.js';
 import { renderPlanningSettings } from './planning-settings.js';
@@ -197,6 +204,7 @@ async function render(route) {
   showLoggedIn(currentUser());
   if (isStaff()) return renderStaffRoute(route, isCurrent);
   // The planner's timeline and its undo history last while the user stays on the planner.
+  if (route.name !== 'suggestions') suggestionState = null;
   if (!PLANNER_ROUTES.includes(route.name)) {
     plannerCache = null;
     plannerHistory.undo = [];
@@ -249,13 +257,16 @@ async function render(route) {
     case 'plan':
     case 'blockedWeeks':
       return showPlanning(route, isCurrent);
+    case 'suggestions':
     case 'planCreate':
       return hasRole('SUPERVISOR', 'ADMIN')
         ? showPlanning(route, isCurrent)
         : showPlaceholder(
             'planning',
             'Access denied',
-            'Only supervisors and administrators can create plans.',
+            route.name === 'suggestions'
+              ? 'Only supervisors and administrators can rebalance the plans.'
+              : 'Only supervisors and administrators can create plans.',
           );
     case 'schedule':
       return showSchedule(route, isCurrent);
@@ -796,7 +807,9 @@ async function showFeedbackLog(route, isCurrent) {
 
 /** Timeline last shown, so opening or closing a plan panel does not fetch it again. */
 let plannerCache = null; // { query, data }
-const PLANNER_ROUTES = ['planning', 'plan', 'planCreate', 'blockedWeeks'];
+const PLANNER_ROUTES = ['planning', 'plan', 'planCreate', 'blockedWeeks', 'suggestions'];
+/** Balancing proposal on screen (Phase 20): fetched once per range and filters. */
+let suggestionState = null; // { query, proposal, selected: Set<number> }
 /** Changes made on the planner in this visit, for Undo / Redo (spec §7). */
 const plannerHistory = { undo: [], redo: [] };
 /** Planner on screen: live preview of a move, messages. */
@@ -815,6 +828,8 @@ function changeText(change) {
       return `${change.code}: series from ${week(change.from)} → ${week(change.anchor)}`;
     case 'skip':
       return `${change.code}: visit of ${week(change.week)} skipped`;
+    case 'batch':
+      return `Balancing: ${change.changes.length} visit${change.changes.length === 1 ? '' : 's'} moved`;
     default:
       return `${change.code}: visit of ${week(change.week)} restored`;
   }
@@ -822,6 +837,8 @@ function changeText(change) {
 
 /** The change that undoes another. */
 function opposite(change) {
+  if (change.kind === 'batch')
+    return { ...change, changes: change.changes.map(opposite).reverse() };
   if (change.kind === 'occurrence') return { ...change, week: change.from, from: change.week };
   if (change.kind === 'series') return { ...change, anchor: change.from, from: change.anchor };
   return { ...change, kind: change.kind === 'skip' ? 'restore' : 'skip' };
@@ -832,6 +849,10 @@ function opposite(change) {
  * as the change expects (the record may have changed since, e.g. after a series move).
  */
 async function sendPlannerChange(change) {
+  if (change.kind === 'batch') {
+    for (const one of change.changes) await sendPlannerChange(one);
+    return null;
+  }
   if (change.kind === 'series') {
     const plan = await apiFetch(`/plans/${change.planId}`);
     if (plan.anchor_week !== change.from) throw new Error('This plan changed since: reload it.');
@@ -871,9 +892,13 @@ async function applyPlannerChange(change, mode = 'do') {
   } catch (err) {
     const message =
       err.status === 0 ? 'You are offline: nothing was changed.' : `Not changed: ${err.message}`;
-    plannerView?.say(message, 'danger');
     announce(message);
-    if (mode !== 'do') render(currentRoute()); // show what is there now
+    if (mode !== 'do') {
+      // Show what is there now, then why: drawing the planner again empties its message line.
+      plannerCache = null;
+      await render(currentRoute());
+    }
+    plannerView?.say(message, 'danger');
     return message;
   }
   if (mode === 'undo') plannerHistory.redo.push(change);
@@ -884,7 +909,10 @@ async function applyPlannerChange(change, mode = 'do') {
   // Name the change itself ("Undone: visit week 17 → week 18"), not the opposite call.
   const text = `${{ do: '', undo: 'Undone: ', redo: 'Redone: ' }[mode]}${changeText(change)}.`;
   announce(text);
-  plannerFocus = change.kind === 'series' ? { plan: change.planId } : { occurrence: change.id };
+  plannerFocus =
+    change.kind === 'series'
+      ? { plan: change.planId }
+      : { occurrence: change.kind === 'batch' ? change.changes[0].id : change.id };
   plannerCache = null;
   await render(currentRoute());
   plannerView?.say(text, 'success');
@@ -935,7 +963,19 @@ async function showPlanning(route, isCurrent) {
       cached ?? apiFetch(`/planning/timeline?${query}`),
       route.name === 'plan' ? apiFetch(`/plans/${route.id}`) : null,
       route.name === 'blockedWeeks' ? apiFetch('/planning/blocked-weeks') : null,
-    ]);
+      route.name === 'suggestions' && suggestionState?.query !== query
+        ? apiFetch('/planning/suggestions', { method: 'POST', body: suggestionsBody(filters) })
+        : null,
+    ]).then(([timeline, planRecord, blockedList, proposal]) => {
+      if (proposal) {
+        suggestionState = {
+          query,
+          proposal,
+          selected: new Set(proposal.moves.map((m) => m.occurrence_id)),
+        };
+      }
+      return [timeline, planRecord, blockedList];
+    });
   } catch (err) {
     if (!isCurrent()) return;
     if (err.status === 404) {
@@ -1029,6 +1069,10 @@ async function showPlanning(route, isCurrent) {
     });
     detailContainer.querySelector('#p-title')?.focus();
   };
+  if (route.name === 'suggestions') {
+    setTitle('Suggested moves');
+    return showSuggestions(data, filters, close);
+  }
   if (route.name === 'planCreate') {
     setTitle('New maintenance plan');
     return showForm(null);
@@ -1106,6 +1150,93 @@ async function showPlanning(route, isCurrent) {
       }),
   });
   detailContainer.querySelector('.detail-title')?.focus();
+}
+
+/**
+ * The balancing proposal over the planner (Phase 20): ghost chips for the moves ticked, the
+ * tiles and load strip as if they were accepted, and the panel to tick, accept or discard.
+ */
+function showSuggestions(data, filters, close) {
+  const { proposal, selected } = suggestionState;
+  const loads = new Map(data.figures.map((f) => [f.week, f.load]));
+  const draw = (focusId = null) => {
+    const kept = proposal.moves.filter((m) => selected.has(m.occurrence_id));
+    const after = previewMoves(data, kept, CATEGORIES);
+    plannerView.propose(kept);
+    if (kept.length) plannerView.preview(after);
+    else plannerView.reset();
+    renderSuggestionsPanel(detailContainer, {
+      proposal,
+      after,
+      selected,
+      currentWeek: data.current_week,
+      capacityByCategory: data.capacity.by_category,
+      loadOf: (week) => loads.get(week) ?? null,
+      onToggle: (id, on) => {
+        if (on) selected.add(id);
+        else selected.delete(id);
+        draw(`proposal-${id}`);
+      },
+      onToggleAll: (on) => {
+        for (const m of proposal.moves) {
+          if (on) selected.add(m.occurrence_id);
+          else selected.delete(m.occurrence_id);
+        }
+        draw();
+      },
+      onAccept: () => acceptProposal(kept, filters),
+      onClose: () => {
+        suggestionState = null;
+        close();
+      },
+    });
+    if (focusId) detailContainer.querySelector(`#${focusId}`)?.focus();
+  };
+  draw();
+  detailContainer.querySelector('.detail-title')?.focus();
+}
+
+/**
+ * Sends the moves kept, one visit at a time through the usual move (BR-P3 checked again by the
+ * server, at the visit's current version), and keeps them as one step for Undo.
+ */
+async function acceptProposal(moves, filters) {
+  const done = [];
+  const refused = [];
+  for (const m of moves) {
+    const change = {
+      kind: 'occurrence',
+      planId: m.plan_id,
+      code: m.code,
+      id: m.occurrence_id,
+      week: m.to,
+      from: m.from,
+    };
+    try {
+      await sendPlannerChange(change);
+      done.push(change);
+    } catch (err) {
+      refused.push({ change, message: err.status === 0 ? 'you are offline' : err.message });
+      if (err.status === 0) break;
+    }
+  }
+  if (done.length) {
+    plannerHistory.undo.push({ kind: 'batch', changes: done });
+    plannerHistory.redo = [];
+  }
+  suggestionState = null;
+  plannerCache = null;
+  const text = [
+    done.length ? `${changeText({ kind: 'batch', changes: done })}.` : 'No visit was moved.',
+    refused.length
+      ? `${refused.length} not moved (${refused[0].change.code}: ${refused[0].message})`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  announce(text);
+  await navigate(planningUrl(filters), { force: true });
+  plannerView?.say(text, refused.length ? 'danger' : 'success');
 }
 
 /** Create or save a plan from the side panel form. */

@@ -23,6 +23,19 @@ const timelineQuery = z
     path: ['year'],
   });
 
+const suggestionsBody = z
+  .strictObject({
+    from: isoWeek.optional(),
+    year: z.number().int().min(2000).max(2100).optional(),
+    weeks: z.number().int().min(1).max(53).default(52),
+    // Same text values as in the timeline query: `site` joined by |, others by commas.
+    ...planFilterFields,
+  })
+  .refine((q) => q.from === undefined || q.year === undefined, {
+    message: 'Give a starting week or a year, not both',
+    path: ['year'],
+  });
+
 /**
  * /api/planning: the year planner (D48). Every maintenance role reads; supervisors and admins
  * release; administrators change the settings (P16).
@@ -40,6 +53,18 @@ export function planningRouter({ planning, timeZone, now }) {
     planning.release(context);
     res.json(planning.timeline(req.valid.query, context));
   });
+
+  // Balancing assistant (Phase 20): the same range and filters as the timeline, in the body.
+  router.post(
+    '/suggestions',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ body: suggestionsBody }),
+    (req, res) => {
+      const context = { now: now(), timeZone };
+      planning.release(context);
+      res.json(planning.suggestions(req.valid.body, context));
+    },
+  );
 
   router.post('/release', requireRole('SUPERVISOR', 'ADMIN'), (req, res) => {
     res.json(planning.release({ now: now(), timeZone, user: req.user }));

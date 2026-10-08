@@ -65,6 +65,7 @@ export function parseRoute(pathname, search = '') {
     const filters = parsePlanningFilters(query);
     if (!second) return { name: 'planning', page, filters };
     if (second === 'blocked-weeks' && !rest.length) return { name: 'blockedWeeks', page, filters };
+    if (second === 'suggestions' && !rest.length) return { name: 'suggestions', page, filters };
     const [third, ...more] = rest;
     if (second !== 'plans' || !third || more.length) return { name: 'notFound', page };
     if (third === 'new') return { name: 'planCreate', page, filters };

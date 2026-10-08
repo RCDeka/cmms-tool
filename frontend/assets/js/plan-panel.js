@@ -5,7 +5,7 @@ import { h, replaceChildren } from './dom.js';
 import { CATEGORIES, PERFORMERS, PLAN_TYPES, SCHEDULE_MODES } from './enums.js';
 import { formatDateTime, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
-import { formatHours, occurrenceBadge, planWarningText } from './planning.js';
+import { formatHours, formatLoad, occurrenceBadge, planWarningText } from './planning.js';
 import { allowedWeeks, moveBlocker } from './planning-rules.js';
 
 /** Frequencies offered first (spec §4), in weeks. */
@@ -756,5 +756,212 @@ export function renderBlockedWeeksPanel(
         )
       : h('p', { class: 'muted' }, 'No week is blocked from this week on.'),
     form,
+  );
+}
+
+/** 'Week 45' (the year only when it differs from the current week's). Pure. */
+const shortWeek = (week, currentWeek) =>
+  week.slice(0, 4) === currentWeek.slice(0, 4) ? `Week ${Number(week.slice(6))}` : formatWeek(week);
+
+/**
+ * Highest load of one trade in one week (the trade imbalance the assistant lowers): the
+ * week's hours of the trade against the trade's weekly capacity. Pure.
+ */
+export function peakTradeLoad(figures, capacityByCategory) {
+  let peak = 0;
+  for (const f of figures) {
+    for (const [trade, hours] of Object.entries(f.by_category)) {
+      const capacity = capacityByCategory[trade];
+      if (capacity > 0) peak = Math.max(peak, hours / capacity);
+    }
+  }
+  return peak;
+}
+
+/**
+ * Before → after lines of a balancing proposal (Phase 20): peak load, weeks over capacity,
+ * tight weeks, and the busiest week of a trade. Pure.
+ * @param {{ figures: object[], tiles: object }} before
+ * @param {{ figures: object[], tiles: object }} after with the moves kept
+ * @param {Record<string, number>} capacityByCategory weekly capacity per trade
+ * @returns {{ label: string, before: string, after: string, better: boolean }[]}
+ */
+export function proposalSummary(before, after, capacityByCategory) {
+  const line = (label, b, a, format) => ({
+    label,
+    before: format(b),
+    after: format(a),
+    better: a < b - 1e-9,
+  });
+  const work = (side) => side.tiles.workload;
+  return [
+    line('Peak week load', work(before).peak_load ?? 0, work(after).peak_load ?? 0, formatLoad),
+    line('Weeks over capacity', work(before).weeks_over, work(after).weeks_over, String),
+    line('Tight weeks (85–100 %)', work(before).weeks_tight, work(after).weeks_tight, String),
+    line(
+      'Busiest week of one trade',
+      peakTradeLoad(before.figures, capacityByCategory),
+      peakTradeLoad(after.figures, capacityByCategory),
+      formatLoad,
+    ),
+  ];
+}
+
+/**
+ * Panel of the balancing assistant (Phase 20): what the proposal changes (before → after for
+ * the moves ticked), then the moves, each with a checkbox, and Accept or Discard. Nothing is
+ * saved before Accept.
+ * @param {HTMLElement} container
+ * @param {{ proposal: object, after: object, selected: Set<number>, currentWeek: string,
+ *   capacityByCategory: Record<string, number>, loadOf: (week: string) => number | null, onToggle: (id: number, on: boolean) => void,
+ *   onToggleAll: (on: boolean) => void, onAccept: () => void, onClose: () => void }} options
+ */
+export function renderSuggestionsPanel(
+  container,
+  {
+    proposal,
+    after,
+    selected,
+    currentWeek,
+    capacityByCategory,
+    loadOf,
+    onToggle,
+    onToggleAll,
+    onAccept,
+    onClose,
+  },
+) {
+  const { moves } = proposal;
+  const week = (w) => shortWeek(w, currentWeek);
+  const summary = proposalSummary(proposal.before, after, capacityByCategory);
+  const list = moves.length
+    ? h(
+        'ul',
+        { class: 'proposal-list' },
+        moves.map((m) => {
+          const id = `proposal-${m.occurrence_id}`;
+          return h(
+            'li',
+            {},
+            h('input', {
+              type: 'checkbox',
+              id,
+              checked: selected.has(m.occurrence_id),
+              onChange: (event) => onToggle(m.occurrence_id, event.target.checked),
+            }),
+            h(
+              'label',
+              { for: id },
+              h('strong', {}, `${m.code} · ${week(m.from)} → ${week(m.to)}`),
+              h(
+                'span',
+                { class: 'muted' },
+                `${m.title} · ${valueLabel('category', m.category)} · ${formatHours(m.estimated_hours)}${
+                  m.type === 'REGULATORY' ? ' · § regulatory' : ''
+                }`,
+              ),
+              h(
+                'span',
+                { class: 'muted' },
+                `Due ${week(m.due_week)}. Load now: ${week(m.from)} ${formatLoad(loadOf(m.from))}, ${week(m.to)} ${formatLoad(loadOf(m.to))}.`,
+              ),
+            ),
+          );
+        }),
+      )
+    : null;
+  const count = moves.filter((m) => selected.has(m.occurrence_id)).length;
+  replaceChildren(
+    container,
+    panelHeader('Suggested moves', onClose),
+    moves.length
+      ? [
+          h(
+            'p',
+            {},
+            `${moves.length} visit${moves.length === 1 ? '' : 's'} could move to smooth the weeks shown. Each stays within its plan's tolerance and season, outside blocked weeks, and a regulatory visit only moves earlier. Nothing is saved until you accept.`,
+          ),
+          h(
+            'table',
+            { class: 'proposal-summary' },
+            h('caption', { class: 'visually-hidden' }, 'Figures before and after the moves ticked'),
+            h(
+              'thead',
+              {},
+              h(
+                'tr',
+                {},
+                h('th', { scope: 'col' }, 'Figure'),
+                h('th', { scope: 'col' }, 'Now'),
+                h('th', { scope: 'col' }, 'With the moves ticked'),
+              ),
+            ),
+            h(
+              'tbody',
+              {},
+              summary.map((row) =>
+                h(
+                  'tr',
+                  {},
+                  h('th', { scope: 'row' }, row.label),
+                  h('td', { class: 'numeric' }, row.before),
+                  h(
+                    'td',
+                    { class: `numeric${row.better ? ' is-better' : ''}` },
+                    row.after,
+                    row.better ? h('span', { class: 'visually-hidden' }, ' (lower)') : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          h(
+            'div',
+            { class: 'form-actions' },
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'button button-secondary',
+                onClick: () => onToggleAll(true),
+              },
+              'Tick all',
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'button button-secondary',
+                onClick: () => onToggleAll(false),
+              },
+              'Untick all',
+            ),
+          ),
+          list,
+          h(
+            'div',
+            { class: 'form-actions' },
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'button button-primary online-only',
+                disabled: !count,
+                onClick: onAccept,
+              },
+              `Accept ${count} move${count === 1 ? '' : 's'}`,
+            ),
+            h(
+              'button',
+              { type: 'button', class: 'button button-secondary', onClick: onClose },
+              'Discard',
+            ),
+          ),
+        ]
+      : h(
+          'p',
+          {},
+          'The weeks shown are already as smooth as the plans allow: no visit can move to lower the load within its rules.',
+        ),
   );
 }

@@ -64,6 +64,17 @@ export function timelineQuery(filters) {
   return query.toString();
 }
 
+/** Body of POST /api/planning/suggestions: the timeline's range and filters (Phase 20). Pure. */
+export function suggestionsBody(filters) {
+  const body = {};
+  if (filters.from) body.from = filters.from;
+  if (filters.year) body.year = Number(filters.year);
+  for (const key of ['site', 'category', 'type', 'performed_by', 'q']) {
+    if (filters[key]) body[key] = filters[key];
+  }
+  return body;
+}
+
 /** True when a filter narrows the plans (the range and grouping do not). Pure. */
 export const hasPlanFilters = (filters) =>
   ['site', 'category', 'type', 'performed_by', 'q'].some((k) => filters[k]);
@@ -868,6 +879,8 @@ export function renderPlanner(
     load = nextLoad;
   };
   return {
+    /** Ghost chips where the proposed visits would go; the visits leaving fade (Phase 20). */
+    propose: (moves) => showProposal(container, data, moves),
     preview: (figures) => show(figures, true),
     reset: () => show({ figures: data.figures, tiles: data.tiles }, false),
     /** A short message under the toolbar: why a drop was refused, what was moved. */
@@ -876,6 +889,36 @@ export function renderPlanner(
       message.dataset.tone = tone;
     },
   };
+}
+
+/**
+ * Shows a balancing proposal on the grid: a dashed ghost chip in the week each visit would go
+ * to, the visit itself faded. A new call replaces the previous proposal.
+ */
+function showProposal(container, data, moves) {
+  const grid = container.querySelector('.planner-grid');
+  if (!grid) return;
+  for (const el of grid.querySelectorAll('.chip-ghost.is-proposal')) el.remove();
+  for (const el of grid.querySelectorAll('.chip.is-leaving')) el.classList.remove('is-leaving');
+  const index = new Map(data.weeks.map((w, i) => [w.week, i]));
+  for (const move of moves) {
+    const chip = grid.querySelector(`.chip[data-occurrence="${move.occurrence_id}"]`);
+    const cell = grid.querySelector(
+      `tr[data-plan="${move.plan_id}"] td.week-cell[data-index="${index.get(move.to)}"]`,
+    );
+    if (!chip || !cell) continue;
+    chip.classList.add('is-leaving');
+    // A picture only: no identity of the visit, so no handler takes it for one.
+    const ghost = chip.cloneNode(true);
+    ghost.className = 'chip chip-ghost is-proposal';
+    for (const name of Object.keys(ghost.dataset)) delete ghost.dataset[name];
+    for (const name of ['id', 'title', 'aria-label', 'aria-describedby', 'aria-current']) {
+      ghost.removeAttribute(name);
+    }
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.tabIndex = -1;
+    cell.append(ghost);
+  }
 }
 
 /** Undo / Redo, the blocked weeks, and the hint on how to move visits. */
@@ -914,6 +957,17 @@ function toolbar({ filters, canEdit, history, message }) {
     ),
     canEdit
       ? h(
+          'a',
+          {
+            href: planningUrl(filters, '/planning/suggestions'),
+            'data-link': true,
+            class: 'button button-secondary online-only',
+          },
+          'Suggest a smoother plan',
+        )
+      : null,
+    canEdit
+      ? h(
           'p',
           { id: 'planner-move-help', class: 'planner-help muted' },
           'Drag a planned visit to another week, or select it and press Shift + arrow keys, then Enter (Escape cancels). The first planned visit of a row moves the whole series; Alt + Shift + arrows move the series from any visit.',
@@ -924,7 +978,7 @@ function toolbar({ filters, canEdit, history, message }) {
 }
 
 /** Routes of the planner that show a side panel (plan or plan form). */
-const PANEL_ROUTES = ['plan', 'planCreate', 'blockedWeeks'];
+const PANEL_ROUTES = ['plan', 'planCreate', 'blockedWeeks', 'suggestions'];
 
 /**
  * Opens the split view for a plan panel, or closes it (and empties the panel) on the plain

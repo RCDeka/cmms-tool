@@ -76,7 +76,8 @@ frontend/
     plan-panel.js             plan panel (the visit clicked: move, skip, restore; move the series;
                               next visits), plan form, blocked weeks panel
     planner-editing.js        drag (pointer: mouse, pen, touch) and keyboard moves of visits (Phase 18)
-    planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures)
+    planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures) and
+                              the figures of a balancing proposal
     planning-settings.js      planning settings page (administrators) with the capacity preview
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
     schedule.js               week scheduler: week switcher, open weekends, tiles, tray, people × days grid
@@ -129,6 +130,7 @@ export const ENTITIES = {
 | `/planning?from=…\|year=…&group=…&site=…&category=…&type=…&performed_by=…&q=…` | year planner (maintenance roles, online only, D48) |
 | `/planning/plans/new`, `/planning/plans/:id?occurrence=N` | planner + plan form or plan panel (split view; `occurrence`: the visit clicked) (creation: SUPERVISOR, ADMIN) |
 | `/planning/blocked-weeks` | planner + blocked weeks panel (every maintenance role reads; SUPERVISOR, ADMIN edit) |
+| `/planning/suggestions` | planner + balancing proposal (SUPERVISOR, ADMIN, online only, D53) |
 | `/admin/planning` | planning settings (ADMIN, online only) |
 | `/schedule?week=…` | week scheduler (maintenance roles, online only; technicians read only, D52) |
 | `/schedule/work-orders/:id?week=…[&person=N&day=D]` | scheduler + panel scheduling a work order of the tray (from a drop on a person's day) |
@@ -258,7 +260,7 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - **Release job**: `npm run pm:release` (`node src/db/cli.js release`), run daily by `deploy/systemd/fast-cmms-pm-release.timer` (04:00, after the backup).
 - **Week scheduler** (`/schedule`, Phase 19, D52): reads `GET /api/schedule` (which releases the visits due first) and keeps the week in memory while panels open and close; every change is one API call (drop of a card: `POST /schedule/allocations`, or the split panel when the job is longer than a block or has no estimate; drop of a block: `PUT …/allocations/:id`; `+` / `−`: its length), then the week is fetched again. A locked block refuses the drag in the browser with the reason; the server refuses it too. Online only; no undo yet (D52).
 - **My week** (`/my-week`): `GET /api/my-week`, saved on the device (`config.my_week`, the last 4 weeks fetched) with its work orders in `wo_records`; offline, the saved week is shown with a notice and its changes (order, lock) are disabled.
-- **Planned**: the balancing assistant (Phase 20, `docs/spec-preventive-maintenance.md` §7).
+- **Balancing assistant** (`/planning/suggestions`, Phase 20, D53): a planner panel that asks `POST /api/planning/suggestions` once per range and filters, shows the moves as ghost chips on the grid (the visits leaving faded) and the tiles and load strip as if the ticked moves were accepted (`previewMoves` in `planning-rules.js`, the same figures as the server's), and, on Accept, sends each ticked move as an ordinary visit move, in order; the moves done form one Undo step (a refused one is reported, the others stay).
 
 ## AI readiness (future)
 

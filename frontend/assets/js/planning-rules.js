@@ -276,3 +276,32 @@ export function previewFigures(data, planId, move, categories) {
   const figures = weeklyFigures(weeks, occurrences, capacity);
   return { figures, tiles: planningTiles(figures, capacity, categories) };
 }
+
+/**
+ * Figures and tiles of the timeline with some visits in other weeks: the balancing proposal,
+ * or the part of it the user keeps (Phase 20).
+ * @param {object} data timeline response
+ * @param {{ occurrence_id: number, to: string }[]} moves
+ */
+export function previewMoves(data, moves, categories) {
+  const weekOf = new Map(moves.map((m) => [m.occurrence_id, m.to]));
+  const occurrences = data.groups.flatMap((group) =>
+    group.plans.flatMap((plan) =>
+      plan.occurrences.map((o) => ({
+        week: weekOf.get(o.id) ?? o.week,
+        status: o.status,
+        estimated_hours: plan.estimated_hours,
+        category: plan.category,
+        site: plan.site,
+        performed_by: plan.performed_by,
+      })),
+    ),
+  );
+  const capacity = { total: data.capacity.weekly, by_category: data.capacity.by_category };
+  const figures = weeklyFigures(
+    data.weeks.map((w) => w.week),
+    occurrences,
+    capacity,
+  );
+  return { figures, tiles: planningTiles(figures, capacity, categories) };
+}

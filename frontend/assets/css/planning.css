@@ -675,3 +675,56 @@
     transition: none;
   }
 }
+
+/* Balancing assistant (Phase 20): the proposal panel. Ghost chips reuse .chip-ghost. */
+.proposal-summary {
+  width: 100%;
+  margin: var(--space-3) 0;
+  border-collapse: collapse;
+}
+
+.proposal-summary th,
+.proposal-summary td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-grid);
+  text-align: left;
+}
+
+.proposal-summary .numeric {
+  text-align: right;
+}
+
+.proposal-summary .is-better {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.proposal-list {
+  list-style: none;
+  margin: var(--space-3) 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.proposal-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.proposal-list input {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  flex: none;
+}
+
+.proposal-list label {
+  display: grid;
+  gap: 2px;
+  min-height: var(--touch-target);
+}

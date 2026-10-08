@@ -37,7 +37,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
 | Conflict console and resolution | no | no | yes | yes |
 | Read plans, the year planner and the planning settings (D48) | no | yes | yes | yes |
-| `POST /plans`, `PUT /plans/:id`, `PUT /plans/:id/anchor`, `POST /planning/release` | no | no | yes | yes |
+| `POST /plans`, `PUT /plans/:id`, `PUT /plans/:id/anchor`, `POST /planning/release`, `POST /planning/suggestions` | no | no | yes | yes |
 | Move, skip, restore a visit (`/plan-occurrences/:id…`); add or remove blocked weeks | no | no | yes | yes |
 | `PUT /planning/settings` (reserve, daily capacity, release horizon, longest block) | no | no | no | yes |
 | Read the week schedule (`GET /schedule`) and their own week (`GET /my-week`) (D52) | no | yes | yes | yes |
@@ -364,7 +364,7 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 
 ## Maintenance plans and the year planner (added, D48, D49)
 
-Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The week scheduler and My week are below (Phase 19); the balancing assistant (Phase 20) is specified in `docs/spec-preventive-maintenance.md` §6.
+Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The balancing assistant (Phase 20) and the week scheduler and My week (Phase 19) follow.
 
 ### GET /api/plans
 - Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, building, location or supplier), `site?` (`|`-separated), `building?` (`|`), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
@@ -420,6 +420,18 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
                              supplier, version, warnings, occurrences: Occurrence[] }] }] }
   ```
 - `load` is null without capacity (e.g. a trade nobody has as specialty). Errors: 400.
+
+### POST /api/planning/suggestions (Phase 20, D53)
+- Roles: SUPERVISOR, ADMIN. Body: the timeline's range and filters, as JSON: `{ "from"?: week, "year"?: number, "weeks"?: 1–53, "q"?, "site"? (`|`-separated), "building"?, "category"?, "type"?, "performed_by"? }` (`from` and `year` together → 400; anything else, `group_by` included → 400). Runs the release first, like the timeline. Rules BR-B1 to BR-B4.
+- `200`:
+  ```
+  { "from", "to", "current_week",
+    "moves": [{ occurrence_id, plan_id, code, title, type, category, site, estimated_hours,
+                from, to, due_week, version }],                   // in the order chosen
+    "before": { figures, tiles },                                  // as in the timeline
+    "after":  { figures, tiles } }                                 // with every move applied
+  ```
+- Nothing is saved: the client sends the moves the user keeps as `PUT /api/plan-occurrences/:id`. `moves` is empty when nothing can lower the load within the plans' rules. Errors: 400; 403.
 
 ### POST /api/planning/release
 - Roles: SUPERVISOR, ADMIN. Releases now (BR-P6), in the name of the user. `200 { "released": 3, "work_order_ids": [...] }`; a second call answers `{ "released": 0, "work_order_ids": [] }`.
@@ -495,5 +507,5 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
-| Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |
+| Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/suggestions`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |
 | Week scheduler | `GET /api/schedule`, `POST /api/schedule/allocations`, `PUT/DELETE /api/schedule/allocations/:id`, `PUT /api/schedule/allocations/:id/lock`, `PUT /api/schedule/day-order`, `PUT /api/schedule/capacity`, `PUT /api/schedule/weeks/:week`, `GET /api/my-week` |
