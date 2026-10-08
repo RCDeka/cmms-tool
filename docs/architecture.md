@@ -73,6 +73,7 @@ frontend/
     planning.js               year planner: filters in the URL, tiles, load strip, 52-week grid (D48)
     plan-panel.js             plan panel (the visit clicked, details, next visits) and plan form
     planning-settings.js      planning settings page (administrators) with the capacity preview
+    asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
     dom.js                    escapeHtml, element helpers
   assets/vendor/              idb, chart.js (vendored, D17)
   test/                       Vitest + fake-indexeddb + jsdom

@@ -1019,3 +1019,60 @@ a.button {
   border: 0;
   border-top: 1px solid var(--color-border);
 }
+
+/* Asset picker (plan and work order forms): a wide dialog with filters, sortable table, pages. */
+.asset-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.asset-pick input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.asset-chosen:empty {
+  display: none;
+}
+
+.asset-chosen {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+.asset-dialog {
+  width: min(96vw, 1180px);
+  max-height: 90dvh;
+}
+
+.asset-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.asset-picker-filters input[type='search'] {
+  width: 18rem;
+  max-width: 100%;
+}
+
+.asset-picker-count {
+  margin: 0 0 var(--space-2);
+}
+
+.asset-picker-results[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.asset-picker-sub {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.asset-picker-table tr.is-broken-down td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-danger);
+}

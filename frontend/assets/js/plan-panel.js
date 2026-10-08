@@ -250,7 +250,10 @@ export function renderPlanPanel(
  * @param {{ plan: object | null, sites: string[], onClose: () => void,
  *   onSubmit: (values: object, form: HTMLFormElement, assetCode: string) => void }} options
  */
-export function renderPlanForm(container, { plan, sites, defaultWeek, onClose, onSubmit }) {
+export function renderPlanForm(
+  container,
+  { plan, sites, defaultWeek, onClose, onSubmit, pickAsset },
+) {
   const editing = Boolean(plan);
   const input = (name, attrs = {}) =>
     h('input', { name, type: 'text', value: plan?.[name] ?? '', ...attrs });
@@ -272,6 +275,42 @@ export function renderPlanForm(container, { plan, sites, defaultWeek, onClose, o
     autocapitalize: 'characters',
     autocomplete: 'off',
   });
+  // The chosen asset in words, so the user sees what the code stands for.
+  const describe = (asset) =>
+    asset
+      ? `${asset.code} — ${asset.name}, ${[asset.site, asset.building].filter(Boolean).join(' · ')}`
+      : '';
+  const assetName = h(
+    'p',
+    { class: 'asset-chosen' },
+    plan?.asset ? `${plan.asset.code} — ${plan.asset.name}` : '',
+  );
+  assetCode.addEventListener('input', () => {
+    assetName.textContent = '';
+  });
+  const browse = h(
+    'button',
+    {
+      type: 'button',
+      class: 'button button-secondary online-only',
+      onClick: async () => {
+        const site = form.elements.site.value.trim();
+        const asset = await pickAsset({
+          ...(form.elements.category.value && { category: form.elements.category.value }),
+          ...(sites.includes(site) && { site }),
+        });
+        if (!asset) return;
+        assetCode.value = asset.code;
+        assetName.textContent = describe(asset);
+        // The site and building follow the asset (BR-P9): clear the typed ones.
+        form.elements.site.value = '';
+        form.elements.building.value = '';
+        assetCode.setAttribute('aria-invalid', 'false');
+        assetCode.focus();
+      },
+    },
+    'Browse assets…',
+  );
   const performer = select(
     'performed_by',
     PERFORMERS.map((p) => [p, valueLabel('performed_by', p)]),
@@ -295,6 +334,14 @@ export function renderPlanForm(container, { plan, sites, defaultWeek, onClose, o
   const active = editing
     ? h('input', { name: 'is_active', type: 'checkbox', checked: plan.is_active })
     : null;
+
+  const assetRow = formRow('p-asset_code', 'Asset code', assetCode, {
+    hint: 'Type a code or browse the assets. The site, building and trade then follow the asset.',
+  });
+  const pick = h('div', { class: 'asset-pick' });
+  assetCode.before(pick);
+  pick.append(assetCode, browse);
+  assetRow.querySelector('.form-control').append(assetName);
 
   const form = h(
     'form',
@@ -326,9 +373,7 @@ export function renderPlanForm(container, { plan, sites, defaultWeek, onClose, o
         hint: 'Regulatory visits have a legal deadline.',
       },
     ),
-    formRow('p-asset_code', 'Asset code', assetCode, {
-      hint: 'The site, building and trade then follow the asset.',
-    }),
+    assetRow,
     formRow('p-site', 'Site', input('site', { list: 'p-site-list', maxlength: '200' }), {
       hint: 'Without an asset.',
     }),

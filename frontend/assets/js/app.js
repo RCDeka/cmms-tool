@@ -86,6 +86,7 @@ import {
 } from './plan-panel.js';
 import { planningUrl, renderPlanner, setPlannerPanel, timelineQuery } from './planning.js';
 import { renderPlanningSettings } from './planning-settings.js';
+import { openAssetPicker } from './asset-picker.js';
 import {
   renderRequestDetail,
   renderRequestForm,
@@ -832,6 +833,13 @@ async function showPlanning(route, isCurrent) {
       defaultWeek: data.current_week,
       onClose: current ? () => render(currentRoute()) : close,
       onSubmit: (raw, form, assetCode) => submitPlan(raw, form, assetCode, current, filters),
+      pickAsset: (initial) =>
+        openAssetPicker({
+          dialog: document.getElementById('asset-dialog'),
+          fetchPage: (q) => apiFetch(`/assets?${q}`),
+          sites,
+          initial,
+        }),
     });
     detailContainer.querySelector('#p-title')?.focus();
   };

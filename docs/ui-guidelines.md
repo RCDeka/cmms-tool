@@ -99,6 +99,12 @@ Badges always show text. Badge class names come from the field and the code in k
 
 Every column title of the asset and work order tables is a button. A click sorts by that column ascending; a second click on the same column flips to descending, and so on. The sorted column has `aria-sort` and an arrow (▲ ascending, ▼ descending); the other columns show a faint ↕. Enumerated columns follow business order (priority Low → Urgent), and empty values (no assignee, no due date) come last. Focus stays on the column title after the sort. The default order (assets by code, work orders newest first) is not in the URL.
 
+## Asset picker (D50)
+
+- The asset field of the plan form and of the work order form has a **Browse assets…** button (`.online-only`) next to the code, so nobody needs to know asset codes by heart.
+- It opens a wide modal dialog "Choose an asset": search (code, name, building, location, brand…, full text), filters for site, trade and status, then a table of 20 assets per page with Code, Name, Location (building · floor · exact location), Site, Trade (with the subcategory), Status and Criticality badges, and a **Choose** button per row (its name says which asset). Code, name, site, trade, status and criticality sort from their column titles like the main tables (▲ / ▼ / ↕, `aria-sort`); broken-down assets keep their red side line. Pages use the usual pagination.
+- The plan form opens it already filtered on the trade chosen and the site typed. Choosing fills the code, shows "AST-0138 — Chiller …, site · building" under it, and clears a typed site and building (they follow the asset). Escape or ✕ closes without choosing; focus returns to the button.
+
 ## Year planner (D48, Phase 17)
 
 - **Sidebar**: "Year planner" for the maintenance roles; "Planning settings" for administrators.

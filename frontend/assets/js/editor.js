@@ -15,6 +15,7 @@ import { apiFetch } from './api.js';
 import { applyToPage, isOnline } from './network.js';
 import { enqueue, discard, listEntries, pendingChanges } from './queue.js';
 import { findAssetById, findAssetByCode } from './refs.js';
+import { openAssetPicker } from './asset-picker.js';
 import { detailUrl, listUrl, navigate, parseRoute } from './router.js';
 import {
   ASSET_CREATION_FIELDS,
@@ -94,6 +95,15 @@ async function formCtx() {
     },
     async findAssetById(id) {
       const asset = await findAssetById(id);
+      if (asset) assetRefs.set(asset.id, asset);
+      return asset;
+    },
+    async pickAsset() {
+      const asset = await openAssetPicker({
+        dialog: document.getElementById('asset-dialog'),
+        fetchPage: (query) => apiFetch(`/assets?${query}`),
+        sites: refs.sites,
+      });
       if (asset) assetRefs.set(asset.id, asset);
       return asset;
     },

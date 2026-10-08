@@ -215,8 +215,35 @@ function buildAssetControl(common, id, value, ctx) {
   };
   input.addEventListener('change', resolve);
 
+  // Browse the asset list instead of typing a code (needs a connection).
+  const browse = ctx.pickAsset
+    ? h(
+        'button',
+        {
+          type: 'button',
+          class: 'button button-secondary online-only',
+          onClick: async () => {
+            const asset = await ctx.pickAsset();
+            if (!asset) return;
+            input.value = asset.code;
+            resolved = asset.id;
+            hint.textContent = `${asset.code} — ${asset.name} (${asset.site})`;
+            ctx.onAsset?.(asset);
+            ctx.onChange?.();
+            input.focus();
+          },
+        },
+        'Browse assets…',
+      )
+    : null;
+
   return {
-    el: h('div', { class: 'asset-control' }, input, hint),
+    el: h(
+      'div',
+      { class: 'asset-control' },
+      h('div', { class: 'asset-pick' }, input, browse),
+      hint,
+    ),
     input,
     read: () => resolved,
     async write(v) {
