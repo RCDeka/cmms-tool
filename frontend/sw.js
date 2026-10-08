@@ -58,6 +58,7 @@ const SHELL_FILES = [
   '/assets/js/save-modes.js',
   '/assets/js/schedule.js',
   '/assets/js/schedule-editing.js',
+  '/assets/js/schedule-history.js',
   '/assets/js/schedule-panel.js',
   '/assets/js/schedule-rules.js',
   '/assets/js/session.js',

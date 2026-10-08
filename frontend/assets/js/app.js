@@ -102,6 +102,7 @@ import { readMyWeek, renderMyWeek, saveMyWeek } from './my-week.js';
 import { longDayLabel as longDay, renderScheduler, scheduleUrl } from './schedule.js';
 import { valueLabel } from './labels.js';
 import { attachScheduleEditing } from './schedule-editing.js';
+import { blockBody, createScheduleHistory } from './schedule-history.js';
 import {
   renderBlockPanel,
   renderCapacityPanel,
@@ -215,6 +216,7 @@ async function render(route) {
   // The scheduler keeps its week in memory while a panel opens or closes.
   if (route.name !== 'schedule') {
     scheduleCache = null;
+    scheduleHistory.clear();
     detachScheduleEditing?.();
     detachScheduleEditing = null;
   }
@@ -1330,6 +1332,8 @@ let scheduleCache = null; // { week, data }
 let detachScheduleEditing = null;
 /** Scheduler on screen: its message line. */
 let scheduleView = null;
+/** Changes made on the scheduler in this visit, for Undo / Redo (D54). */
+const scheduleHistory = createScheduleHistory(apiFetch);
 
 /** Today in the browser's time zone, 'YYYY-MM-DD'. */
 const todayDate = () => new Intl.DateTimeFormat('en-CA').format(new Date());
@@ -1340,11 +1344,14 @@ const writeError = (err, what = 'nothing was changed') =>
 
 /**
  * Sends one change of the scheduler, then draws the week again (closing the panel when
- * `close`) and says what was done. Resolves to an error message, or null.
+ * `close`) and says what was done. `change` is a change for the history (schedule-history.js),
+ * kept for Undo, or a function for a write outside it (the estimate of a work order).
+ * Resolves to an error message, or null.
  */
-async function scheduleChange(send, done, { form = null, close = false } = {}) {
+async function scheduleChange(change, done, { form = null, close = false } = {}) {
   try {
-    await send();
+    if (typeof change === 'function') await change();
+    else await scheduleHistory.perform({ ...change, text: done.replace(/\.$/, '') });
   } catch (err) {
     const message = writeError(err);
     if (form) showErrors(form, apiFieldErrors(err), message);
@@ -1362,6 +1369,43 @@ async function scheduleChange(send, done, { form = null, close = false } = {}) {
   scheduleView?.say(done, 'success');
   return null;
 }
+
+/** Undo or Redo the last change of the scheduler, then draw the week again. */
+async function replaySchedule(mode) {
+  let change;
+  try {
+    change = await scheduleHistory[mode]();
+  } catch (err) {
+    const message = `${writeError(err)} The change could not be ${mode === 'undo' ? 'undone' : 'redone'}.`;
+    announce(message);
+    scheduleCache = null;
+    await render(currentRoute()); // show what is there now
+    scheduleView?.say(message, 'danger');
+    return;
+  }
+  if (!change) return;
+  const text = `${mode === 'undo' ? 'Undone' : 'Redone'}: ${change.text}.`;
+  announce(text);
+  scheduleCache = null;
+  await render(currentRoute());
+  scheduleView?.say(text, 'success');
+}
+
+/** Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) on the scheduler, outside text fields. */
+function onScheduleShortcut(event) {
+  if (currentRoute().name !== 'schedule' || !hasRole('SUPERVISOR', 'ADMIN')) return;
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+  const key = event.key.toLowerCase();
+  if (key === 'z' && !event.shiftKey) replaySchedule('undo');
+  else if (key === 'y' || (key === 'z' && event.shiftKey)) replaySchedule('redo');
+  else return;
+  event.preventDefault();
+}
+
+/** Values of a block for the fields of `changes`, to put them back. Pure. */
+const fieldsOf = (block, changes) =>
+  Object.fromEntries(Object.keys(changes).map((k) => [k, block[k] ?? null]));
 
 const personNameOf = (data, id) => {
   const p = data.people.find((x) => x.id === id);
@@ -1397,23 +1441,27 @@ async function showSchedule(route, isCurrent) {
   const scroll = previous ? { left: previous.scrollLeft, top: previous.scrollTop } : null;
 
   detachScheduleEditing?.();
+  const labels = scheduleHistory.labels();
   scheduleView = renderScheduler(tableContainer, {
     data,
     canEdit,
     panel,
     today: todayDate(),
+    history: {
+      undoLabel: labels.undo,
+      redoLabel: labels.redo,
+      onUndo: () => replaySchedule('undo'),
+      onRedo: () => replaySchedule('redo'),
+    },
     onWeek: (next) => navigate(scheduleUrl(next === data.current_week ? null : next)),
     onWeekend: (key, open) =>
       scheduleChange(
-        () =>
-          apiFetch(`/schedule/weeks/${data.week}`, {
-            method: 'PUT',
-            body: {
-              saturday_open: data.saturday_open,
-              sunday_open: data.sunday_open,
-              [key]: open,
-            },
-          }),
+        {
+          kind: 'weekend',
+          week: data.week,
+          before: { saturday_open: data.saturday_open, sunday_open: data.sunday_open },
+          after: { saturday_open: data.saturday_open, sunday_open: data.sunday_open, [key]: open },
+        },
         `${key === 'saturday_open' ? 'Saturday' : 'Sunday'} ${open ? 'opened' : 'closed'} for ${formatWeek(data.week)}.`,
       ),
   });
@@ -1444,42 +1492,42 @@ async function showSchedule(route, isCurrent) {
               );
             }
             return scheduleChange(
-              () =>
-                apiFetch('/schedule/allocations', {
-                  method: 'POST',
-                  body: {
-                    blocks: [
-                      {
-                        kind: 'WORK',
-                        work_order_id: item.id,
-                        technician_id: drop.person,
-                        day: drop.day,
-                        hours,
-                      },
-                    ],
+              {
+                kind: 'create',
+                blocks: [
+                  {
+                    kind: 'WORK',
+                    work_order_id: item.id,
+                    technician_id: drop.person,
+                    day: drop.day,
+                    hours,
                   },
-                }),
+                ],
+              },
               `${item.number}: ${formatDuration(hours)} for ${who} on ${when}.`,
             );
           }
           const block = blockById(drop.id);
+          const moved = { day: drop.day, technician_id: drop.person };
           return scheduleChange(
-            () =>
-              apiFetch(`/schedule/allocations/${block.id}`, {
-                method: 'PUT',
-                body: { day: drop.day, technician_id: drop.person, version: block.version },
-              }),
+            {
+              kind: 'update',
+              ref: scheduleHistory.refOf(block),
+              before: fieldsOf(block, moved),
+              after: moved,
+            },
             `Block moved to ${who}, ${when}.`,
           );
         },
         onResize: (id, hours) => {
           const block = blockById(id);
           return scheduleChange(
-            () =>
-              apiFetch(`/schedule/allocations/${id}`, {
-                method: 'PUT',
-                body: { hours, version: block.version },
-              }),
+            {
+              kind: 'update',
+              ref: scheduleHistory.refOf(block),
+              before: { hours: block.hours },
+              after: { hours },
+            },
             `Block now ${formatDuration(hours)}.`,
           );
         },
@@ -1547,7 +1595,7 @@ async function showSchedule(route, isCurrent) {
         }
         const total = blocks.reduce((s, b) => s + b.hours, 0);
         return scheduleChange(
-          () => apiFetch('/schedule/allocations', { method: 'POST', body: { blocks } }),
+          { kind: 'create', blocks },
           `${item.number}: ${formatDuration(total)} scheduled in ${blocks.length} block${blocks.length === 1 ? '' : 's'}.`,
           { form, close: true },
         );
@@ -1572,11 +1620,12 @@ async function showSchedule(route, isCurrent) {
         if (!Object.keys(changes).length)
           return showErrors(form, {}, 'Nothing to save: no value was changed.');
         return scheduleChange(
-          () =>
-            apiFetch(`/schedule/allocations/${block.id}`, {
-              method: 'PUT',
-              body: { ...changes, version: block.version },
-            }),
+          {
+            kind: 'update',
+            ref: scheduleHistory.refOf(block),
+            before: fieldsOf(block, changes),
+            after: changes,
+          },
           'Block saved.',
           { form },
         );
@@ -1592,21 +1641,19 @@ async function showSchedule(route, isCurrent) {
         });
         if (choice !== 'remove') return;
         scheduleChange(
-          () =>
-            apiFetch(`/schedule/allocations/${block.id}?version=${block.version}`, {
-              method: 'DELETE',
-            }),
+          { kind: 'delete', ref: scheduleHistory.refOf(block), block: blockBody(block) },
           'Block removed: its hours are back in the tray.',
           { close: true },
         );
       },
       onLock: (start, form) =>
         scheduleChange(
-          () =>
-            apiFetch(`/schedule/allocations/${block.id}/lock`, {
-              method: 'PUT',
-              body: { locked_start: start, version: block.version },
-            }),
+          {
+            kind: 'lock',
+            ref: scheduleHistory.refOf(block),
+            from: block.locked_start,
+            to: start,
+          },
           start ? `Appointment locked at ${start}.` : 'Appointment unlocked.',
           { form },
         ),
@@ -1631,7 +1678,7 @@ async function showSchedule(route, isCurrent) {
       onClose: close,
       onSubmit: (block, form) =>
         scheduleChange(
-          () => apiFetch('/schedule/allocations', { method: 'POST', body: { blocks: [block] } }),
+          { kind: 'create', blocks: [block] },
           `${valueLabel('allocation_kind', block.kind)}: ${formatDuration(block.hours)} for ${personNameOf(data, block.technician_id)} on ${longDay(block.day)}.`,
           { form, close: true },
         ),
@@ -1645,11 +1692,13 @@ async function showSchedule(route, isCurrent) {
       onClose: close,
       onSubmit: (input, form) =>
         scheduleChange(
-          () =>
-            apiFetch('/schedule/capacity', {
-              method: 'PUT',
-              body: { technician_id: person.id, day: panel.day, ...input },
-            }),
+          {
+            kind: 'capacity',
+            person: person.id,
+            day: panel.day,
+            before: person.days.find((d) => d.day === panel.day).override,
+            after: input.hours === null ? null : input,
+          },
           input.hours === null
             ? `${personNameOf(data, person.id)}: usual hours on ${longDay(panel.day)}.`
             : `${personNameOf(data, person.id)}: ${formatDuration(input.hours)} on ${longDay(panel.day)}.`,
@@ -2358,6 +2407,7 @@ function init() {
   initLayout({ onLogout });
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
   document.addEventListener('keydown', onPlannerShortcut);
+  document.addEventListener('keydown', onScheduleShortcut);
   setRerender(() => render(currentRoute()));
   setServerRecordListener(updateShownRecord);
   setNavigationGuard(leaveGuard);

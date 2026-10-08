@@ -497,8 +497,25 @@ function tilesSection(data) {
   );
 }
 
-/** Week switcher (previous, this week, next, a week field) and the weekend switches. */
-function toolbar(data, { canEdit, onWeek, onWeekend, message }) {
+/** Undo or Redo button, naming the change it would undo or redo (D54). */
+function historyButton(label, entry, onClick, key) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'button button-secondary online-only',
+      disabled: !entry,
+      title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
+      'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
+      onClick,
+    },
+    label,
+    entry ? h('span', { class: 'visually-hidden' }, `: ${entry}`) : null,
+  );
+}
+
+/** Week switcher (previous, this week, next, a week field), the weekend switches, Undo / Redo. */
+function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
   const shown = data.week === data.current_week ? null : data.week;
   const link = (week, text, label) =>
     h(
@@ -554,6 +571,12 @@ function toolbar(data, { canEdit, onWeek, onWeekend, message }) {
           { class: 'schedule-weekend' },
           weekend('saturday_open', 'Open Saturday'),
           weekend('sunday_open', 'Open Sunday'),
+          history
+            ? [
+                historyButton('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
+                historyButton('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
+              ]
+            : null,
         )
       : h(
           'p',
@@ -564,7 +587,7 @@ function toolbar(data, { canEdit, onWeek, onWeekend, message }) {
       ? h(
           'p',
           { id: 'schedule-help', class: 'planner-help muted' },
-          'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour.',
+          'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour; Ctrl + Z undoes, Ctrl + Y redoes.',
         )
       : null,
     message,
@@ -575,11 +598,16 @@ function toolbar(data, { canEdit, onWeek, onWeekend, message }) {
  * Renders the week scheduler.
  * @param {HTMLElement} container
  * @param {{ data: object, canEdit: boolean, panel: object | null, today: string,
+ *   history?: { undoLabel: string | null, redoLabel: string | null, onUndo: () => void,
+ *     onRedo: () => void },
  *   onWeek: (week: string) => void,
  *   onWeekend: (key: 'saturday_open' | 'sunday_open', open: boolean) => void }} options
  * @returns {{ say: (text: string, tone?: string) => void }}
  */
-export function renderScheduler(container, { data, canEdit, panel, today, onWeek, onWeekend }) {
+export function renderScheduler(
+  container,
+  { data, canEdit, panel, today, history = null, onWeek, onWeekend },
+) {
   const message = h('p', { class: 'planner-message', role: 'status' });
   const people = data.people.length;
   replaceChildren(
@@ -587,7 +615,7 @@ export function renderScheduler(container, { data, canEdit, panel, today, onWeek
     h(
       'div',
       { class: 'scheduler' },
-      toolbar(data, { canEdit, onWeek, onWeekend, message }),
+      toolbar(data, { canEdit, history, onWeek, onWeekend, message }),
       tilesSection(data),
       h(
         'div',
