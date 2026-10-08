@@ -98,3 +98,7 @@ Badges always show text. Badge class names come from the field and the code in k
 ## Table sort (D42)
 
 Every column title of the asset and work order tables is a button. A click sorts by that column ascending; a second click on the same column flips to descending, and so on. The sorted column has `aria-sort` and an arrow (▲ ascending, ▼ descending); the other columns show a faint ↕. Enumerated columns follow business order (priority Low → Urgent), and empty values (no assignee, no due date) come last. Focus stays on the column title after the sort. The default order (assets by code, work orders newest first) is not in the URL.
+
+## Planned: planning screens (D48)
+
+The year planner and week scheduler (drag and drop with live impact, keyboard moves and undo, chips and blocks that always carry text or an icon besides their style) are described in `docs/spec-preventive-maintenance.md` §7–9.

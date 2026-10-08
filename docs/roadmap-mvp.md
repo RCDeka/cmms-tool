@@ -117,6 +117,15 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 
 - **Phase 16: review of staff requests (product owner, 2026-10-08)** — done (D47, BR-R6 to BR-R9). Acceptance: a new request is "Waiting for review" for the requester and counted on the supervisors' and admins' dashboard tile "Staff requests to review" (technicians have no tile); the tile opens the matching list; a request waiting for review can be neither assigned, started nor cancelled by a normal edit; a supervisor approves it only with a technician or supervisor assigned, or rejects it with a reason; the requester then sees "Approved" with the assignee, or "Rejected" with the reason; the count goes down; requests sent before the change are classified by the migration.
 
+## Planned phases: preventive maintenance (D48)
+
+Specified in `docs/spec-preventive-maintenance.md` (section 11 holds the full acceptance criteria). Not started.
+
+- **Phase 17: maintenance plans and the read-only year planner**: plans, occurrences, release of work orders 4 weeks ahead, 52-week grid grouped by site, building or trade, load strip and balancing tiles.
+- **Phase 18: year planner editing**: drag a series or one occurrence with live impact, tolerance, regulatory and blocked-week rules, keyboard moves, undo.
+- **Phase 19: week scheduler and My week**: "to schedule" tray, day allocations per technician (30-minute steps, 7 h a day, blocks ≤ 3 h 30, splitting), travel and preparation time, locked appointments, open weekends, carry-over, technicians' week offline.
+- **Phase 20: balancing assistant**: "Suggest a smoother plan" within each plan's rules, shown before acceptance.
+
 ## Post-MVP backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.

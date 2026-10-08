@@ -20,7 +20,7 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features (only the `.ai-only` mechanism), preventive-maintenance scheduling, inventory, file uploads. See the backlog in `docs/roadmap-mvp.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features (only the `.ai-only` mechanism), inventory, file uploads. Preventive maintenance is specified (D48, `docs/spec-preventive-maintenance.md`) but not started: implement it only phase by phase as scheduled in `docs/roadmap-mvp.md`. See the backlog in `docs/roadmap-mvp.md`.
 
 ## Code conventions
 

@@ -34,7 +34,7 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 - **Staff requests**: bank staff (role `STAFF`) submit requests ("I don't know" is accepted for the kind of problem and the urgency; the location is typed), follow their open requests with a plain-words status and next step, see all past requests, and exchange comments with the maintenance team, who handle each request as a work order. A supervisor or admin reviews each request first (dashboard tile "Staff requests to review"): approve it and assign a technician or supervisor, or reject it with a reason the requester sees.
 - **Roles**: `STAFF`, `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
-Out of scope for the MVP: deleting work orders (they are cancelled), user administration (Phase 11), AI features, preventive maintenance, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`).
+Out of scope for the MVP: deleting work orders (they are cancelled), AI features, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`). Preventive maintenance (a 52-week year planner and a weekly scheduler per technician) is specified in `docs/spec-preventive-maintenance.md` and planned as Phases 17–20.
 
 ## Run locally
 

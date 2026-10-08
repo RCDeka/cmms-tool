@@ -215,6 +215,8 @@ Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role
 | name | TEXT PK | migration file name |
 | applied_at | TEXT | |
 
+> **Planned (D48):** preventive maintenance adds tables `maintenance_plans`, `plan_occurrences`, `allocations`, `capacity_overrides`, `schedule_weeks`, `blocked_weeks`, `planning_settings`, and `plan_id` / `planned_week` on `work_orders`. See `docs/spec-preventive-maintenance.md` §4–5; this document will hold them once implemented.
+
 ## Business rules
 
 ### Users and authentication

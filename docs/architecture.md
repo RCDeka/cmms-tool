@@ -225,6 +225,10 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - Display (accessibility: never color alone): amber row background + ⚠ icon + text badge "Conflict" in the table. Banner and badge in the detail panel.
 - Console `/conflicts`: list with the record, the author and timestamp of each version. The detail view shows the two versions side by side, highlights divergent fields (BR-V6) and offers **Accept version A**, **Accept version B**, **Merge manually** (choose the value per divergent field).
 
+## Planned: preventive maintenance (D48)
+
+Two new screens, `/planning` (year planner, 52 weeks) and `/schedule` (week scheduler, days × technicians), plus `/my-week` for technicians (readable offline). Both planning screens are online only. See `docs/spec-preventive-maintenance.md` §7–9.
+
 ## AI readiness (future)
 
 - Buttons that need AI carry the `.ai-only` class and are disabled offline (see Network state).

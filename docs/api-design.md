@@ -331,6 +331,10 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
+## Planned: preventive maintenance (D48)
+
+`/api/plans`, `/api/plan-occurrences`, `/api/planning/*`, `/api/schedule/*` and `/api/my-week`, specified in `docs/spec-preventive-maintenance.md` §6. Not implemented yet.
+
 ## Future AI endpoints (not in the MVP)
 
 `POST /api/assistant/format-report` and `POST /api/assistant/find-work-order` are described in the brief. They are not implemented. The UI only prepares the `.ai-only` mechanism (see `docs/architecture.md`).
