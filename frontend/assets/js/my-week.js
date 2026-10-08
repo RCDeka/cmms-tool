@@ -1,0 +1,238 @@
+// My week (D48, Phase 19, spec §9): a technician's (or supervisor's) own days, appointments
+// first, then their blocks in their own order. They reorder their day and lock or unlock a
+// time on their own blocks (BR-S7). The week is saved on the device and readable offline
+// (P18); changes need a connection.
+import * as DB from './db.js';
+import { storesOf } from './db.js';
+import { h, replaceChildren } from './dom.js';
+import { formatDateTime, formatWeek, personName } from './format.js';
+import { valueLabel } from './labels.js';
+import { addWeeks } from './planning-rules.js';
+import { longDayLabel, myWeekUrl } from './schedule.js';
+import {
+  appointmentText,
+  dayWarningTexts,
+  formatDuration,
+  lockTimes,
+  reorder,
+} from './schedule-rules.js';
+
+/** Config key of the weeks saved on the device. */
+export const MY_WEEK_CACHE = 'my_week';
+/** Weeks kept on the device: the most recent ones fetched. */
+const KEPT_WEEKS = 4;
+
+/**
+ * Saves a week on the device, with its work orders (so they open offline too), keeping the
+ * last weeks fetched only.
+ * @param {object} data GET /api/my-week answer
+ */
+export async function saveMyWeek(data) {
+  const saved = (await DB.getConfig(MY_WEEK_CACHE)) ?? {};
+  const weeks = { ...saved, [data.week]: data };
+  const kept = Object.keys(weeks)
+    .sort((a, b) => weeks[b].generated_at.localeCompare(weeks[a].generated_at))
+    .slice(0, KEPT_WEEKS);
+  await DB.setConfig(MY_WEEK_CACHE, Object.fromEntries(kept.map((w) => [w, weeks[w]])));
+  if (data.work_orders.length) {
+    await DB.saveRecords(
+      storesOf('work_orders').records,
+      data.work_orders.map((w) => ({ ...w, _fetched_at: data.generated_at })),
+    );
+  }
+}
+
+/** A week saved on the device, or null. `week` null: the current week of the last fetch. */
+export async function readMyWeek(week) {
+  const saved = (await DB.getConfig(MY_WEEK_CACHE)) ?? {};
+  if (week) return saved[week] ?? null;
+  const latest = Object.values(saved).sort((a, b) =>
+    b.generated_at.localeCompare(a.generated_at),
+  )[0];
+  return latest ? (saved[latest.current_week] ?? null) : null;
+}
+
+/** Work orders of the weeks saved on the device: never evicted from the cache. */
+export async function myWeekWorkOrderIds() {
+  const saved = (await DB.getConfig(MY_WEEK_CACHE)) ?? {};
+  return Object.values(saved).flatMap((w) => w.work_orders.map((o) => o.id));
+}
+
+function blockCard(block, day, { onMove, onLock, canChange }) {
+  const wo = block.work_order;
+  const free = day.blocks.filter((b) => !b.locked_start);
+  const index = free.indexOf(block);
+  const title =
+    block.kind === 'WORK'
+      ? h('a', { href: `/work-orders/${wo.id}`, 'data-link': true }, `${wo.number} — ${wo.title}`)
+      : h('strong', {}, valueLabel('allocation_kind', block.kind));
+  const where = wo ? [wo.site, wo.building, wo.location].filter(Boolean).join(' · ') : null;
+  const moveButton = (direction, text) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'button button-secondary online-only',
+        disabled: !canChange || index === -1 || !reorder(day.blocks, block.id, direction),
+        'aria-label': `${text}: ${block.kind === 'WORK' ? wo.number : valueLabel('allocation_kind', block.kind)}`,
+        onClick: () => onMove(day, block, direction),
+      },
+      text,
+    );
+  const time = h(
+    'select',
+    { 'aria-label': `Start time of ${wo?.number ?? 'this block'}`, class: 'online-only' },
+    lockTimes(block.hours).map((t) => h('option', { value: t, selected: t === '09:00' }, t)),
+  );
+  return h(
+    'li',
+    {
+      class: `my-block block-${block.kind.toLowerCase()}${block.locked_start ? ' is-locked' : ''}`,
+      tabindex: '-1',
+      dataset: { block: String(block.id) },
+    },
+    block.locked_start
+      ? h(
+          'p',
+          { class: 'block-lock' },
+          `🔒 ${appointmentText(block.locked_start, block.hours)} · locked by ${personName(block.locked_by)}`,
+        )
+      : null,
+    h('p', { class: 'my-block-title' }, title),
+    h(
+      'p',
+      { class: 'block-meta' },
+      [formatDuration(block.hours), where].filter(Boolean).join(' · '),
+    ),
+    block.note ? h('p', { class: 'block-note' }, block.note) : null,
+    h(
+      'div',
+      { class: 'my-block-actions' },
+      block.locked_start ? null : [moveButton(-1, 'Move up'), moveButton(1, 'Move down')],
+      block.kind === 'WORK'
+        ? block.locked_start
+          ? h(
+              'button',
+              {
+                type: 'button',
+                class: 'button button-secondary online-only',
+                disabled: !canChange,
+                onClick: () => onLock(block, null),
+              },
+              'Unlock the time',
+            )
+          : [
+              time,
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'button button-secondary online-only',
+                  disabled: !canChange,
+                  onClick: () => onLock(block, time.value),
+                },
+                'Lock at this time',
+              ),
+            ]
+        : null,
+    ),
+  );
+}
+
+/**
+ * Renders My week.
+ * @param {HTMLElement} container
+ * @param {{ data: object, savedOffline: boolean, canChange: boolean,
+ *   onMove: (day: object, block: object, direction: -1 | 1) => void,
+ *   onLock: (block: object, start: string | null) => void }} options
+ * @returns {{ say: (text: string, tone?: string) => void }}
+ */
+export function renderMyWeek(container, { data, savedOffline, canChange, onMove, onLock }) {
+  const message = h('p', { class: 'planner-message', role: 'status' });
+  const link = (week, text, label) =>
+    h(
+      'a',
+      {
+        href: myWeekUrl(week === data.current_week ? null : week),
+        'data-link': true,
+        class: 'button button-secondary',
+        'aria-label': label,
+      },
+      text,
+    );
+  const days = data.days.map((day) =>
+    h(
+      'section',
+      { class: 'my-day', 'aria-labelledby': `my-day-${day.day}` },
+      h(
+        'h2',
+        { id: `my-day-${day.day}` },
+        longDayLabel(day.day),
+        day.override ? ` · ${valueLabel('capacity_reason', day.override.reason)}` : '',
+      ),
+      h(
+        'p',
+        { class: `my-day-total${day.warnings.includes('OVER_CAPACITY') ? ' is-over' : ''}` },
+        `${formatDuration(day.total)} / ${formatDuration(day.capacity)}`,
+        day.sites.length ? ` · ${day.sites.join(' · ')}` : '',
+      ),
+      day.warnings.length
+        ? h(
+            'ul',
+            { class: 'cell-warnings' },
+            dayWarningTexts(day).map((text) =>
+              h('li', {}, h('span', { 'aria-hidden': 'true' }, '⚠ '), text),
+            ),
+          )
+        : null,
+      day.blocks.length
+        ? h(
+            'ol',
+            { class: 'my-blocks' },
+            day.blocks.map((b) => blockCard(b, day, { onMove, onLock, canChange })),
+          )
+        : h('p', { class: 'muted' }, 'Nothing scheduled.'),
+    ),
+  );
+  replaceChildren(
+    container,
+    h(
+      'div',
+      { class: 'my-week' },
+      h(
+        'div',
+        { class: 'schedule-toolbar' },
+        h(
+          'div',
+          { class: 'schedule-weeks' },
+          link(addWeeks(data.week, -1), '← Previous', 'Previous week'),
+          h('strong', { class: 'schedule-week-name' }, formatWeek(data.week)),
+          link(addWeeks(data.week, 1), 'Next →', 'Next week'),
+          data.week === data.current_week
+            ? null
+            : link(data.current_week, 'This week', 'Back to this week'),
+        ),
+        h(
+          'p',
+          { class: 'muted' },
+          `${formatDuration(data.week_total)} scheduled of ${formatDuration(data.week_capacity)}. Appointments come first; order the rest of each day as you like.`,
+        ),
+        savedOffline
+          ? h(
+              'p',
+              { class: 'banner banner-info', role: 'note' },
+              `Offline: your week as saved on this device on ${formatDateTime(data.generated_at)}. Changes need a connection.`,
+            )
+          : null,
+        message,
+      ),
+      days,
+    ),
+  );
+  return {
+    say: (text, tone = 'info') => {
+      message.textContent = text;
+      message.dataset.tone = tone;
+    },
+  };
+}

@@ -4,7 +4,7 @@ import { apiFetch } from './api.js';
 import { displayValue } from './conflicts.js';
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
-import { formatDateTime, personName } from './format.js';
+import { formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { PLANNING_FIELD_LABELS, planningFieldValue } from './planning.js';
 
@@ -17,7 +17,18 @@ const ACTION_LABELS = {
 };
 const CHOICE_LABELS = { A: 'kept version A', B: 'applied version B', MERGE: 'merged' };
 /** Fields shown in the summary of a creation (the full list would drown the timeline). */
-const CREATION_SUMMARY = ['code', 'number', 'status', 'assignee_id', 'username', 'role'];
+const CREATION_SUMMARY = [
+  'code',
+  'number',
+  'status',
+  'assignee_id',
+  'username',
+  'role',
+  // Blocks of the week scheduler (Phase 19).
+  'technician_id',
+  'day',
+  'hours',
+];
 /** User accounts are not a table entity: their labels live here (admins only, D39). */
 const USER_FIELD_LABELS = {
   username: 'Username',
@@ -41,6 +52,33 @@ export function userFieldValue(field, value) {
   return String(value);
 }
 
+/** Blocks of the week scheduler (Phase 19). */
+const ALLOCATION_FIELD_LABELS = {
+  kind: 'Kind',
+  work_order_id: 'Work order',
+  technician_id: 'Person',
+  day: 'Day',
+  hours: 'Length',
+  locked_start: 'Appointment',
+  note: 'Note',
+};
+
+/** Value of a block field, as text; people by name when the server named them. Pure. */
+export function allocationFieldValue(field, value, lookups = { users: [] }) {
+  if (value === null || value === undefined || value === '') {
+    return h('span', { class: 'no-value' }, field === 'locked_start' ? 'Not locked' : 'No value');
+  }
+  if (field === 'kind') return valueLabel('allocation_kind', value);
+  if (field === 'technician_id') {
+    const person = lookups.users.find((u) => u.id === value);
+    return person ? personName(person) : `User #${value}`;
+  }
+  if (field === 'hours') return `${value} h`;
+  if (field === 'work_order_id') return `#${value}`;
+  if (field === 'day') return formatDate(value);
+  return String(value);
+}
+
 /**
  * Records that are not a table entity (no field definitions in entities.js): their labels
  * and values. User accounts are for admins only (D39); planning records come with D48.
@@ -58,6 +96,7 @@ const OTHER_RECORDS = {
     value: planningFieldValue,
     url: () => '/admin/planning',
   },
+  allocations: { labels: ALLOCATION_FIELD_LABELS, value: allocationFieldValue, url: null },
 };
 
 /** Record types of the audit log filter, in display order. */
@@ -67,6 +106,7 @@ export const AUDIT_TYPES = [
   { value: 'maintenance_plans', label: 'Maintenance plans' },
   { value: 'plan_occurrences', label: 'Plan visits' },
   { value: 'planning_settings', label: 'Planning settings' },
+  { value: 'allocations', label: 'Scheduled blocks' },
   { value: 'users', label: 'User accounts', adminOnly: true },
 ];
 
@@ -110,7 +150,7 @@ function changeList(entityKey, entry, lookups) {
         ? (other.labels[field] ?? field)
         : (fieldForApi(entityKey, field)?.def.label ?? field);
       const show = (value) =>
-        other ? other.value(field, value) : displayValue(entityKey, field, value, lookups);
+        other ? other.value(field, value, lookups) : displayValue(entityKey, field, value, lookups);
       return h(
         'li',
         {},

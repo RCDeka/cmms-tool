@@ -257,6 +257,7 @@ export async function seedDatabase(
       users,
       makeTimestamp(createRandom(PLANS_RANDOM_SEED), now),
     );
+    const allocations = insertSchedule(db, today, now);
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return {
       users: users.length + staff.length,
@@ -264,6 +265,7 @@ export async function seedDatabase(
       workOrders,
       requests: requests.length,
       plans,
+      allocations,
       conflicts,
     };
   })();
@@ -676,6 +678,129 @@ function insertPlans(db, today, users, timestamp) {
     }
   }
   return count;
+}
+
+/**
+ * A week of the week scheduler (D48, Phase 19), the current week: technician1 has a job split
+ * over Monday and Tuesday, an appointment locked at 10:00 on Tuesday, and two sites on
+ * Wednesday with travel time between them; technician2 has preparation time, work on Monday
+ * and Tuesday, and is on leave on Thursday. The work orders are open ones already assigned to
+ * them; they get the current week as their planned week. No random stream: the choice follows
+ * the work order ids.
+ * @returns {number} blocks created
+ */
+function insertSchedule(db, today, now) {
+  const week = weekOfDate(today);
+  const monday = addDays(today, 1 - (new Date(`${today}T00:00:00Z`).getUTCDay() || 7));
+  const day = (n) => addDays(monday, n);
+  const stamp = new Date(now.getTime() - 60_000).toISOString();
+  const id = (username) =>
+    db.prepare('SELECT id FROM users WHERE username = ?').pluck().get(username);
+  const supervisor = id('supervisor1');
+  const openOf = (person) =>
+    db
+      .prepare(
+        `SELECT id, number, site, estimated_hours FROM work_orders
+         WHERE assignee_id = ? AND status IN ('OPEN', 'IN_PROGRESS') AND estimated_hours IS NOT NULL
+           AND review_status IS NOT 'PENDING' AND plan_id IS NULL ORDER BY id`,
+      )
+      .all(person);
+
+  const tech1 = id('technician1');
+  const tech2 = id('technician2');
+  const mine1 = openOf(tech1);
+  const mine2 = openOf(tech2);
+  const long =
+    mine1.find((w) => w.estimated_hours >= 5 && w.estimated_hours <= 7) ??
+    mine1.find((w) => w.estimated_hours > 3.5) ??
+    mine1[0];
+  const rest1 = mine1.filter((w) => w !== long);
+  const appointment = rest1[0];
+  const first = rest1.find((w) => w !== appointment);
+  const second = rest1.find((w) => w !== appointment && w.site !== first.site) ?? rest1[2];
+  const hours = (w, max = 3.5) => Math.min(max, Math.ceil(w.estimated_hours * 2) / 2);
+  const needed = Math.ceil(long.estimated_hours * 2) / 2;
+
+  const blocks = [
+    // A job split over two days (BR-S1).
+    { kind: 'WORK', wo: long, person: tech1, day: day(0), hours: Math.min(3.5, needed) },
+    ...(needed > 3.5
+      ? [{ kind: 'WORK', wo: long, person: tech1, day: day(1), hours: needed - 3.5 }]
+      : []),
+    // An appointment (P6).
+    {
+      kind: 'WORK',
+      wo: appointment,
+      person: tech1,
+      day: day(1),
+      hours: hours(appointment, 2),
+      locked_start: '10:00',
+      note: 'Keys at reception',
+    },
+    // Two sites in a day, with travel time (BR-S10).
+    { kind: 'WORK', wo: first, person: tech1, day: day(2), hours: hours(first, 3) },
+    {
+      kind: 'TRAVEL',
+      person: tech1,
+      day: day(2),
+      hours: 1,
+      note: `${first.site} → ${second.site}`,
+    },
+    { kind: 'WORK', wo: second, person: tech1, day: day(2), hours: hours(second, 3) },
+    { kind: 'PREPARATION', person: tech2, day: day(0), hours: 0.5, note: 'Collect the parts' },
+    { kind: 'WORK', wo: mine2[0], person: tech2, day: day(0), hours: hours(mine2[0]) },
+    { kind: 'WORK', wo: mine2[1], person: tech2, day: day(1), hours: hours(mine2[1]) },
+  ];
+
+  const insert = db.prepare(`INSERT INTO allocations
+    (kind, work_order_id, technician_id, day, hours, locked_start, locked_by, position, note,
+     created_by, updated_by, created_at, updated_at)
+    VALUES (@kind, @work_order_id, @technician_id, @day, @hours, @locked_start, @locked_by,
+     @position, @note, @user, @user, @stamp, @stamp)`);
+  const positions = new Map();
+  const names = new Map(
+    db
+      .prepare('SELECT id, first_name, last_name FROM users')
+      .all()
+      .map((u) => [u.id, `${u.first_name} ${u.last_name}`]),
+  );
+  for (const b of blocks) {
+    const key = `${b.person}:${b.day}`;
+    positions.set(key, (positions.get(key) ?? 0) + 1);
+    const row = {
+      kind: b.kind,
+      work_order_id: b.wo?.id ?? null,
+      technician_id: b.person,
+      day: b.day,
+      hours: b.hours,
+      locked_start: b.locked_start ?? null,
+      locked_by: b.locked_start ? supervisor : null,
+      position: positions.get(key),
+      note: b.note ?? null,
+    };
+    const blockId = Number(insert.run({ ...row, user: supervisor, stamp }).lastInsertRowid);
+    const { position: _p, locked_by: _l, ...logged } = row;
+    recordAudit(db, {
+      entityType: 'allocations',
+      entityId: blockId,
+      action: 'CREATE',
+      changes: creationChanges(logged),
+      label: `${b.wo?.number ?? { TRAVEL: 'Travel', PREPARATION: 'Preparation' }[b.kind]} · ${names.get(b.person)} · ${b.day}`,
+      userId: supervisor,
+      version: 1,
+      at: stamp,
+    });
+  }
+  const planned = [...new Set(blocks.map((b) => b.wo?.id).filter(Boolean))];
+  const setWeek = db.prepare('UPDATE work_orders SET planned_week = ? WHERE id = ?');
+  for (const woId of planned) setWeek.run(week, woId);
+
+  // An absence (P5).
+  db.prepare(
+    `INSERT INTO capacity_overrides (technician_id, day, hours, reason, note, updated_by, updated_at)
+     VALUES (?, ?, 0, 'LEAVE', 'Annual leave', ?, ?)`,
+  ).run(tech2, day(3), supervisor, stamp);
+  return blocks.length;
 }
 
 /** Weeks from now to a plan's first visit: often one of the busy weeks, else anywhere. */

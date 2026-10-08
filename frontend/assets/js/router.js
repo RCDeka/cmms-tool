@@ -5,6 +5,7 @@ import { parseFeedbackFilters } from './feedback.js';
 import { filtersQuery, isPlainList, parseFilters } from './filters.js';
 import { AUDIT_TYPES } from './history.js';
 import { parsePlanningFilters } from './planning.js';
+import { parseSchedulePanel } from './schedule.js';
 
 const ID = /^[1-9]\d{0,15}$/;
 /** Work orders created offline have a temporary id until the server answers (D26). */
@@ -14,7 +15,10 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
  *   |'users'|'user'|'userCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
- *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'notFound'} name
+ *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'schedule'|'myWeek'
+ *   |'notFound'} name
+ * @property {string | null} [week] week scheduler and My week: the week shown (current when null)
+ * @property {object | null} [panel] week scheduler: the side panel open (schedule.js)
  * @property {number} [occurrenceId] plan panel: the visit clicked on the year planner
  * @property {'open'|'all'} [scope] staff request list: unfinished requests, or all (D46)
  * @property {string} [entity] 'assets' | 'work_orders'
@@ -73,6 +77,16 @@ export function parseRoute(pathname, search = '') {
       filters,
       ...(occurrenceId && { occurrenceId }),
     };
+  }
+  if (first === 'schedule' || (first === 'my-week' && !second)) {
+    // Week scheduler and My week (D48, Phase 19): /schedule?week=2026-W41 and its panels.
+    const value = query.get('week');
+    const week = value && /^\d{4}-W\d{2}$/.test(value) ? value : null;
+    if (first === 'my-week') return { name: 'myWeek', page, week };
+    const panel = parseSchedulePanel([second, ...rest].filter(Boolean), query);
+    return panel === undefined
+      ? { name: 'notFound', page }
+      : { name: 'schedule', page, week, panel };
   }
   if (first === 'admin' && second === 'feedback' && !rest.length) {
     const filters = parseFeedbackFilters(query);

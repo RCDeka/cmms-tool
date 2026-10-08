@@ -29,7 +29,8 @@ backend/src/
   routes/              one router per resource: thin, no SQL
   services/            SQL (prepared statements) + transactions + calling rules
   rules/               pure functions: enums, permissions, work-order-status, versioning, conflict diff, kpi,
-                       planning (occurrence series, warnings, capacity, weekly figures and tiles)
+                       planning (occurrence series, warnings, capacity, weekly figures and tiles),
+                       schedule (days, daily capacity, hours left, warnings, appointments, tray, tiles)
   lib/                 small helpers (dates in APP_TIMEZONE, ISO weeks, pagination)
 ```
 
@@ -41,7 +42,8 @@ Request flow: `route → validate → service → rules → SQL`. Errors are thr
 frontend/
   index.html                  shell: sidebar, status bar, #main-content, #table-container, #detail-container
   sw.js                       service worker (must sit at the root for its scope)
-  assets/css/                 base, layout, table, detail, components (brief), planning (year planner)
+  assets/css/                 base, layout, table, detail, components (brief), planning (year planner),
+                              schedule (week scheduler, My week)
   assets/js/
     app.js                    entry point: init DB, auth, router, network, queue flush
     config.js                 APP_NAME, API base, timeout, page size
@@ -77,6 +79,13 @@ frontend/
     planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures)
     planning-settings.js      planning settings page (administrators) with the capacity preview
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
+    schedule.js               week scheduler: week switcher, open weekends, tiles, tray, people × days grid
+                              (Phase 19, D52); its URLs and panels
+    schedule-editing.js       drag of tray cards and blocks onto a person's day (pointer), + / − resize
+    schedule-panel.js         scheduler panels: schedule a work order (split proposal), a block (move, note,
+                              appointment, remove), add time, hours of a day
+    schedule-rules.js         split proposal, hours left, durations and warnings as text, day reordering
+    my-week.js                My week, and the weeks saved on the device for offline reading
     dom.js                    escapeHtml, element helpers
   assets/vendor/              idb, chart.js (vendored, D17)
   test/                       Vitest + fake-indexeddb + jsdom
@@ -121,6 +130,11 @@ export const ENTITIES = {
 | `/planning/plans/new`, `/planning/plans/:id?occurrence=N` | planner + plan form or plan panel (split view; `occurrence`: the visit clicked) (creation: SUPERVISOR, ADMIN) |
 | `/planning/blocked-weeks` | planner + blocked weeks panel (every maintenance role reads; SUPERVISOR, ADMIN edit) |
 | `/admin/planning` | planning settings (ADMIN, online only) |
+| `/schedule?week=…` | week scheduler (maintenance roles, online only; technicians read only, D52) |
+| `/schedule/work-orders/:id?week=…[&person=N&day=D]` | scheduler + panel scheduling a work order of the tray (from a drop on a person's day) |
+| `/schedule/blocks/:id?week=…` | scheduler + block panel (supervisors and admins edit; the person of the block locks it) |
+| `/schedule/time?week=…&person=N&day=D`, `/schedule/capacity?…` | scheduler + add time, or hours of a day (SUPERVISOR, ADMIN) |
+| `/my-week?week=…` | My week: one's own days and blocks (readable offline, P18) |
 
 Staff members only reach `/requests…` and `/account`; any other page sends them to `/requests`. The maintenance roles get a short notice on `/requests` and `/requests/new`.
 
@@ -134,7 +148,7 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 |---|---|---|
 | `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, scope, ids: [...], fetched_at }` (`scope`: query of the role's plain list, D44) |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
-| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display) |
+| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display), the last 4 weeks of My week (`my_week`, by week, D52) |
 | `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
 | `sync_queue` (D10) | auto id | `{ op: 'create' \| 'update', entity, record_id, client_id?, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
 
@@ -148,7 +162,7 @@ When page N of an entity is shown (P = number of pages):
 1. Keep set K = {1, N−1, N, N+1, P} ∩ [1, P]: at most 5 pages.
 2. Prefetch the pages of K not yet cached. One request per page; the rows are stored as records directly (D7).
 3. Evict pages not in K. **The current page N is part of K** (the brief's sample code would have evicted it).
-4. Evict records that belong to no kept page, unless they have a draft, a queued write, or are open in the detail panel.
+4. Evict records that belong to no kept page, unless they have a draft, a queued write, belong to a week saved for My week (D52), or are open in the detail panel. Offline, a record saved on the device opens in the detail panel even when its list page was never saved.
 5. Only the plain list is cached: default order (assets by code, work orders newest first) and no filters except the role's default (technicians: their own work orders, D44). Each cached page records that query, so a page saved under another role is ignored. A table sorted from its column titles is fetched from the server like a filtered list (D42).
 
 Prefetching runs after the visible content is rendered, one request at a time, and is skipped while offline.
@@ -242,7 +256,9 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - **Year planner** (`/planning`, Phase 17): reads `GET /api/planning/timeline`, which releases the work orders due first (BR-P6). Online only (P18): nothing is cached in IndexedDB; offline, the page says it needs a connection. The timeline is kept in memory while the user stays on the planner, so opening or closing a plan panel does not fetch it again (a filter change, a save or leaving the planner does). Plans are created and edited in the side panel (`POST`/`PUT /api/plans`), never queued offline.
 - **Editing** (Phase 18): `planner-editing.js` handles pointer drags (a press becomes a drag after 6 px, so a click still opens the panel; the grid scrolls sideways near its edges) and keyboard moves on the rendered grid. While a visit moves, `planning-rules.js` (copies of the server rules, kept in step by `test/planning-rules.test.js`) gives the allowed weeks, the refusal reason and the figures as if dropped; the tiles and load strip are swapped for these, and put back on cancel. Nothing is sent before the drop. Each change is one API call (`PUT /plan-occurrences/:id`, `PUT /plans/:id/anchor`, skip, restore); the timeline is then fetched again. **Undo / Redo** (buttons, `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z`) keep the changes made since the planner was opened (lost when leaving it); an undo is the opposite call, sent after reading the record again, so it checks the record is still as the change left it and uses its current version.
 - **Release job**: `npm run pm:release` (`node src/db/cli.js release`), run daily by `deploy/systemd/fast-cmms-pm-release.timer` (04:00, after the backup).
-- **Planned**: `/schedule` (week scheduler, days × technicians) and `/my-week` for technicians (readable offline), Phases 18–20, `docs/spec-preventive-maintenance.md` §7–9.
+- **Week scheduler** (`/schedule`, Phase 19, D52): reads `GET /api/schedule` (which releases the visits due first) and keeps the week in memory while panels open and close; every change is one API call (drop of a card: `POST /schedule/allocations`, or the split panel when the job is longer than a block or has no estimate; drop of a block: `PUT …/allocations/:id`; `+` / `−`: its length), then the week is fetched again. A locked block refuses the drag in the browser with the reason; the server refuses it too. Online only; no undo yet (D52).
+- **My week** (`/my-week`): `GET /api/my-week`, saved on the device (`config.my_week`, the last 4 weeks fetched) with its work orders in `wo_records`; offline, the saved week is shown with a notice and its changes (order, lock) are disabled.
+- **Planned**: the balancing assistant (Phase 20, `docs/spec-preventive-maintenance.md` §7).
 
 ## AI readiness (future)
 

@@ -40,8 +40,12 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `POST /plans`, `PUT /plans/:id`, `PUT /plans/:id/anchor`, `POST /planning/release` | no | no | yes | yes |
 | Move, skip, restore a visit (`/plan-occurrences/:id…`); add or remove blocked weeks | no | no | yes | yes |
 | `PUT /planning/settings` (reserve, daily capacity, release horizon, longest block) | no | no | no | yes |
+| Read the week schedule (`GET /schedule`) and their own week (`GET /my-week`) (D52) | no | yes | yes | yes |
+| Allocate, move, resize, remove blocks; capacity of a day; open weekends | no | no | yes | yes |
+| Lock or unlock an appointment (`PUT /schedule/allocations/:id/lock`) | no | own blocks | yes | yes |
+| Order a day (`PUT /schedule/day-order`) | no | own day | yes | yes |
 
-Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences` and `/api/planning` (403), whatever the method (D46).
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule` and `/api/my-week` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -86,6 +90,16 @@ Occurrence  { id, due_week, week, status, skip_reason,
               warnings: ('OUT_OF_SEASON' | 'BLOCKED_WEEK')[] }
               (GET /plan-occurrences/:id adds plan_id and moved_by: UserRef|null)
 BlockedWeek { id, week, site | null, reason, created_by: UserRef, created_at }
+Block       { id, kind, work_order_id, technician_id, day, hours, locked_start, locked_by: UserRef|null,
+              position, note, version, updated_at,
+              work_order: { id, number, title, site, building, location, status, priority,
+                            category, type, estimated_hours, assignee_id } | null }
+ScheduleDay { day, capacity, total, override: { hours, reason, note } | null, sites: string[],
+              warnings: ('OVER_CAPACITY' | 'ABSENT' | 'WEEKEND_CLOSED' | 'SEVERAL_SITES')[] }
+TrayItem    { id, number, title, type, status, priority, category, site, building, location, due_on,
+              planned_week, plan_id, group: 'PLANNED' | 'CARRIED_OVER' | 'NOT_PLANNED', carried_from,
+              estimated_hours, needed_hours, scheduled_hours, week_hours, hours_left,
+              assignee: UserRef|null, version }
 ```
 
 `password_hash` is never returned.
@@ -214,7 +228,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Reject: `{ "decision": "REJECT", "version": number, "reason": string (1–2000) }`. The work order becomes `CANCELLED`.
 - `200 { "reviewed": true, "version": N+1, "item": WorkOrder }`.
 - Errors: 400 invalid body (missing `assignee_id` or `reason`, unknown field); 403; 404; 409 already reviewed (`BR-R6`), changed since (`BR-V1`) or open conflict (`BR-V4`); 422 not a staff request (`BR-R6`), assignee or supervisor not eligible (`BR-W3`), due date before creation (`BR-W8`).
-- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403), as are `plan_id`, `plan` and `planned_week` (set by the release, D48).
+- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403), as are `plan_id`, `plan` and `planned_week` (set by the release, D48, or by the first block of the week scheduler, D52).
 - A plan's visit follows its work order: cancelling it skips the occurrence (BR-P7), closing it restarts a floating plan (BR-P5). While a request is `PENDING`, that `PUT` refuses `status` and `assignee_id` changes (422 `BR-R7`).
 
 ### GET /api/work-orders/:id/comments, POST /api/work-orders/:id/comments (added, D46)
@@ -350,7 +364,7 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 
 ## Maintenance plans and the year planner (added, D48, D49)
 
-Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The week scheduler and My week (Phase 19) and the balancing assistant (Phase 20) are specified in `docs/spec-preventive-maintenance.md` §6.
+Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The week scheduler and My week are below (Phase 19); the balancing assistant (Phase 20) is specified in `docs/spec-preventive-maintenance.md` §6.
 
 ### GET /api/plans
 - Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, building, location or supplier), `site?` (`|`-separated), `building?` (`|`), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
@@ -415,6 +429,55 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 - `GET` (every maintenance role) → `200 { daily_hours, reserve_percent, release_weeks_ahead, max_block_hours, version, updated_by: UserRef|null, updated_at, capacity_people }` (`capacity_people`: active technicians and supervisors).
 - `PUT` (ADMIN only, 403 for supervisors): `{ "reserve_percent"?: 0–80, "daily_hours"?: 0.5–12 (half hours), "release_weeks_ahead"?: 1–12, "max_block_hours"?: 0.5–8 (half hours), "version" }`. `200 { "updated": boolean, "item" }`; the change applies at once to every figure and is logged (`entity_type = planning_settings`). Errors: 400; 403; 409 `BR-V1`.
 
+## Week scheduler and My week (added, D48, D52)
+
+Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. Days are dates `YYYY-MM-DD`; weeks ISO weeks (a week that does not exist → 400). Writes are not queued offline: the scheduler needs a connection (P18).
+
+### GET /api/schedule
+- Query: `week?` (default: the current week in `APP_TIMEZONE`). Every maintenance role. Runs the release first (BR-P6), so the week's preventive work orders are in the tray.
+- `200`:
+  ```
+  { "week": "2026-W41", "current_week": "2026-W41",
+    "days": [{ "day": "2026-10-05", "weekday": 1, "open": true }, ...],   // Mon–Fri, open weekend days, closed ones holding blocks
+    "saturday_open": false, "sunday_open": false,
+    "settings": { "daily_hours": 7, "max_block_hours": 3.5 },
+    "people": [{ id, first_name, last_name, role, specialty, site, inactive?, week_total, week_capacity,
+                 "days": ScheduleDay[], "blocks": Block[] }],                // technicians first, then supervisors
+    "tray": TrayItem[],                                                      // planned, carried over, not planned; by priority, due date
+    "tiles": { booked_hours, available_hours,
+               hours_left: { planned, carried_over, not_planned },
+               travel_share, sites_per_day: { average, worst }, carried_over } }
+  ```
+- A person's blocks of a day: appointments by start time, then work, then other time, each in the person's order. People deactivated since they got blocks this week are listed with `inactive: true`.
+
+### POST /api/schedule/allocations
+- SUPERVISOR, ADMIN. Body: `{ "blocks": [{ "kind", "work_order_id"? (WORK only, required for it), "technician_id", "day", "hours", "note"? }] }` (1–20 blocks: a split is one request, all or nothing).
+- `201 { "created": true, "items": Block[] }`. The first block of a work order sets its `planned_week` and, when unassigned, its assignee (BR-S3).
+- Errors: 400 (unknown field, hours not in half hours or outside 0.5–8, work order missing on WORK or given on other kinds); 403; 422 `BR-S1` (longer than `max_block_hours`), `BR-S2` (no estimate), `BR-S3` (not an active technician or supervisor), `BR-S4` (finished, waiting for review, or unknown work order).
+
+### PUT /api/schedule/allocations/:id
+- SUPERVISOR, ADMIN. `{ "day"?, "technician_id"?, "hours"?, "note"?, "version" }`. `200 { "updated": true, "item": Block }`. A block moved to another day or person goes to the end of that day.
+- Errors: 400 (no field); 403; 404; 409 `BR-V1`; 422 `BR-S6` (locked), `BR-S4` (finished work order), `BR-S1`, `BR-S3`.
+
+### DELETE /api/schedule/allocations/:id?version=N
+- SUPERVISOR, ADMIN. `204`; its hours go back to the tray; logged with the last values. Errors: 400 (no version); 403; 404; 409 `BR-V1`; 422 `BR-S6`, `BR-S4`.
+
+### PUT /api/schedule/allocations/:id/lock
+- SUPERVISOR, ADMIN on any block; a TECHNICIAN on their own (403 otherwise). `{ "locked_start": "HH:MM" | null, "version" }`. `200 { "updated": true, "item": Block }`.
+- Errors: 400 (not on the half hour, ending after midnight); 403; 404; 409 `BR-V1`, `BR-S6` (overlaps another appointment of the day); 422 `BR-S6` (not a work block).
+
+### PUT /api/schedule/day-order
+- Every maintenance role; technicians for their own day (403 otherwise). `{ "technician_id", "day", "ids": [] }`: every block of that day, in the new order. `200 { "items": Block[] }` (appointments still first). Not versioned, not logged. Errors: 400; 403; 409 when `ids` is not exactly the day's blocks.
+
+### PUT /api/schedule/capacity
+- SUPERVISOR, ADMIN. `{ "technician_id", "day", "hours": 0–12 (half hours) | null, "reason"? (required with hours), "note"? }`; `hours: null` goes back to the default. `200 { technician_id, day, override: { hours, reason, note } | null }`. Errors: 400; 403; 422 `BR-S3`.
+
+### PUT /api/schedule/weeks/:week
+- SUPERVISOR, ADMIN. `{ "saturday_open": boolean, "sunday_open": boolean }` → `200 { week, saturday_open, sunday_open }`. Errors: 400; 403.
+
+### GET /api/my-week
+- Every maintenance role, for themselves. Query `week?` (default the current week). `200 { week, current_week, generated_at, user: UserRef, days: [ScheduleDay + { weekday, blocks: Block[] }], week_total, week_capacity, work_orders: WorkOrder[] }`: appointments first, then the person's own order; the complete work orders of the blocks, so the client can open them offline.
+
 ## Future AI endpoints (not in the MVP)
 
 `POST /api/assistant/format-report` and `POST /api/assistant/find-work-order` are described in the brief. They are not implemented. The UI only prepares the `.ai-only` mechanism (see `docs/architecture.md`).
@@ -433,3 +496,4 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 | Dashboard | `GET /api/dashboard` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
 | Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |
+| Week scheduler | `GET /api/schedule`, `POST /api/schedule/allocations`, `PUT/DELETE /api/schedule/allocations/:id`, `PUT /api/schedule/allocations/:id/lock`, `PUT /api/schedule/day-order`, `PUT /api/schedule/capacity`, `PUT /api/schedule/weeks/:week`, `GET /api/my-week` |

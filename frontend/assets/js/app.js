@@ -91,6 +91,17 @@ import { previewFigures } from './planning-rules.js';
 import { CATEGORIES } from './enums.js';
 import { formatWeek } from './format.js';
 import { renderPlanningSettings } from './planning-settings.js';
+import { readMyWeek, renderMyWeek, saveMyWeek } from './my-week.js';
+import { longDayLabel as longDay, renderScheduler, scheduleUrl } from './schedule.js';
+import { valueLabel } from './labels.js';
+import { attachScheduleEditing } from './schedule-editing.js';
+import {
+  renderBlockPanel,
+  renderCapacityPanel,
+  renderItemPanel,
+  renderTimePanel,
+} from './schedule-panel.js';
+import { formatDuration, hoursToSchedule, reorder } from './schedule-rules.js';
 import { openAssetPicker } from './asset-picker.js';
 import {
   renderRequestDetail,
@@ -193,6 +204,12 @@ async function render(route) {
     detachEditing?.();
     detachEditing = null;
   }
+  // The scheduler keeps its week in memory while a panel opens or closes.
+  if (route.name !== 'schedule') {
+    scheduleCache = null;
+    detachScheduleEditing?.();
+    detachScheduleEditing = null;
+  }
   switch (route.name) {
     case 'list':
     case 'detail':
@@ -240,6 +257,10 @@ async function render(route) {
             'Access denied',
             'Only supervisors and administrators can create plans.',
           );
+    case 'schedule':
+      return showSchedule(route, isCurrent);
+    case 'myWeek':
+      return showMyWeek(route, isCurrent);
     case 'planningSettings':
       return hasRole('ADMIN')
         ? showPlanningSettings(isCurrent)
@@ -1171,6 +1192,414 @@ async function showPlanningSettings(isCurrent) {
   tableContainer.querySelector('.placeholder-title')?.focus();
 }
 
+// --- Week scheduler and My week (D48, Phase 19) --------------------------------------------
+
+/** Week last shown on the scheduler, so opening or closing a panel does not fetch it again. */
+let scheduleCache = null; // { week, data }
+let detachScheduleEditing = null;
+/** Scheduler on screen: its message line. */
+let scheduleView = null;
+
+/** Today in the browser's time zone, 'YYYY-MM-DD'. */
+const todayDate = () => new Intl.DateTimeFormat('en-CA').format(new Date());
+
+/** Error text of a scheduler write, offline included. */
+const writeError = (err, what = 'nothing was changed') =>
+  err.status === 0 ? `You are offline: ${what}.` : `Not changed: ${err.message}`;
+
+/**
+ * Sends one change of the scheduler, then draws the week again (closing the panel when
+ * `close`) and says what was done. Resolves to an error message, or null.
+ */
+async function scheduleChange(send, done, { form = null, close = false } = {}) {
+  try {
+    await send();
+  } catch (err) {
+    const message = writeError(err);
+    if (form) showErrors(form, apiFieldErrors(err), message);
+    else {
+      scheduleView?.say(message, 'danger');
+      announce(message);
+    }
+    return message;
+  }
+  scheduleCache = null;
+  announce(done);
+  const route = currentRoute();
+  if (close && route.panel) await navigate(scheduleUrl(route.week), { force: true });
+  else await render(route);
+  scheduleView?.say(done, 'success');
+  return null;
+}
+
+const personNameOf = (data, id) => {
+  const p = data.people.find((x) => x.id === id);
+  return p ? `${p.first_name} ${p.last_name}` : 'someone';
+};
+
+async function showSchedule(route, isCurrent) {
+  leaveRecordViews('schedule', 'Week scheduler');
+  const week = route.week;
+  const cached = scheduleCache && scheduleCache.week === week ? scheduleCache.data : null;
+  if (!tableContainer.querySelector('.scheduler')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the week…'));
+  }
+  let data;
+  try {
+    data = cached ?? (await apiFetch(`/schedule${week ? `?week=${week}` : ''}`));
+  } catch (err) {
+    if (!isCurrent()) return;
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The week scheduler needs a connection to the server. Technicians find their own week, saved on the device, under My week.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  scheduleCache = { week, data };
+  const canEdit = hasRole('SUPERVISOR', 'ADMIN');
+  const panel = route.panel;
+  const shownWeek = data.week === data.current_week ? null : data.week;
+  const hadFocus = tableContainer.contains(document.activeElement);
+  const previous = tableContainer.querySelector('.schedule-scroll');
+  const scroll = previous ? { left: previous.scrollLeft, top: previous.scrollTop } : null;
+
+  detachScheduleEditing?.();
+  scheduleView = renderScheduler(tableContainer, {
+    data,
+    canEdit,
+    panel,
+    today: todayDate(),
+    onWeek: (next) => navigate(scheduleUrl(next === data.current_week ? null : next)),
+    onWeekend: (key, open) =>
+      scheduleChange(
+        () =>
+          apiFetch(`/schedule/weeks/${data.week}`, {
+            method: 'PUT',
+            body: {
+              saturday_open: data.saturday_open,
+              sunday_open: data.sunday_open,
+              [key]: open,
+            },
+          }),
+        `${key === 'saturday_open' ? 'Saturday' : 'Sunday'} ${open ? 'opened' : 'closed'} for ${formatWeek(data.week)}.`,
+      ),
+  });
+  const grid = tableContainer.querySelector('.schedule-scroll');
+  if (scroll && grid) Object.assign(grid, { scrollLeft: scroll.left, scrollTop: scroll.top });
+
+  const trayItem = (id) => data.tray.find((t) => t.id === id);
+  const blockById = (id) => data.people.flatMap((p) => p.blocks).find((b) => b.id === id);
+  const max = data.settings.max_block_hours;
+  detachScheduleEditing = canEdit
+    ? attachScheduleEditing(tableContainer, {
+        data,
+        onDrop: (drop) => {
+          const who = personNameOf(data, drop.person);
+          const when = longDay(drop.day);
+          if (drop.kind === 'item') {
+            const item = trayItem(drop.id);
+            const hours = hoursToSchedule(item, max);
+            // A long job, or one without an estimate: the split proposal opens (BR-S1, BR-S2).
+            if (hours === null || hours > max) {
+              return navigate(
+                scheduleUrl(shownWeek, {
+                  type: 'item',
+                  id: item.id,
+                  person: drop.person,
+                  day: drop.day,
+                }),
+              );
+            }
+            return scheduleChange(
+              () =>
+                apiFetch('/schedule/allocations', {
+                  method: 'POST',
+                  body: {
+                    blocks: [
+                      {
+                        kind: 'WORK',
+                        work_order_id: item.id,
+                        technician_id: drop.person,
+                        day: drop.day,
+                        hours,
+                      },
+                    ],
+                  },
+                }),
+              `${item.number}: ${formatDuration(hours)} for ${who} on ${when}.`,
+            );
+          }
+          const block = blockById(drop.id);
+          return scheduleChange(
+            () =>
+              apiFetch(`/schedule/allocations/${block.id}`, {
+                method: 'PUT',
+                body: { day: drop.day, technician_id: drop.person, version: block.version },
+              }),
+            `Block moved to ${who}, ${when}.`,
+          );
+        },
+        onResize: (id, hours) => {
+          const block = blockById(id);
+          return scheduleChange(
+            () =>
+              apiFetch(`/schedule/allocations/${id}`, {
+                method: 'PUT',
+                body: { hours, version: block.version },
+              }),
+            `Block now ${formatDuration(hours)}.`,
+          );
+        },
+        onRefuse: (message) => {
+          scheduleView.say(message, 'danger');
+          announce(message);
+        },
+        announce,
+      })
+    : null;
+
+  const close = () => navigate(scheduleUrl(shownWeek));
+  setSplitView(Boolean(panel));
+  if (!panel) {
+    replaceChildren(detailContainer);
+    if (!hadFocus) tableContainer.querySelector('#schedule-tiles-heading')?.focus();
+    return;
+  }
+  const notFound = (text) => {
+    replaceChildren(
+      detailContainer,
+      h(
+        'div',
+        { class: 'detail-header' },
+        h('h2', { class: 'detail-title', tabindex: '-1' }, text),
+      ),
+      h('p', {}, h('a', { href: scheduleUrl(shownWeek), 'data-link': true }, 'Back to the week')),
+    );
+    detailContainer.querySelector('.detail-title')?.focus();
+  };
+  if (panel.type === 'item') {
+    const item = trayItem(panel.id);
+    if (!item) return notFound('This work order is not in this week’s tray');
+    setTitle(`Schedule ${item.number}`);
+    renderItemPanel(detailContainer, {
+      item,
+      data,
+      panel,
+      today: todayDate(),
+      canEdit,
+      onClose: close,
+      onSubmit: async ({ blocks, estimate }, form) => {
+        if (!blocks.length) return showErrors(form, {}, 'Add at least one block.');
+        if (estimate !== null) {
+          if (!(estimate > 0) || estimate * 2 !== Math.round(estimate * 2)) {
+            return showErrors(
+              form,
+              { estimate: 'Hours in steps of half an hour' },
+              'Check the highlighted fields.',
+            );
+          }
+          // BR-S2: the estimate first, on the work order itself, at its current version.
+          const error = await scheduleChange(
+            async () => {
+              const wo = await apiFetch(`/work-orders/${item.id}`);
+              await apiFetch(`/work-orders/${item.id}`, {
+                method: 'PUT',
+                body: { estimated_hours: estimate, version: wo.version },
+              });
+            },
+            `${item.number}: estimate set to ${formatDuration(estimate)}.`,
+            { form },
+          );
+          if (error) return;
+        }
+        const total = blocks.reduce((s, b) => s + b.hours, 0);
+        return scheduleChange(
+          () => apiFetch('/schedule/allocations', { method: 'POST', body: { blocks } }),
+          `${item.number}: ${formatDuration(total)} scheduled in ${blocks.length} block${blocks.length === 1 ? '' : 's'}.`,
+          { form, close: true },
+        );
+      },
+    });
+    detailContainer.querySelector('.detail-title')?.focus();
+    return;
+  }
+  if (panel.type === 'block') {
+    const block = blockById(panel.id);
+    if (!block) return notFound('This block is not in this week');
+    const person = data.people.find((p) => p.id === block.technician_id);
+    setTitle('Block');
+    renderBlockPanel(detailContainer, {
+      block,
+      person,
+      data,
+      canEdit,
+      canLock: canEdit || block.technician_id === currentUser().id,
+      onClose: close,
+      onUpdate: (changes, form) => {
+        if (!Object.keys(changes).length)
+          return showErrors(form, {}, 'Nothing to save: no value was changed.');
+        return scheduleChange(
+          () =>
+            apiFetch(`/schedule/allocations/${block.id}`, {
+              method: 'PUT',
+              body: { ...changes, version: block.version },
+            }),
+          'Block saved.',
+          { form },
+        );
+      },
+      onDelete: async () => {
+        const choice = await confirmDialog({
+          title: 'Remove this block?',
+          message: 'Its hours go back to the tray.',
+          actions: [
+            { value: 'remove', label: 'Remove', primary: true },
+            { value: 'cancel', label: 'Cancel' },
+          ],
+        });
+        if (choice !== 'remove') return;
+        scheduleChange(
+          () =>
+            apiFetch(`/schedule/allocations/${block.id}?version=${block.version}`, {
+              method: 'DELETE',
+            }),
+          'Block removed: its hours are back in the tray.',
+          { close: true },
+        );
+      },
+      onLock: (start, form) =>
+        scheduleChange(
+          () =>
+            apiFetch(`/schedule/allocations/${block.id}/lock`, {
+              method: 'PUT',
+              body: { locked_start: start, version: block.version },
+            }),
+          start ? `Appointment locked at ${start}.` : 'Appointment unlocked.',
+          { form },
+        ),
+    });
+    detailContainer.querySelector('.detail-title')?.focus();
+    return;
+  }
+  const person = data.people.find((p) => p.id === panel.person);
+  if (!person || !person.days.some((d) => d.day === panel.day) || !canEdit) {
+    return notFound(
+      canEdit
+        ? 'This day is not in this week'
+        : 'Only supervisors and administrators change the week',
+    );
+  }
+  if (panel.type === 'time') {
+    setTitle('Add time');
+    renderTimePanel(detailContainer, {
+      data,
+      person: person.id,
+      day: panel.day,
+      onClose: close,
+      onSubmit: (block, form) =>
+        scheduleChange(
+          () => apiFetch('/schedule/allocations', { method: 'POST', body: { blocks: [block] } }),
+          `${valueLabel('allocation_kind', block.kind)}: ${formatDuration(block.hours)} for ${personNameOf(data, block.technician_id)} on ${longDay(block.day)}.`,
+          { form, close: true },
+        ),
+    });
+  } else {
+    setTitle('Hours of the day');
+    renderCapacityPanel(detailContainer, {
+      data,
+      person,
+      day: panel.day,
+      onClose: close,
+      onSubmit: (input, form) =>
+        scheduleChange(
+          () =>
+            apiFetch('/schedule/capacity', {
+              method: 'PUT',
+              body: { technician_id: person.id, day: panel.day, ...input },
+            }),
+          input.hours === null
+            ? `${personNameOf(data, person.id)}: usual hours on ${longDay(panel.day)}.`
+            : `${personNameOf(data, person.id)}: ${formatDuration(input.hours)} on ${longDay(panel.day)}.`,
+          { form, close: true },
+        ),
+    });
+  }
+  detailContainer.querySelector('.detail-title')?.focus();
+}
+
+/** My week: fetched when online and saved on the device; the saved copy when offline. */
+async function showMyWeek(route, isCurrent) {
+  leaveRecordViews('my_week', 'My week');
+  if (!tableContainer.querySelector('.my-week')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your week…'));
+  }
+  let data;
+  let savedOffline = false;
+  try {
+    data = await apiFetch(`/my-week${route.week ? `?week=${route.week}` : ''}`);
+    saveMyWeek(data).catch(() => {});
+  } catch (err) {
+    if (!isCurrent()) return;
+    data = err.status === 0 ? await readMyWeek(route.week) : null;
+    if (!data) {
+      showConsoleError(err, () => render(currentRoute()));
+      if (err.status === 0) {
+        tableContainer.querySelector('.error-state p').textContent =
+          'This week has not been saved on this device yet: open My week once with a connection.';
+      }
+      return;
+    }
+    savedOffline = true;
+  }
+  if (!isCurrent()) return;
+  setSplitView(false);
+  replaceChildren(detailContainer);
+  const focusBlock = (id) => tableContainer.querySelector(`[data-block="${id}"]`)?.focus();
+  const change = async (send, done, blockId) => {
+    try {
+      await send();
+    } catch (err) {
+      const message = writeError(err);
+      view.say(message, 'danger');
+      announce(message);
+      return;
+    }
+    announce(done);
+    await render(currentRoute());
+    focusBlock(blockId);
+  };
+  const view = renderMyWeek(tableContainer, {
+    data,
+    savedOffline,
+    canChange: !savedOffline,
+    onMove: (day, block, direction) => {
+      const ids = reorder(day.blocks, block.id, direction);
+      if (!ids) return;
+      change(
+        () =>
+          apiFetch('/schedule/day-order', {
+            method: 'PUT',
+            body: { technician_id: data.user.id, day: day.day, ids },
+          }),
+        direction < 0 ? 'Moved up.' : 'Moved down.',
+        block.id,
+      );
+    },
+    onLock: (block, start) =>
+      change(
+        () =>
+          apiFetch(`/schedule/allocations/${block.id}/lock`, {
+            method: 'PUT',
+            body: { locked_start: start, version: block.version },
+          }),
+        start ? `Locked at ${start}.` : 'Time unlocked.',
+        block.id,
+      ),
+  });
+}
+
 // --- Conflict console (supervisors and admins) ---------------------------------------------
 
 function leaveRecordViews(section, title) {
@@ -1442,7 +1871,7 @@ async function showEntity(route, isCurrent) {
         );
       }
       area.setAttribute('aria-busy', 'true');
-      let data;
+      let data = null;
       try {
         data = plain
           ? (await fetchAndStorePage(route.entity, route.page)).data
@@ -1453,19 +1882,21 @@ async function showEntity(route, isCurrent) {
             );
       } catch (err) {
         if (isCurrent()) showTableError(area, err, cfg, route);
-        return;
+        // Offline, a record saved on the device still opens beside the error (e.g. a work
+        // order of My week, Phase 19).
+        if (err.status !== 0 || route.name !== 'detail') return;
       } finally {
         if (isCurrent()) area.removeAttribute('aria-busy');
       }
       if (!isCurrent()) return;
       // A page past the end (e.g. an old link) goes to the last page.
-      if (route.page > data.pages) {
+      if (data && route.page > data.pages) {
         const url = route.id
           ? detailUrl(route.entity, route.id, data.pages, filters)
           : listUrl(route.entity, data.pages, filters);
         return navigate(url, { replace: true, force: true });
       }
-      displayPage(route, data, pinned);
+      if (data) displayPage(route, data, pinned);
     }
   }
 

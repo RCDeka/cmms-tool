@@ -52,6 +52,14 @@ export const PERFORMERS = ['INTERNAL', 'CONTRACTOR'];
 
 export const OCCURRENCE_STATUSES = ['PLANNED', 'RELEASED', 'SKIPPED'];
 
+// Week scheduler (D48, Phase 19, docs/data-model.md → allocations).
+
+/** A block of hours on a work order, or travel, preparation or other time (P10). */
+export const ALLOCATION_KINDS = ['WORK', 'TRAVEL', 'PREPARATION', 'OTHER'];
+
+/** Why a person's hours on a day differ from the default. */
+export const CAPACITY_REASONS = ['LEAVE', 'PART_TIME', 'TRAINING', 'WEEKEND', 'OTHER'];
+
 /** Records whose changes are written to the audit log. */
 export const AUDIT_ENTITY_TYPES = [
   'assets',

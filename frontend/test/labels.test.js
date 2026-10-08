@@ -18,6 +18,8 @@ describe('enums', () => {
     'PLAN_TYPES',
     'SCHEDULE_MODES',
     'OCCURRENCE_STATUSES',
+    'ALLOCATION_KINDS',
+    'CAPACITY_REASONS',
   ])('%s matches the backend', (name) => {
     expect(frontend[name]).toEqual(backend[name]);
   });

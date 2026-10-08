@@ -26,6 +26,8 @@ assets 1───* maintenance_plans (asset_id, optional)
 maintenance_plans 1───* plan_occurrences (plan_id)
 maintenance_plans 1───* work_orders (plan_id, optional)
 plan_occurrences 0..1───1 work_orders (work_order_id, set by the release)
+work_orders 1───* allocations (work_order_id, WORK blocks)
+users 1───* allocations (technician_id) / capacity_overrides (technician_id)
 ```
 
 ## Enumerated values
@@ -46,6 +48,8 @@ plan_occurrences 0..1───1 work_orders (work_order_id, set by the release)
 | Schedule mode (D48) | `FIXED` (Fixed calendar), `FLOATING` (From the last visit) |
 | Performed by (D48) | `INTERNAL` (Internal team), `CONTRACTOR` (Contractor) |
 | Occurrence status (D48) | `PLANNED` (Planned), `RELEASED` (Work order created), `SKIPPED` (Skipped) |
+| Allocation kind (D52) | `WORK` (Work), `TRAVEL` (Travel), `PREPARATION` (Preparation), `OTHER` (Other time) |
+| Capacity reason (D52) | `LEAVE` (Leave), `PART_TIME` (Part time), `TRAINING` (Training), `WEEKEND` (Weekend work), `OTHER` (Other) |
 
 - Terminal work order statuses: `CLOSED`, `CANCELLED`. Non-terminal: `OPEN`, `IN_PROGRESS`, `ON_HOLD`.
 - `FIRE_SAFETY` is the fire detection and alarm system; `NETWORK_CABLING` covers voice, data and video cabling.
@@ -130,7 +134,7 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | reviewed_at | TEXT | yes | | datetime of the review **(added, D47)** |
 | review_note | TEXT | yes | | reason of a rejection, shown to the requester **(added, D47)** |
 | plan_id | INTEGER | yes | FK → maintenance_plans.id | the plan of a preventive visit; set by the release, read-only **(added, D48)** |
-| planned_week | TEXT | yes | ISO week `YYYY-Www` | week the work is planned in; set by the release, read-only until the week scheduler **(added, D48)** |
+| planned_week | TEXT | yes | ISO week `YYYY-Www` | week the work is planned in; set by the release, or by the week scheduler with the first block (D52); read-only in `PUT` **(added, D48)** |
 | version | INTEGER | no | default 1 | |
 | has_conflict | INTEGER | no | default 0 | |
 | updated_by | INTEGER | yes | FK → users.id | **(added, D2)** |
@@ -164,7 +168,7 @@ Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'O
 | Column | Type | Null | Constraints / default | Notes |
 |---|---|---|---|---|
 | id | INTEGER | no | PK | |
-| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`, `maintenance_plans`, `plan_occurrences`, `allocations`, `planning_settings`) | planning records since `008` (D48; `allocations` is reserved for Phase 19) |
+| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`, `maintenance_plans`, `plan_occurrences`, `allocations`, `planning_settings`) | planning records since `008` (D48); blocks of the week scheduler since Phase 19 |
 | entity_id | INTEGER | no | | id of the record (kept after deletion) |
 | action | TEXT | no | CHECK IN (`CREATE`, `UPDATE`, `DELETE`, `CONFLICT`, `RESOLVE`) | |
 | changes | TEXT | no | JSON, default `{}` | `{ field: { from, to } }` in API values |
@@ -226,7 +230,7 @@ Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role
 | applied_at | TEXT | |
 
 ### Preventive maintenance (added, D48, D49)
-Migrations `008_preventive_maintenance.sql` (Phase 17) and `009_planner_editing.sql` (Phase 18). Weeks are **ISO weeks** (Monday to Sunday) written `YYYY-Www` (`2026-W43`), in `APP_TIMEZONE`; some years have 53 weeks (2026 does), and frequencies simply run through them. Week columns have `CHECK (… GLOB '[0-9][0-9][0-9][0-9]-W[0-5][0-9]')`; the API also refuses weeks that do not exist (`2027-W53`). The week scheduler's tables (`allocations`, `capacity_overrides`, `schedule_weeks`) come with Phase 19 (`docs/spec-preventive-maintenance.md` §4).
+Migrations `008_preventive_maintenance.sql` (Phase 17), `009_planner_editing.sql` (Phase 18) and `010_week_scheduler.sql` (Phase 19). Weeks are **ISO weeks** (Monday to Sunday) written `YYYY-Www` (`2026-W43`), in `APP_TIMEZONE`; some years have 53 weeks (2026 does), and frequencies simply run through them. Week columns have `CHECK (… GLOB '[0-9][0-9][0-9][0-9]-W[0-5][0-9]')`; the API also refuses weeks that do not exist (`2027-W53`). Days are dates `YYYY-MM-DD` (`CHECK (… GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`).
 
 #### maintenance_plans
 A recurring preventive task: what, where, which trade, how long, how often.
@@ -279,6 +283,33 @@ Constraints: UNIQUE (`plan_id`, `due_week`); `RELEASED` ⇒ `work_order_id` set;
 
 #### blocked_weeks (`009`)
 Weeks visits should avoid (a data center change freeze, the summer holidays): `id`, `week` (ISO week), `site` (NULL = every site), `reason` (1–200), `created_by`, `created_at`. Unique per week and site, "every site" counted once (unique index on `week, coalesce(site, '')`). The planner warns, it never refuses (BR-P8). Not in the audit log.
+
+#### allocations (`010`, D52)
+A block of hours of one person on one day: work on a work order, or travel, preparation or other time. No clock time, except an appointment.
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| kind | TEXT | no | CHECK Allocation kind | |
+| work_order_id | INTEGER | yes | FK → work_orders.id | set ⇔ `kind = WORK` |
+| technician_id | INTEGER | no | FK → users.id | an active technician or supervisor (API) |
+| day | TEXT | no | date | |
+| hours | REAL | no | 0.5–8, multiple of 0.5 | the API keeps it ≤ `max_block_hours` (3.5 h, BR-S1) |
+| locked_start | TEXT | yes | `HH:MM` on the half hour, `WORK` only | appointment (P6) |
+| locked_by | INTEGER | yes | FK → users.id | set ⇔ `locked_start` set |
+| position | INTEGER | yes | | the person's own order in the day (BR-S7) |
+| note | TEXT | yes | ≤ 500 | "Keys at reception", "Lyon → Saclay" |
+| version | INTEGER | no | default 1 | moves, resizes, notes and locks are checked against it (409 when stale) |
+| created_by / updated_by | INTEGER | no / yes | FK → users.id | |
+| created_at / updated_at | TEXT | no | | |
+
+Indexes: (`technician_id`, `day`), `work_order_id`, `day`. Logged in `audit_log` (`entity_type = allocations`); the day order is not.
+
+#### capacity_overrides (`010`)
+A person's hours on one day when they differ from the default (P5): `technician_id` (FK), `day`, `hours` (0–12 in half hours; 0 = absent), `reason` (CHECK Capacity reason), `note` (≤ 200), `updated_by`, `updated_at`. PK (`technician_id`, `day`). Without an override: `daily_hours` Monday to Friday, 0 on Saturday and Sunday. Not logged.
+
+#### schedule_weeks (`010`)
+Weekend days opened for a week (P11): `week` (PK, ISO week), `saturday_open`, `sunday_open` (0/1, default 0), `updated_by`, `updated_at`. No row: Monday to Friday. An open weekend day appears in the grid with 0 h until a person gets hours with a `WEEKEND` override. Not logged.
 
 #### planning_settings
 One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7; 0.5–12 in half hours), `reserve_percent` (30; 0–80), `release_weeks_ahead` (4; 1–12), `max_block_hours` (3.5; 0.5–8 in half hours), `version`, `updated_by`, `updated_at`. Every change is logged (`entity_type = planning_settings`).
@@ -350,7 +381,7 @@ One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7
 - BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
 - BR-P2 (D51): Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved. When the anchor moves at the same frequency, the series **shifts**: a visit moved by hand moves by the same number of weeks (keeping its own offset); a visit with a work order, or skipped, keeps its week but its `due_week` follows the series when it is still to come, so it holds its slot and no second visit is planned next to it. A moved visit whose due week leaves the series, lands in the past or meets a taken slot is removed. When the frequency changes, the series is rebuilt (no shift). A `FLOATING` restart (BR-P5) is a rebuild too. Deactivating removes every `PLANNED` occurrence.
 - BR-P3: One visit moves within `due_week ± tolerance_weeks`, never before the current week; a `REGULATORY` visit only earlier (its due week is a legal deadline). Otherwise 422 with the reason ("Week 1 is outside this visit's tolerance of ± 3 weeks around week 50.", "A regulatory visit can only move earlier: week 50 is its deadline."). Back on its due week, it is no longer a moved visit.
-- BR-P4: A visit with a work order is not moved in the year planner (422): its work order is rescheduled instead (Phase 19).
+- BR-P4: A visit with a work order is not moved in the year planner (422): its work order is scheduled in the week scheduler instead (D52).
 - BR-P5: `FIXED` plans keep their calendar. In a `FLOATING` plan, closing a visit's work order moves the anchor to the closing week + the frequency (logged on the plan) and replaces the planned visits.
 - BR-P6: The release creates the work order of every `PLANNED` occurrence of an active plan whose week is at most `release_weeks_ahead` weeks after the current week, one transaction per occurrence; a second run creates nothing (the occurrence is no longer `PLANNED`, and `work_order_id` is UNIQUE). The work order takes the plan's type, title (+ " – 2026-W43"), description, asset, site, location, trade and hours, with `status = OPEN`, `priority = NORMAL`, no assignee, `created_on` = today, `due_on` = the Friday of the week (today when late), `plan_id`, `planned_week`, and the plan's author (or the user who asked for the release) as `created_by`.
 - BR-P7: A planned visit is skipped with a reason (1–500) and leaves the load; it can be restored (back to `PLANNED`). A visit with a work order is skipped only by cancelling its work order, which skips it with the reason "Work order WO-… cancelled"; that skip cannot be undone (422).
@@ -362,6 +393,19 @@ One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7
 - BR-Y2: Weekly capacity = Σ over active technicians **and supervisors** of `daily_hours` × 5 working days, minus `reserve_percent`; per trade through `specialty` (`GENERAL` without one) and per site. The site and trade filters narrow it to those people (D49).
 - BR-Y3: Load = planned hours ÷ capacity; above 100 %: over capacity; 85 % to 100 %: tight; no load without capacity.
 - BR-Y4: Contractor visits are counted per week, never in the load.
+
+### Week scheduler (D48, D52)
+- BR-S1: A block is 0.5 h to `max_block_hours` (3.5 h), in half hours (400 for other steps, 422 above the longest block). A longer job is split into several blocks: the interface proposes 3 h 30 per day from the day of the drop over the following days, editable; one request creates them all, or none.
+- BR-S2: A work order is fully scheduled when its `WORK` blocks add up to its `estimated_hours` rounded up to the half hour; until then the tray shows what is left ("30 min left"). Hours left count every `WORK` block of the work order, in any week. A work order without an estimate cannot get blocks (422): the interface asks for one first.
+- BR-S3: The first block of a work order without a `planned_week` gives it the week of the block; without an assignee, the person of the block becomes the assignee (not while it has an open conflict). Other people given blocks are helpers. Both changes are logged on the work order and increase its version.
+- BR-S4: Finished work orders and staff requests waiting for a review cannot get blocks (422); the blocks of a finished work order no longer change.
+- BR-S5: A day's total (every kind of block) above its capacity is a warning (`OVER_CAPACITY`), never a refusal.
+- BR-S6: An appointment (`locked_start`) is set or removed by a supervisor, an admin, or the person of the block, on `WORK` blocks only, at a half hour, ending by midnight. A locked block cannot change day, person or length, nor be removed (422) until unlocked. Two appointments of a person on a day cannot overlap (409).
+- BR-S7: Technicians lock and unlock their own blocks (403 for others') and order their own day (`position`); everything else is for supervisors and admins.
+- BR-S8: Blocks on a day with 0 h (`ABSENT` when an override says so) or on a weekend day not opened (`WEEKEND_CLOSED`, the day then stays visible) are accepted with a warning.
+- BR-S9: Carry-over: an unfinished work order planned in an earlier week is listed in a week's tray as carried over from its planned week; its past blocks stay as history.
+- BR-S10: Sites of a day = distinct sites of the person's `WORK` blocks; two or more is a warning (`SEVERAL_SITES`) with an "Add travel time" link.
+- Capacity of a day = the override's hours, else `daily_hours` Monday to Friday and 0 on weekends; a closed weekend day without an override counts 0.
 
 ### KPI definitions (dashboard)
 "Today" and "this month" use `APP_TIMEZONE` (D13).
@@ -387,4 +431,5 @@ Generated by `backend/src/db/seed/` with a fixed random seed (the output is the 
 - The **200 generated work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
 - The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), with a location, some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
 - **62 maintenance plans** (D48), each on its own asset (site, building and trade follow it), from `PLAN_TEMPLATES` in `seed/catalog.js`: every trade, both calendar modes, regulatory plans, 8 contractor plans (fire safety, backflow tests, CCTV), visits above 3 h 30, two seasonal plans (one placed outside its season), and one contract ending in a little over a year. Most long-period plans start 3, 16, 29 or 42 weeks after the current week, so the year has visible peaks (one week over capacity, two tight, about 41 % on average). Occurrences are stored up to the horizon; no work order is released by the seed: the daily job or the first opening of the planner does it. The plans use their own random stream, so the rest of the dataset is unchanged.
+- **A week of the week scheduler** (D52), the current week: technician1 has a 6 h job split over Monday (3 h 30) and Tuesday (2 h 30), a 2 h appointment locked at 10:00 on Tuesday by supervisor1 ("Keys at reception"), and two sites on Wednesday with 1 h of travel between them; technician2 has preparation time and work on Monday and Tuesday, and is on leave on Thursday (capacity override 0 h). The work orders are open ones already assigned to them; they get the current week as planned week. 9 blocks, each with its creation in the audit log.
 - **0 conflicts** by default. A dev-only option (`npm run db:seed -- --with-conflicts`) creates 3 open conflicts to demonstrate the arbitration console.

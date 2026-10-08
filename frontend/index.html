@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/assets/css/detail.css" />
     <link rel="stylesheet" href="/assets/css/components.css" />
     <link rel="stylesheet" href="/assets/css/planning.css" />
+    <link rel="stylesheet" href="/assets/css/schedule.css" />
     <script type="module" src="/assets/js/app.js"></script>
     <!-- Fetch the whole module graph in parallel instead of level by level. -->
     <link rel="modulepreload" href="/assets/js/account.js" />
@@ -36,6 +37,7 @@
     <link rel="modulepreload" href="/assets/js/labels.js" />
     <link rel="modulepreload" href="/assets/js/layout.js" />
     <link rel="modulepreload" href="/assets/js/login.js" />
+    <link rel="modulepreload" href="/assets/js/my-week.js" />
     <link rel="modulepreload" href="/assets/js/network.js" />
     <link rel="modulepreload" href="/assets/js/plan-panel.js" />
     <link rel="modulepreload" href="/assets/js/planner-editing.js" />
@@ -50,6 +52,10 @@
     <link rel="modulepreload" href="/assets/js/review.js" />
     <link rel="modulepreload" href="/assets/js/rules.js" />
     <link rel="modulepreload" href="/assets/js/save-modes.js" />
+    <link rel="modulepreload" href="/assets/js/schedule.js" />
+    <link rel="modulepreload" href="/assets/js/schedule-editing.js" />
+    <link rel="modulepreload" href="/assets/js/schedule-panel.js" />
+    <link rel="modulepreload" href="/assets/js/schedule-rules.js" />
     <link rel="modulepreload" href="/assets/js/session.js" />
     <link rel="modulepreload" href="/assets/js/sync.js" />
     <link rel="modulepreload" href="/assets/js/table.js" />
@@ -84,6 +90,12 @@
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
           <a href="/planning" data-link data-nav="planning">Year planner</a>
+        </li>
+        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+          <a href="/schedule" data-link data-nav="schedule">Week scheduler</a>
+        </li>
+        <li data-roles="TECHNICIAN SUPERVISOR" hidden>
+          <a href="/my-week" data-link data-nav="my_week">My week</a>
         </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
           <a href="/conflicts" data-link data-nav="conflicts">Conflicts</a>

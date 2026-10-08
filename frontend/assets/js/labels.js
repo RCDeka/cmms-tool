@@ -43,6 +43,20 @@ export const VALUE_LABELS = {
   performed_by: { INTERNAL: 'Internal team', CONTRACTOR: 'Contractor' },
   occurrence_status: { PLANNED: 'Planned', RELEASED: 'Work order created', SKIPPED: 'Skipped' },
   planning_group: { site: 'Site', building: 'Building', category: 'Trade' },
+  // Week scheduler (D48, Phase 19).
+  allocation_kind: {
+    WORK: 'Work',
+    TRAVEL: 'Travel',
+    PREPARATION: 'Preparation',
+    OTHER: 'Other time',
+  },
+  capacity_reason: {
+    LEAVE: 'Leave',
+    PART_TIME: 'Part time',
+    TRAINING: 'Training',
+    WEEKEND: 'Weekend work',
+    OTHER: 'Other',
+  },
 };
 
 /**

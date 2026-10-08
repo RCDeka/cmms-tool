@@ -33,6 +33,10 @@ export const SCHEDULE_MODES = ['FIXED', 'FLOATING'];
 export const PERFORMERS = ['INTERNAL', 'CONTRACTOR'];
 export const OCCURRENCE_STATUSES = ['PLANNED', 'RELEASED', 'SKIPPED'];
 
+/** Week scheduler (D48, Phase 19). */
+export const ALLOCATION_KINDS = ['WORK', 'TRAVEL', 'PREPARATION', 'OTHER'];
+export const CAPACITY_REASONS = ['LEAVE', 'PART_TIME', 'TRAINING', 'WEEKEND', 'OTHER'];
+
 /** Enum lists by name, as referenced by field definitions in entities.js. */
 export const ENUMS = {
   role: ROLES,
@@ -46,4 +50,6 @@ export const ENUMS = {
   schedule_mode: SCHEDULE_MODES,
   performed_by: PERFORMERS,
   occurrence_status: OCCURRENCE_STATUSES,
+  allocation_kind: ALLOCATION_KINDS,
+  capacity_reason: CAPACITY_REASONS,
 };

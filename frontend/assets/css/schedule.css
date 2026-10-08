@@ -1,0 +1,462 @@
+/* Week scheduler and My week (D48, Phase 19): the week switcher, the tray, the grid of people
+   × days and the blocks. Every state carries text or a symbol besides its color. */
+
+.schedule-toolbar {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.schedule-weeks,
+.schedule-weekend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.schedule-week-name {
+  font-size: 1.125rem;
+}
+
+.schedule-weeks input[type='week'] {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.weekend-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  font-weight: 600;
+}
+
+.weekend-switch input {
+  width: 20px;
+  height: 20px;
+}
+
+/* Tray on the left, grid on the right; stacked on narrow screens. */
+.schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.schedule-tray {
+  position: sticky;
+  top: 0;
+  max-height: 80vh;
+  overflow: auto;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.schedule-tray h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.125rem;
+}
+
+.tray-group summary {
+  min-height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tray-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tray-card {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-info);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--font-size-small);
+}
+
+.tray-card:hover {
+  border-color: var(--color-brand-red);
+}
+
+.tray-card.is-draggable,
+.block.is-draggable {
+  cursor: grab;
+  /* A finger drags the card instead of scrolling the page. */
+  touch-action: none;
+  user-select: none;
+}
+
+.tray-card.is-done {
+  border-left-color: var(--color-success);
+}
+
+.tray-card.is-selected,
+.block.is-selected {
+  outline: 2px solid var(--color-brand-red);
+  outline-offset: 1px;
+}
+
+.tray-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tray-card-title {
+  font-weight: 600;
+}
+
+.tray-card-meta {
+  color: var(--color-text-muted);
+}
+
+.tray-card-left.is-left {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.tray-card-carried {
+  color: var(--color-warning);
+}
+
+/* The grid scrolls sideways inside its frame; the person column stays in place. */
+.schedule-scroll {
+  overflow: auto;
+  max-height: 80vh;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.schedule-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-size-small);
+  width: 100%;
+}
+
+.schedule-grid th,
+.schedule-grid td {
+  border-bottom: 1px solid var(--color-grid);
+  border-right: 1px solid var(--color-grid);
+  vertical-align: top;
+}
+
+.schedule-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  text-align: left;
+}
+
+.schedule-grid .day-col.is-today {
+  box-shadow: inset 0 -3px 0 var(--color-brand-red);
+}
+
+.schedule-grid .day-col.is-weekend {
+  background: var(--color-neutral-bg);
+}
+
+.day-closed {
+  display: block;
+  color: var(--color-warning);
+  font-weight: 400;
+}
+
+.person-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  text-align: left;
+  font-weight: 400;
+}
+
+.schedule-grid thead .person-cell {
+  z-index: 3;
+}
+
+.person-cell > * {
+  display: block;
+}
+
+.person-total.is-over {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.day-cell {
+  min-width: 170px;
+  padding: var(--space-1);
+}
+
+.day-cell.is-off,
+.day-cell.is-closed {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-surface) 0 6px,
+    var(--color-neutral-bg) 6px 8px
+  );
+}
+
+.day-cell.is-over {
+  background: var(--color-danger-bg);
+}
+
+.day-cell.is-drop-target {
+  outline: 3px solid var(--color-success);
+  outline-offset: -3px;
+  background: var(--color-success-bg);
+}
+
+.cell-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--space-2);
+}
+
+.cell-capacity {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.day-cell.is-over .cell-capacity {
+  color: var(--color-danger);
+}
+
+.cell-sites {
+  color: var(--color-text-muted);
+}
+
+.cell-warnings {
+  list-style: none;
+  margin: var(--space-1) 0;
+  padding: 0;
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.day-cell.is-over .cell-warnings {
+  color: var(--color-danger);
+}
+
+.cell-blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.block {
+  display: grid;
+  min-height: var(--touch-target);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-info);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--color-info-bg);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.block:hover {
+  border-color: var(--color-brand-red);
+}
+
+/* Travel, preparation and other time: their own style, and their kind written. */
+.block-travel,
+.block-preparation,
+.block-other {
+  border-color: var(--color-text-muted);
+  border-style: dashed;
+  background: var(--color-surface);
+}
+
+.block.is-locked {
+  border-color: var(--color-text);
+  border-left-width: 6px;
+}
+
+.block-lock {
+  font-weight: 600;
+}
+
+.block-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.block-meta,
+.block-note {
+  color: var(--color-text-muted);
+}
+
+.block-note {
+  font-style: italic;
+}
+
+.add-time {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-1);
+}
+
+/* Drag: the card or block follows the pointer, the original fades. */
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.85;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 25%);
+}
+
+.is-dragged {
+  opacity: 0.4;
+}
+
+.scheduler.is-dragging {
+  cursor: grabbing;
+}
+
+/* Side panel: one row per block of a split. */
+.block-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.block-row {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.block-total {
+  font-weight: 600;
+}
+
+/* My week. */
+.my-week {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 900px;
+}
+
+.my-day {
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.my-day h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.my-day-total {
+  margin: var(--space-1) 0;
+  color: var(--color-text-muted);
+}
+
+.my-day-total.is-over {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.my-blocks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.my-block {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-info);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+}
+
+.my-block p {
+  margin: 0;
+}
+
+.my-block.is-locked {
+  border-color: var(--color-text);
+  border-left-width: 6px;
+}
+
+.my-block.block-travel,
+.my-block.block-preparation,
+.my-block.block-other {
+  border-style: dashed;
+  border-color: var(--color-text-muted);
+}
+
+.my-block-title {
+  font-weight: 600;
+}
+
+.my-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.my-block-actions select {
+  min-height: var(--touch-target);
+}
+
+@media (max-width: 1023px) {
+  .schedule-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-tray {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drag-ghost {
+    box-shadow: none;
+  }
+}

@@ -43,6 +43,7 @@ describe('seedDatabase', () => {
       workOrders: 207,
       requests: 7,
       plans: 62,
+      allocations: 9,
       conflicts: 0,
     });
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
@@ -224,6 +225,28 @@ describe('seedDatabase', () => {
     // Weekly capacity of the 4 technicians and supervisors: 4 × 35 h − 30 % = 98 h.
     expect(Math.max(...hours)).toBeGreaterThan(98);
     expect(Math.min(...hours)).toBeLessThan(40);
+  });
+
+  it('schedules the current week: a split job, an appointment, travel time, an absence (Phase 19)', () => {
+    const blocks = all('SELECT * FROM allocations ORDER BY id');
+    expect(blocks).toHaveLength(9);
+    // Week 2026-W40: Monday 28 September to Friday 2 October.
+    expect(blocks.every((b) => b.day >= '2026-09-28' && b.day <= '2026-10-02')).toBe(true);
+    const split = blocks.filter((b) => b.work_order_id === blocks[0].work_order_id);
+    expect(split.map((b) => b.hours)).toEqual([3.5, 2.5]);
+    expect(blocks.filter((b) => b.locked_start).map((b) => b.locked_start)).toEqual(['10:00']);
+    expect(blocks.filter((b) => b.kind === 'TRAVEL')).toHaveLength(1);
+    // Work orders of the blocks are assigned to the person and planned in the week.
+    const work = all(
+      `SELECT w.assignee_id, w.planned_week, a.technician_id FROM allocations a
+       JOIN work_orders w ON w.id = a.work_order_id`,
+    );
+    expect(work.every((w) => w.assignee_id === w.technician_id)).toBe(true);
+    expect(new Set(work.map((w) => w.planned_week))).toEqual(new Set(['2026-W40']));
+    expect(all('SELECT hours, reason FROM capacity_overrides')).toEqual([
+      { hours: 0, reason: 'LEAVE' },
+    ]);
+    expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'allocations'")).toBe(9);
   });
 
   it('refuses to seed a database that already has data', async () => {

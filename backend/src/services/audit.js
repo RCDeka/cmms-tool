@@ -39,7 +39,7 @@ function toEntry(row) {
 }
 
 /** Fields whose values are user ids: their names are sent along (`people`). */
-const PERSON_FIELDS = ['assignee_id', 'supervisor_id'];
+const PERSON_FIELDS = ['assignee_id', 'supervisor_id', 'technician_id'];
 
 /** @param {import('better-sqlite3').Database} db */
 export function createAuditService(db) {

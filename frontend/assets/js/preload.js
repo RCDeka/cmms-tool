@@ -2,6 +2,7 @@
 // Preload and eviction).
 import * as DB from './db.js';
 import { pageKey, storesOf } from './db.js';
+import { myWeekWorkOrderIds } from './my-week.js';
 import { isOnline } from './network.js';
 import { fetchAndStorePage } from './sync.js';
 
@@ -15,11 +16,19 @@ export function keepSet(current, pages) {
   return [...set].filter((p) => p >= 1 && p <= pages).sort((a, b) => a - b);
 }
 
-/** Record ids that must never be evicted: drafts and queued writes of the entity, plus extras. */
+/**
+ * Record ids that must never be evicted: drafts and queued writes of the entity, the work
+ * orders of the weeks saved for My week (read offline, Phase 19), plus extras.
+ */
 export async function protectedIds(entity, extraIds = []) {
-  const [drafts, queue] = await Promise.all([DB.getAll('drafts'), DB.getAll('sync_queue')]);
+  const [drafts, queue, myWeek] = await Promise.all([
+    DB.getAll('drafts'),
+    DB.getAll('sync_queue'),
+    entity === 'work_orders' ? myWeekWorkOrderIds() : [],
+  ]);
   return new Set([
     ...extraIds,
+    ...myWeek,
     ...drafts.filter((d) => d.entity === entity).map((d) => d.id),
     ...queue.filter((q) => q.entity === entity).map((q) => q.record_id),
   ]);

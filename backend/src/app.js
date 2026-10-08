@@ -19,6 +19,7 @@ import { planningRouter } from './routes/planning.js';
 import { plansRouter } from './routes/plans.js';
 import { referenceRouter } from './routes/reference.js';
 import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
+import { myWeekRouter, scheduleRouter } from './routes/schedule.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
 import { createAuditService } from './services/audit.js';
@@ -32,6 +33,7 @@ import { createPlanService } from './services/plans.js';
 import { createPlanningService } from './services/planning.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createRequestService } from './services/requests.js';
+import { createScheduleService } from './services/schedule.js';
 import { createUserService } from './services/users.js';
 import { createWorkOrderService } from './services/work-orders.js';
 import { MAINTENANCE_ROLES } from './rules/enums.js';
@@ -80,6 +82,7 @@ export function createApp({
   const plans = createPlanService(db);
   const planning = createPlanningService(db, { workOrders });
   const occurrences = createOccurrenceService(db);
+  const schedule = createScheduleService(db, { workOrders, planning });
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -130,6 +133,8 @@ export function createApp({
       '/api/plans',
       '/api/plan-occurrences',
       '/api/planning',
+      '/api/schedule',
+      '/api/my-week',
     ],
     requireRole(...MAINTENANCE_ROLES),
   );
@@ -153,6 +158,8 @@ export function createApp({
     planOccurrencesRouter({ occurrences, timeZone: config.timeZone, now }),
   );
   app.use('/api/planning', planningRouter({ planning, timeZone: config.timeZone, now }));
+  app.use('/api/schedule', scheduleRouter({ schedule, planning, timeZone: config.timeZone, now }));
+  app.use('/api/my-week', myWeekRouter({ schedule, timeZone: config.timeZone, now }));
   app.use('/api/dashboard', dashboardRouter({ dashboard, timeZone: config.timeZone, now }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);

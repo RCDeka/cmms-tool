@@ -83,6 +83,18 @@ const occurrence = (planId, o = {}) => ({
   updated_at: '2026-10-04T12:00:00.000Z',
   ...o,
 });
+let daySeq = 0;
+/** A block of hours; a new day each time, so capacity overrides never collide. */
+const allocation = (personId, o = {}) => ({
+  kind: 'TRAVEL',
+  technician_id: personId,
+  day: `2026-11-${String((++daySeq % 28) + 1).padStart(2, '0')}`,
+  hours: 1,
+  created_by: personId,
+  created_at: '2026-10-04T12:00:00.000Z',
+  updated_at: '2026-10-04T12:00:00.000Z',
+  ...o,
+});
 const conflict = (userId, o = {}) => ({
   entity_type: 'assets',
   entity_id: 1,
@@ -320,6 +332,35 @@ describe('CHECK constraints match src/rules/enums.js', () => {
       },
     ],
     [
+      'allocations.kind',
+      enums.ALLOCATION_KINDS,
+      (v) => {
+        const u = insert('users', user());
+        insert(
+          'allocations',
+          allocation(u, {
+            kind: v,
+            work_order_id: v === 'WORK' ? insert('work_orders', workOrder(u)) : null,
+          }),
+        );
+      },
+    ],
+    [
+      'capacity_overrides.reason',
+      enums.CAPACITY_REASONS,
+      (v) => {
+        const u = insert('users', user());
+        insert('capacity_overrides', {
+          technician_id: u,
+          day: '2026-10-05',
+          hours: 0,
+          reason: v,
+          updated_by: u,
+          updated_at: '2026-10-04T12:00:00.000Z',
+        });
+      },
+    ],
+    [
       'audit_log.entity_type',
       enums.AUDIT_ENTITY_TYPES,
       (v) => insert('audit_log', { entity_type: v, entity_id: 1, action: 'UPDATE', label: 'x' }),
@@ -482,6 +523,64 @@ describe('integrity rules', () => {
     const p = insert('maintenance_plans', plan(u));
     const o = insert('plan_occurrences', occurrence(p));
     expect(db.prepare('SELECT version FROM plan_occurrences WHERE id = ?').pluck().get(o)).toBe(1);
+  });
+
+  it('keeps blocks consistent: half hours, work order only on work, locks (Phase 19)', () => {
+    const u = insert('users', user());
+    const wo = insert('work_orders', workOrder(u));
+    expect(() => insert('allocations', allocation(u, { hours: 1.25 }))).toThrow(/CHECK/);
+    expect(() => insert('allocations', allocation(u, { hours: 0 }))).toThrow(/CHECK/);
+    expect(() => insert('allocations', allocation(u, { hours: 8.5 }))).toThrow(/CHECK/);
+    expect(() => insert('allocations', allocation(u, { day: '5 Oct' }))).toThrow(/CHECK/);
+    // WORK ⇔ a work order.
+    expect(() => insert('allocations', allocation(u, { kind: 'WORK' }))).toThrow(/CHECK/);
+    expect(() => insert('allocations', allocation(u, { work_order_id: wo }))).toThrow(/CHECK/);
+    // An appointment: a time on the half hour, who locked it, on work only.
+    const work = { kind: 'WORK', work_order_id: wo };
+    expect(() => insert('allocations', allocation(u, { ...work, locked_start: '10:00' }))).toThrow(
+      /CHECK/,
+    );
+    expect(() =>
+      insert('allocations', allocation(u, { ...work, locked_start: '10:15', locked_by: u })),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      insert('allocations', allocation(u, { locked_start: '10:00', locked_by: u })),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      insert('allocations', allocation(u, { ...work, locked_start: '10:30', locked_by: u })),
+    ).not.toThrow();
+    expect(() => insert('allocations', allocation(u, { ...work, work_order_id: 9999 }))).toThrow(
+      /FOREIGN KEY/,
+    );
+    expect(() => insert('allocations', allocation(u, { note: 'x'.repeat(501) }))).toThrow(/CHECK/);
+  });
+
+  it('keeps one capacity override per person and day, and weekend switches per week', () => {
+    const u = insert('users', user());
+    const override = (o = {}) => ({
+      technician_id: u,
+      day: '2026-10-08',
+      hours: 0,
+      reason: 'LEAVE',
+      updated_by: u,
+      updated_at: '2026-10-04T12:00:00.000Z',
+      ...o,
+    });
+    insert('capacity_overrides', override());
+    expect(() => insert('capacity_overrides', override())).toThrow(/UNIQUE|PRIMARY/);
+    expect(() =>
+      insert('capacity_overrides', override({ day: '2026-10-09', hours: 12.5 })),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      insert('capacity_overrides', override({ day: '2026-10-09', hours: 3.25 })),
+    ).toThrow(/CHECK/);
+    const week = { week: '2026-W41', saturday_open: 1, updated_by: u, updated_at: 'x' };
+    insert('schedule_weeks', week);
+    expect(() => insert('schedule_weeks', week)).toThrow(/UNIQUE|PRIMARY/);
+    expect(() => insert('schedule_weeks', { ...week, week: '2026-W42', sunday_open: 2 })).toThrow(
+      /CHECK/,
+    );
+    expect(() => insert('schedule_weeks', { ...week, week: 'W42' })).toThrow(/CHECK/);
   });
 
   it('keeps one row of planning settings with bounded values (P16)', () => {
