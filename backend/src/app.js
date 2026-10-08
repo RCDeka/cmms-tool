@@ -14,6 +14,7 @@ import { conflictsRouter } from './routes/conflicts.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { healthRouter } from './routes/health.js';
+import { planOccurrencesRouter } from './routes/plan-occurrences.js';
 import { planningRouter } from './routes/planning.js';
 import { plansRouter } from './routes/plans.js';
 import { referenceRouter } from './routes/reference.js';
@@ -26,6 +27,7 @@ import { createCommentService } from './services/comments.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
 import { createFeedbackService } from './services/feedback.js';
+import { createOccurrenceService } from './services/occurrences.js';
 import { createPlanService } from './services/plans.js';
 import { createPlanningService } from './services/planning.js';
 import { createReferenceDataService } from './services/reference-data.js';
@@ -77,6 +79,7 @@ export function createApp({
   const requests = createRequestService(db, { workOrders, comments });
   const plans = createPlanService(db);
   const planning = createPlanningService(db, { workOrders });
+  const occurrences = createOccurrenceService(db);
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -125,6 +128,7 @@ export function createApp({
       '/api/dashboard',
       '/api/audit-log',
       '/api/plans',
+      '/api/plan-occurrences',
       '/api/planning',
     ],
     requireRole(...MAINTENANCE_ROLES),
@@ -144,6 +148,10 @@ export function createApp({
   app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
   app.use('/api/conflicts', conflictsRouter({ conflicts }));
   app.use('/api/plans', plansRouter({ plans, timeZone: config.timeZone, now }));
+  app.use(
+    '/api/plan-occurrences',
+    planOccurrencesRouter({ occurrences, timeZone: config.timeZone, now }),
+  );
   app.use('/api/planning', planningRouter({ planning, timeZone: config.timeZone, now }));
   app.use('/api/dashboard', dashboardRouter({ dashboard, timeZone: config.timeZone, now }));
   app.use('/api', referenceRouter({ referenceData, users }));

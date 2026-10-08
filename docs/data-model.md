@@ -226,7 +226,7 @@ Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role
 | applied_at | TEXT | |
 
 ### Preventive maintenance (added, D48, D49)
-Migration `008_preventive_maintenance.sql`. Weeks are **ISO weeks** (Monday to Sunday) written `YYYY-Www` (`2026-W43`), in `APP_TIMEZONE`; some years have 53 weeks (2026 does), and frequencies simply run through them. Week columns have `CHECK (… GLOB '[0-9][0-9][0-9][0-9]-W[0-5][0-9]')`; the API also refuses weeks that do not exist (`2027-W53`). The week scheduler's tables (`allocations`, `capacity_overrides`, `schedule_weeks`) and `blocked_weeks` come with Phases 18–19 (`docs/spec-preventive-maintenance.md` §4).
+Migrations `008_preventive_maintenance.sql` (Phase 17) and `009_planner_editing.sql` (Phase 18). Weeks are **ISO weeks** (Monday to Sunday) written `YYYY-Www` (`2026-W43`), in `APP_TIMEZONE`; some years have 53 weeks (2026 does), and frequencies simply run through them. Week columns have `CHECK (… GLOB '[0-9][0-9][0-9][0-9]-W[0-5][0-9]')`; the API also refuses weeks that do not exist (`2027-W53`). The week scheduler's tables (`allocations`, `capacity_overrides`, `schedule_weeks`) come with Phase 19 (`docs/spec-preventive-maintenance.md` §4).
 
 #### maintenance_plans
 A recurring preventive task: what, where, which trade, how long, how often.
@@ -248,7 +248,7 @@ A recurring preventive task: what, where, which trade, how long, how often.
 | anchor_week | TEXT | no | ISO week | first visit of the series |
 | end_week | TEXT | yes | ISO week, ≥ anchor (API) | contract end; open-ended when NULL |
 | schedule_mode | TEXT | no | CHECK Schedule mode, default `FIXED` | BR-P5 |
-| tolerance_weeks | INTEGER | no | 0–8 | default `min(8, floor(frequency_weeks / 4))`; used by moves (Phase 18) |
+| tolerance_weeks | INTEGER | no | 0–8 | default `min(8, floor(frequency_weeks / 4))`; how far one visit may move (BR-P3) |
 | season_from_week, season_to_week | INTEGER | yes | 1–53, both or neither | allowed season; may wrap over the new year (45 → 10) |
 | performed_by | TEXT | no | CHECK Performed by, default `INTERNAL` | |
 | supplier | TEXT | yes | required by the API for `CONTRACTOR` | contractor name |
@@ -267,14 +267,18 @@ One visit of a plan in a week.
 | id | INTEGER | no | PK | |
 | plan_id | INTEGER | no | FK → maintenance_plans.id | |
 | due_week | TEXT | no | ISO week | week given by the series |
-| week | TEXT | no | ISO week | planned week; differs from `due_week` once moved (Phase 18) |
+| week | TEXT | no | ISO week | planned week; differs from `due_week` once moved |
 | status | TEXT | no | CHECK Occurrence status, default `PLANNED` | |
 | work_order_id | INTEGER | yes | FK → work_orders.id, UNIQUE | set by the release |
 | skip_reason | TEXT | yes | required when `SKIPPED` | |
-| moved_by / moved_at | | yes | | last single move (Phase 18) |
+| moved_by / moved_at | | yes | | last single move; cleared when the visit goes back to its due week |
+| version | INTEGER | no | default 1 | moves, skips and restores are checked against it (409 when stale); the release and the series changes increase it too (`009`) |
 | created_at / updated_at | TEXT | no | | |
 
 Constraints: UNIQUE (`plan_id`, `due_week`); `RELEASED` ⇒ `work_order_id` set; `PLANNED` ⇒ no `work_order_id` (a visit skipped by cancelling its work order keeps the link, D49). Indexes: `week`, (`plan_id`, `week`).
+
+#### blocked_weeks (`009`)
+Weeks visits should avoid (a data center change freeze, the summer holidays): `id`, `week` (ISO week), `site` (NULL = every site), `reason` (1–200), `created_by`, `created_at`. Unique per week and site, "every site" counted once (unique index on `week, coalesce(site, '')`). The planner warns, it never refuses (BR-P8). Not in the audit log.
 
 #### planning_settings
 One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7; 0.5–12 in half hours), `reserve_percent` (30; 0–80), `release_weeks_ahead` (4; 1–12), `max_block_hours` (3.5; 0.5–8 in half hours), `version`, `updated_by`, `updated_at`. Every change is logged (`entity_type = planning_settings`).
@@ -344,11 +348,13 @@ One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7
 
 ### Preventive maintenance (D48, D49)
 - BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
-- BR-P2: Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved; released and skipped ones keep their week. Deactivating removes every `PLANNED` occurrence.
+- BR-P2 (D51): Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved. When the anchor moves at the same frequency, the series **shifts**: a visit moved by hand moves by the same number of weeks (keeping its own offset); a visit with a work order, or skipped, keeps its week but its `due_week` follows the series when it is still to come, so it holds its slot and no second visit is planned next to it. A moved visit whose due week leaves the series, lands in the past or meets a taken slot is removed. When the frequency changes, the series is rebuilt (no shift). A `FLOATING` restart (BR-P5) is a rebuild too. Deactivating removes every `PLANNED` occurrence.
+- BR-P3: One visit moves within `due_week ± tolerance_weeks`, never before the current week; a `REGULATORY` visit only earlier (its due week is a legal deadline). Otherwise 422 with the reason ("Week 1 is outside this visit's tolerance of ± 3 weeks around week 50.", "A regulatory visit can only move earlier: week 50 is its deadline."). Back on its due week, it is no longer a moved visit.
+- BR-P4: A visit with a work order is not moved in the year planner (422): its work order is rescheduled instead (Phase 19).
 - BR-P5: `FIXED` plans keep their calendar. In a `FLOATING` plan, closing a visit's work order moves the anchor to the closing week + the frequency (logged on the plan) and replaces the planned visits.
 - BR-P6: The release creates the work order of every `PLANNED` occurrence of an active plan whose week is at most `release_weeks_ahead` weeks after the current week, one transaction per occurrence; a second run creates nothing (the occurrence is no longer `PLANNED`, and `work_order_id` is UNIQUE). The work order takes the plan's type, title (+ " – 2026-W43"), description, asset, site, location, trade and hours, with `status = OPEN`, `priority = NORMAL`, no assignee, `created_on` = today, `due_on` = the Friday of the week (today when late), `plan_id`, `planned_week`, and the plan's author (or the user who asked for the release) as `created_by`.
-- BR-P7 (part): cancelling a released visit's work order sets the occurrence `SKIPPED` with the reason "Work order WO-… cancelled". Skipping by hand comes with Phase 18.
-- BR-P8 (part): warnings, never refusals: a visit longer than `max_block_hours` (`LONG_VISIT`, "will be split"), a visit outside the plan's season (`OUT_OF_SEASON`), a week over capacity. Blocked weeks come with Phase 18.
+- BR-P7: A planned visit is skipped with a reason (1–500) and leaves the load; it can be restored (back to `PLANNED`). A visit with a work order is skipped only by cancelling its work order, which skips it with the reason "Work order WO-… cancelled"; that skip cannot be undone (422).
+- BR-P8: Warnings, never refusals: a visit longer than `max_block_hours` (`LONG_VISIT`, "will be split"), a visit outside the plan's season (`OUT_OF_SEASON`), a visit in a week blocked for its site or every site (`BLOCKED_WEEK`), a week over capacity.
 - BR-P9: With an asset, a plan's `site` and `building` are the asset's; sending others is refused (422), as is an unknown asset. The trade defaults to the asset's.
 
 ### Year planner figures (D48)

@@ -42,6 +42,8 @@ const SHELL_FILES = [
   '/assets/js/login.js',
   '/assets/js/network.js',
   '/assets/js/plan-panel.js',
+  '/assets/js/planner-editing.js',
+  '/assets/js/planning-rules.js',
   '/assets/js/planning.js',
   '/assets/js/planning-settings.js',
   '/assets/js/preload.js',

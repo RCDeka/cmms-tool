@@ -9,6 +9,7 @@ import { CATEGORIES, PERFORMERS, PLAN_TYPES } from './enums.js';
 import { formatDate, formatWeek } from './format.js';
 import { valueLabel } from './labels.js';
 import { setSplitView } from './layout.js';
+import { isBlocked as isBlockedFor } from './planning-rules.js';
 
 /** Group keys of the rows, in switch order. */
 export const GROUP_BY = ['site', 'building', 'category'];
@@ -94,16 +95,19 @@ export function groupTitle(group) {
  * §7): released ✓, skipped struck through with "skipped" in the label, regulatory §,
  * contractor outline with the supplier in the label, ⚠ for warnings. Pure.
  */
-export function chipView(plan, occurrence) {
+export function chipView(plan, occurrence, { series = false } = {}) {
   const classes = ['chip', `chip-${occurrence.status.toLowerCase()}`];
   const marks = [];
+  const moved = occurrence.week !== occurrence.due_week;
   if (plan.type === 'REGULATORY') marks.push('§');
   if (occurrence.status === 'RELEASED') marks.push('✓');
+  if (moved) marks.push('↔');
   const warnings = occurrence.warnings ?? [];
   if (warnings.length) marks.push('⚠');
   if (plan.performed_by === 'CONTRACTOR') classes.push('chip-contractor');
-  if (occurrence.week !== occurrence.due_week) classes.push('chip-moved');
+  if (moved) classes.push('chip-moved');
   if (warnings.length) classes.push('chip-warning');
+  if (series) classes.push('chip-series');
 
   const parts = [
     `${plan.code}, ${formatWeek(occurrence.week)}`,
@@ -117,6 +121,8 @@ export function chipView(plan, occurrence) {
     parts.push(`moved from ${formatWeek(occurrence.due_week)}`);
   }
   if (warnings.includes('OUT_OF_SEASON')) parts.push('outside the season');
+  if (warnings.includes('BLOCKED_WEEK')) parts.push('in a blocked week');
+  if (series) parts.push('first planned visit: moving it moves the whole series');
   return {
     text: `${marks.join('')}${numberFormat.format(plan.estimated_hours)}`,
     classes: classes.join(' '),
@@ -218,6 +224,19 @@ function weekClass(data, i) {
   const { week } = data.weeks[i];
   const yearStart = i > 0 && week.slice(0, 4) !== data.weeks[i - 1].week.slice(0, 4);
   return `${week === data.current_week ? ' is-current' : ''}${yearStart ? ' year-start' : ''}`;
+}
+
+/** Blocked weeks of a week, as one line: "Change freeze (Saclay Data Center)". Pure. */
+export function blockedText(week, blockedWeeks = []) {
+  return blockedWeeks
+    .filter((b) => b.week === week)
+    .map((b) => `${b.reason} (${b.site ?? 'every site'})`)
+    .join('; ');
+}
+
+/** True when a visit can be dragged: planned, not in the past, and the user may edit. Pure. */
+export function isMovable(occurrence, currentWeek, canEdit) {
+  return canEdit && occurrence.status === 'PLANNED' && occurrence.week >= currentWeek;
 }
 
 /** Field labels of the planning records in the audit log (history.js). */
@@ -415,7 +434,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
   );
 }
 
-function tilesSection(data) {
+function tilesSection(data, preview = false) {
   return h(
     'section',
     { class: 'planner-tiles', 'aria-labelledby': 'planner-tiles-heading' },
@@ -433,7 +452,9 @@ function tilesSection(data) {
           {},
           h(
             'div',
-            { class: `kpi-tile planner-tile${tile.flagged ? ' is-flagged' : ''}` },
+            {
+              class: `kpi-tile planner-tile${tile.flagged ? ' is-flagged' : ''}${preview ? ' is-preview' : ''}`,
+            },
             h('span', { class: 'kpi-label' }, tile.label),
             h('span', { class: 'kpi-value planner-tile-value' }, tile.value),
             h('span', { class: 'planner-tile-detail' }, tile.detail),
@@ -551,37 +572,55 @@ function headerRow(data) {
       const showYear = year !== lastYear;
       lastYear = year;
       const isCurrent = week === data.current_week;
+      const blocked = blockedText(week, data.blocked_weeks);
       return h(
         'th',
         {
           scope: 'col',
-          class: `week-col${isCurrent ? ' is-current' : ''}${showYear ? ' year-start' : ''}`,
-          title: `${formatWeek(week)}, Monday ${formatDate(monday)}`,
+          class: `week-col${isCurrent ? ' is-current' : ''}${showYear ? ' year-start' : ''}${blocked ? ' is-blocked' : ''}`,
+          title: `${formatWeek(week)}, Monday ${formatDate(monday)}${blocked ? `. Blocked: ${blocked}` : ''}`,
           'aria-current': isCurrent ? 'date' : null,
         },
         showYear ? h('span', { class: 'week-year' }, year) : null,
         h('span', { class: 'visually-hidden' }, 'Week '),
         String(weekNumber(week)),
         isCurrent ? h('span', { class: 'visually-hidden' }, ' (this week)') : null,
+        blocked
+          ? h(
+              'span',
+              { class: 'week-blocked' },
+              h('span', { 'aria-hidden': 'true' }, '⛔'),
+              h('span', { class: 'visually-hidden' }, ` blocked: ${blocked}`),
+            )
+          : null,
       );
     }),
   );
 }
 
-function planRow(plan, data, { selectedId, onOpen }) {
+function planRow(plan, data, { selectedId, onOpen, canEdit }) {
   const index = new Map(data.weeks.map((w, i) => [w.week, i]));
   const cells = data.weeks.map(() => []);
+  // The first visit that can move stands for the series: dragging it moves them all (spec §7).
+  const seriesId = plan.occurrences.find((o) => isMovable(o, data.current_week, canEdit))?.id;
   for (const o of plan.occurrences) {
-    const view = chipView(plan, o);
+    const movable = isMovable(o, data.current_week, canEdit);
+    const view = chipView(plan, o, { series: o.id === seriesId });
     cells[index.get(o.week)].push(
       h(
         'button',
         {
           type: 'button',
-          class: view.classes,
+          class: `${view.classes}${movable ? ' is-movable' : ''}`,
           'aria-label': view.label,
+          'aria-describedby': movable ? 'planner-move-help' : null,
           title: view.label,
           'aria-current': o.id === selectedId ? 'true' : null,
+          dataset: {
+            occurrence: o.id,
+            plan: plan.id,
+            ...(movable && { move: o.id === seriesId ? 'series' : 'occurrence' }),
+          },
           onClick: () => onOpen(plan.id, o.id),
         },
         view.text,
@@ -591,7 +630,10 @@ function planRow(plan, data, { selectedId, onOpen }) {
   const warning = planWarningText(plan.warnings, data.settings);
   return h(
     'tr',
-    { class: `plan-row${plan.performed_by === 'CONTRACTOR' ? ' is-contractor' : ''}` },
+    {
+      class: `plan-row${plan.performed_by === 'CONTRACTOR' ? ' is-contractor' : ''}`,
+      dataset: { plan: plan.id },
+    },
     h(
       'th',
       { scope: 'row', class: 'plan-cell' },
@@ -613,7 +655,17 @@ function planRow(plan, data, { selectedId, onOpen }) {
         ? h('span', { class: 'plan-warning' }, h('span', { 'aria-hidden': 'true' }, '⚠ '), warning)
         : null,
     ),
-    cells.map((chips, i) => h('td', { class: `week-cell${weekClass(data, i)}` }, chips)),
+    cells.map((chips, i) => {
+      const blocked = isBlockedFor(data.weeks[i].week, plan.site, data.blocked_weeks ?? []);
+      return h(
+        'td',
+        {
+          class: `week-cell${weekClass(data, i)}${blocked ? ' is-blocked' : ''}`,
+          dataset: { index: i },
+        },
+        chips,
+      );
+    }),
   );
 }
 
@@ -646,7 +698,7 @@ function groupRows(group, data, options) {
   );
 }
 
-function legend() {
+function legend(canEdit) {
   const chip = (cls, text) => h('span', { class: cls, 'aria-hidden': 'true' }, text);
   return h(
     'div',
@@ -660,7 +712,17 @@ function legend() {
       h('span', {}, chip('chip chip-skipped', '2'), ' skipped'),
       h('span', {}, chip('chip chip-planned', '§2'), ' regulatory'),
       h('span', {}, chip('chip chip-planned chip-contractor', '2'), ' contractor'),
-      h('span', {}, chip('chip chip-planned chip-warning', '⚠2'), ' outside its season'),
+      h('span', {}, chip('chip chip-planned chip-warning', '⚠2'), ' outside its season or blocked'),
+      h('span', {}, chip('chip chip-planned chip-moved', '↔2'), ' moved'),
+      canEdit
+        ? h(
+            'span',
+            {},
+            chip('chip chip-planned chip-series', '2'),
+            ' first visit: moves the series',
+          )
+        : null,
+      h('span', {}, chip('legend-blocked', '⛔'), ' blocked week'),
     ),
     h(
       'p',
@@ -744,9 +806,12 @@ function figuresTable(data) {
  */
 export function renderPlanner(
   container,
-  { data, filters, sites, canEdit, isAdmin, selectedId = null, onFilter, onOpen },
+  { data, filters, sites, canEdit, isAdmin, selectedId = null, history = null, onFilter, onOpen },
 ) {
   const tooltip = loadTooltip();
+  let tiles = tilesSection(data);
+  let load = loadRow(data, tooltip);
+  const message = h('p', { class: 'planner-message', role: 'status' });
   const plans = data.groups.reduce((n, g) => n + g.plans.length, 0);
   const range = `${formatWeek(data.from)} to ${formatWeek(data.to)}`;
   replaceChildren(
@@ -760,9 +825,10 @@ export function renderPlanner(
         canEdit,
         onFilter,
       }),
-      tilesSection(data),
+      tiles,
       reserveLine(data, isAdmin),
-      legend(),
+      legend(canEdit),
+      toolbar({ filters, canEdit, history, message }),
       h(
         'div',
         { class: 'planner-scroll', tabindex: '0', 'aria-labelledby': 'planner-caption' },
@@ -775,8 +841,8 @@ export function renderPlanner(
             { id: 'planner-caption', class: 'visually-hidden' },
             `Maintenance plans, ${range}: ${plans} plan${plans === 1 ? '' : 's'}`,
           ),
-          h('thead', {}, headerRow(data), loadRow(data, tooltip)),
-          data.groups.map((g) => groupRows(g, data, { selectedId, onOpen })),
+          h('thead', {}, headerRow(data), load),
+          data.groups.map((g) => groupRows(g, data, { selectedId, onOpen, canEdit })),
         ),
       ),
       plans
@@ -789,10 +855,76 @@ export function renderPlanner(
       figuresTable(data),
     ),
   );
+
+  /** Swaps the tiles and the load strip for other figures (live impact), or back. */
+  const show = (next, preview) => {
+    const view = { ...data, ...next };
+    const nextTiles = tilesSection(view, preview);
+    const nextLoad = loadRow(view, tooltip);
+    nextLoad.classList.toggle('is-preview', preview);
+    tiles.replaceWith(nextTiles);
+    load.replaceWith(nextLoad);
+    tiles = nextTiles;
+    load = nextLoad;
+  };
+  return {
+    preview: (figures) => show(figures, true),
+    reset: () => show({ figures: data.figures, tiles: data.tiles }, false),
+    /** A short message under the toolbar: why a drop was refused, what was moved. */
+    say: (text, tone = 'info') => {
+      message.textContent = text;
+      message.dataset.tone = tone;
+    },
+  };
+}
+
+/** Undo / Redo, the blocked weeks, and the hint on how to move visits. */
+function toolbar({ filters, canEdit, history, message }) {
+  const button = (label, entry, onClick, key) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'button button-secondary online-only',
+        disabled: !entry,
+        title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
+        'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
+        onClick,
+      },
+      label,
+      entry ? h('span', { class: 'visually-hidden' }, `: ${entry}`) : null,
+    );
+  return h(
+    'div',
+    { class: 'planner-toolbar' },
+    canEdit && history
+      ? [
+          button('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
+          button('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
+        ]
+      : null,
+    h(
+      'a',
+      {
+        href: planningUrl(filters, '/planning/blocked-weeks'),
+        'data-link': true,
+        class: 'button button-secondary',
+      },
+      'Blocked weeks',
+    ),
+    canEdit
+      ? h(
+          'p',
+          { id: 'planner-move-help', class: 'planner-help muted' },
+          'Drag a planned visit to another week, or select it and press Shift + arrow keys, then Enter (Escape cancels). The first planned visit of a row moves the whole series; Alt + Shift + arrows move the series from any visit.',
+        )
+      : null,
+    message,
+  );
 }
 
 /** Routes of the planner that show a side panel (plan or plan form). */
-const PANEL_ROUTES = ['plan', 'planCreate'];
+const PANEL_ROUTES = ['plan', 'planCreate', 'blockedWeeks'];
 
 /**
  * Opens the split view for a plan panel, or closes it (and empties the panel) on the plain

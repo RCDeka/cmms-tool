@@ -196,7 +196,7 @@ describe('GET /api/plans', () => {
 });
 
 describe('PUT /api/plans/:id', () => {
-  it('moves the series and keeps released visits (BR-P2)', async () => {
+  it('moves the series and keeps released visits, which hold their slot (BR-P2, D51)', async () => {
     const { item } = (
       await as('supervisor1').post('/api/plans', quarterly({ anchor_week: '2026-W42' }))
     ).body;
@@ -209,10 +209,13 @@ describe('PUT /api/plans/:id', () => {
       updated: true,
       item: { version: 2, anchor_week: '2026-W45' },
     });
-    expect(res.body.item.occurrences.slice(0, 3).map((o) => [o.week, o.status])).toEqual([
-      ['2026-W42', 'RELEASED'],
-      ['2026-W45', 'PLANNED'],
-      ['2027-W05', 'PLANNED'],
+    // The visit of W42 already has its work order: it stays, and stands for the slot of W45.
+    expect(
+      res.body.item.occurrences.slice(0, 3).map((o) => [o.week, o.due_week, o.status]),
+    ).toEqual([
+      ['2026-W42', '2026-W45', 'RELEASED'],
+      ['2027-W05', '2027-W05', 'PLANNED'],
+      ['2027-W18', '2027-W18', 'PLANNED'],
     ]);
   });
 

@@ -36,6 +36,24 @@ export function seriesWeeks(plan, from, to) {
   }
 }
 
+/** True when a week is one of the series' weeks (BR-P1). */
+export function isSeriesWeek(plan, week) {
+  const offset = weeksBetween(plan.anchor_week, week);
+  return (
+    offset >= 0 && offset % plan.frequency_weeks === 0 && (!plan.end_week || week <= plan.end_week)
+  );
+}
+
+/**
+ * Weeks a series moved from one anchor to another shifts by; 0 when the frequency changed too
+ * (the series is then rebuilt rather than shifted).
+ */
+export function seriesShift(before, after) {
+  return before.frequency_weeks === after.frequency_weeks
+    ? weeksBetween(before.anchor_week, after.anchor_week)
+    : 0;
+}
+
 /**
  * True when a week is inside the plan's season (week numbers, the range may wrap over the
  * new year, e.g. 45 → 10). A plan without a season accepts every week.
@@ -53,9 +71,74 @@ export function planWarnings(plan, settings) {
   return plan.estimated_hours > settings.max_block_hours ? ['LONG_VISIT'] : [];
 }
 
-/** Occurrence warnings (BR-P8): outside the plan's season. */
-export function occurrenceWarnings(plan, week) {
-  return inSeason(week, plan.season_from_week, plan.season_to_week) ? [] : ['OUT_OF_SEASON'];
+/**
+ * True when a week is blocked for a site: by an entry for that site or for every site.
+ * @param {string} week
+ * @param {string} site
+ * @param {{ week: string, site: string | null }[]} blockedWeeks
+ */
+export function isBlocked(week, site, blockedWeeks) {
+  return blockedWeeks.some((b) => b.week === week && (b.site === null || b.site === site));
+}
+
+/** Occurrence warnings (BR-P8): outside the plan's season, in a blocked week. */
+export function occurrenceWarnings(plan, week, blockedWeeks = []) {
+  const warnings = [];
+  if (!inSeason(week, plan.season_from_week, plan.season_to_week)) warnings.push('OUT_OF_SEASON');
+  if (isBlocked(week, plan.site, blockedWeeks)) warnings.push('BLOCKED_WEEK');
+  return warnings;
+}
+
+/**
+ * Weeks one occurrence may move to (BR-P3): its due week ± the plan's tolerance, only earlier
+ * for a regulatory plan (its due week is a legal deadline), never before the current week.
+ * @returns {{ from: string, to: string }} inclusive; `from > to` when nothing is allowed
+ */
+export function allowedWeeks(plan, occurrence, currentWeek) {
+  const earliest = addWeeks(occurrence.due_week, -plan.tolerance_weeks);
+  return {
+    from: earliest < currentWeek ? currentWeek : earliest,
+    to:
+      plan.type === 'REGULATORY'
+        ? occurrence.due_week
+        : addWeeks(occurrence.due_week, plan.tolerance_weeks),
+  };
+}
+
+/** 'week 43' for messages. */
+const weekWords = (week) => `week ${weekParts(week).week}`;
+
+/**
+ * Why an occurrence cannot move to `week`, or null when it can (BR-P3, BR-P4, BR-P7).
+ * @returns {{ rule: string, message: string } | null}
+ */
+export function moveBlocker(plan, occurrence, week, currentWeek) {
+  if (occurrence.status === 'RELEASED') {
+    return {
+      rule: 'BR-P4',
+      message: 'This visit already has its work order: change the work order instead of the visit.',
+    };
+  }
+  if (occurrence.status === 'SKIPPED') {
+    return { rule: 'BR-P7', message: 'This visit is skipped: restore it first.' };
+  }
+  if (week < currentWeek) {
+    return { rule: 'BR-P3', message: 'A visit cannot be moved into the past.' };
+  }
+  const { from, to } = allowedWeeks(plan, occurrence, currentWeek);
+  if (plan.type === 'REGULATORY' && week > occurrence.due_week) {
+    return {
+      rule: 'BR-P3',
+      message: `A regulatory visit can only move earlier: ${weekWords(occurrence.due_week)} is its deadline.`,
+    };
+  }
+  if (week < from || week > to) {
+    return {
+      rule: 'BR-P3',
+      message: `${weekWords(week)[0].toUpperCase()}${weekWords(week).slice(1)} is outside this visit's tolerance of ± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'} around ${weekWords(occurrence.due_week)}.`,
+    };
+  }
+  return null;
 }
 
 /**

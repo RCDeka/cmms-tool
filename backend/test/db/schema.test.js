@@ -462,6 +462,28 @@ describe('integrity rules', () => {
     ).not.toThrow();
   });
 
+  it('blocks a week once per site, and once for every site (Phase 18)', () => {
+    const u = insert('users', user());
+    const blocked = (o = {}) => ({
+      week: '2026-W52',
+      reason: 'Change freeze',
+      created_by: u,
+      created_at: '2026-10-04T12:00:00.000Z',
+      ...o,
+    });
+    insert('blocked_weeks', blocked());
+    expect(() => insert('blocked_weeks', blocked())).toThrow(/UNIQUE/);
+    insert('blocked_weeks', blocked({ site: 'Lyon' }));
+    expect(() => insert('blocked_weeks', blocked({ site: 'Lyon' }))).toThrow(/UNIQUE/);
+    expect(() => insert('blocked_weeks', blocked({ week: '52' }))).toThrow(/CHECK/);
+    expect(() => insert('blocked_weeks', blocked({ week: '2026-W53', reason: ' ' }))).toThrow(
+      /CHECK/,
+    );
+    const p = insert('maintenance_plans', plan(u));
+    const o = insert('plan_occurrences', occurrence(p));
+    expect(db.prepare('SELECT version FROM plan_occurrences WHERE id = ?').pluck().get(o)).toBe(1);
+  });
+
   it('keeps one row of planning settings with bounded values (P16)', () => {
     expect(db.prepare('SELECT reserve_percent, daily_hours FROM planning_settings').all()).toEqual([
       { reserve_percent: 30, daily_hours: 7 },

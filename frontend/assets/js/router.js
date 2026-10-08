@@ -14,7 +14,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
  *   |'users'|'user'|'userCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
- *   |'planning'|'plan'|'planCreate'|'planningSettings'|'notFound'} name
+ *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'notFound'} name
  * @property {number} [occurrenceId] plan panel: the visit clicked on the year planner
  * @property {'open'|'all'} [scope] staff request list: unfinished requests, or all (D46)
  * @property {string} [entity] 'assets' | 'work_orders'
@@ -60,6 +60,7 @@ export function parseRoute(pathname, search = '') {
     // Year planner (D48): /planning, /planning/plans/new, /planning/plans/:id?occurrence=N.
     const filters = parsePlanningFilters(query);
     if (!second) return { name: 'planning', page, filters };
+    if (second === 'blocked-weeks' && !rest.length) return { name: 'blockedWeeks', page, filters };
     const [third, ...more] = rest;
     if (second !== 'plans' || !third || more.length) return { name: 'notFound', page };
     if (third === 'new') return { name: 'planCreate', page, filters };

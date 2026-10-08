@@ -16,7 +16,7 @@ import { addInFilter } from '../lib/list-filter.js';
 import { fieldErrors } from '../middleware/validate.js';
 import { auditLabel, diffChanges } from '../rules/audit.js';
 import { CATEGORIES } from '../rules/enums.js';
-import { PLANNING_SETTINGS_FIELDS, WRITE_META } from '../rules/fields.js';
+import { isoWeek, PLANNING_SETTINGS_FIELDS, WRITE_META } from '../rules/fields.js';
 import {
   GENERAL,
   occurrenceWarnings,
@@ -44,6 +44,19 @@ const settingsSchema = z.strictObject({
  */
 const PAST_WEEKS = 104;
 const FUTURE_WEEKS = 52;
+
+const blockedSchema = z.strictObject({
+  week: isoWeek,
+  // Left out or null: every site.
+  site: z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .optional()
+    .transform((v) => v || null),
+  reason: z.string().trim().min(1, 'Say why the week is blocked').max(200),
+});
 
 /** Group keys of the timeline rows. */
 export const GROUP_BY = ['site', 'building', 'category'];
@@ -126,7 +139,8 @@ export function createPlanningService(db, { workOrders }) {
         );
         const released = { status: 'RELEASED', work_order_id: workOrderId };
         db.prepare(
-          'UPDATE plan_occurrences SET status = ?, work_order_id = ?, updated_at = ? WHERE id = ?',
+          `UPDATE plan_occurrences SET status = ?, work_order_id = ?, version = version + 1,
+             updated_at = ? WHERE id = ?`,
         ).run(released.status, released.work_order_id, stamp, occurrence.id);
         recordAudit(db, {
           entityType: 'plan_occurrences',
@@ -142,12 +156,67 @@ export function createPlanningService(db, { workOrders }) {
       .immediate();
   }
 
+  const blockedSelect = `SELECT b.id, b.week, b.site, b.reason, b.created_at, ${userRefColumns('cb')}
+    FROM blocked_weeks b LEFT JOIN users cb ON cb.id = b.created_by`;
+  const blockedBetween = db.prepare(
+    'SELECT id, week, site, reason FROM blocked_weeks WHERE week BETWEEN ? AND ? ORDER BY week, site',
+  );
+  const toBlocked = (row) => ({
+    id: row.id,
+    week: row.week,
+    site: row.site,
+    reason: row.reason,
+    created_by: userRef(row, 'cb'),
+    created_at: row.created_at,
+  });
+
   /** Settings with the number of people counted as capacity (preview of a change). */
   const settingsWithPeople = () => ({ ...settings(), capacity_people: capacityPeople().length });
 
   return {
     settings,
     settingsWithPeople,
+
+    /** GET /api/planning/blocked-weeks: from the current week on unless a range is given. */
+    blockedWeeks({ from, to }, { now, timeZone }) {
+      const start = from ?? weekOfDate(dateInZone(timeZone, now));
+      return {
+        items: db
+          .prepare(`${blockedSelect} WHERE b.week >= ? AND b.week <= ? ORDER BY b.week, b.site`)
+          .all(start, to ?? '9999-W99')
+          .map(toBlocked),
+      };
+    },
+
+    /** POST /api/planning/blocked-weeks: a week to avoid, for one site or every site (BR-P8). */
+    addBlockedWeek(body, user, { now }) {
+      const parsed = blockedSchema.safeParse(body ?? {});
+      if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
+      const { week, site = null, reason } = parsed.data;
+      const taken = db
+        .prepare("SELECT 1 FROM blocked_weeks WHERE week = ? AND coalesce(site, '') = ?")
+        .get(week, site ?? '');
+      if (taken) {
+        throw new HttpError(409, 'This week is already blocked for this site.', {
+          fields: { week: 'Already blocked' },
+        });
+      }
+      const id = Number(
+        db
+          .prepare(
+            'INSERT INTO blocked_weeks (week, site, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(week, site, reason, user.id, now.toISOString()).lastInsertRowid,
+      );
+      return toBlocked(db.prepare(`${blockedSelect} WHERE b.id = ?`).get(id));
+    },
+
+    /** DELETE /api/planning/blocked-weeks/:id. */
+    removeBlockedWeek(id) {
+      if (!db.prepare('DELETE FROM blocked_weeks WHERE id = ?').run(id).changes) {
+        throw new HttpError(404, 'Blocked week not found');
+      }
+    },
 
     /**
      * PUT /api/planning/settings (administrators, P16), at the version they saw. Logged.
@@ -253,7 +322,7 @@ export function createPlanningService(db, { workOrders }) {
       const rows = db
         .prepare(
           `SELECT o.id, o.plan_id, o.due_week, o.week, o.status, o.skip_reason, o.work_order_id,
-             w.number AS wo_number, w.status AS wo_status
+             o.version, o.moved_at, w.number AS wo_number, w.status AS wo_status
            FROM plan_occurrences o
            JOIN maintenance_plans p ON p.id = o.plan_id
            LEFT JOIN work_orders w ON w.id = o.work_order_id
@@ -261,6 +330,7 @@ export function createPlanningService(db, { workOrders }) {
            ORDER BY o.week, o.id`,
         )
         .all({ ...params, from, to });
+      const blocked = blockedBetween.all(from, to);
 
       const byPlan = new Map(plans.map((p) => [p.id, { plan: p, occurrences: [] }]));
       for (const o of rows) {
@@ -275,7 +345,9 @@ export function createPlanningService(db, { workOrders }) {
             o.work_order_id === null
               ? null
               : { id: o.work_order_id, number: o.wo_number, status: o.wo_status },
-          warnings: occurrenceWarnings(entry.plan, o.week),
+          moved_at: o.moved_at,
+          version: o.version,
+          warnings: occurrenceWarnings(entry.plan, o.week, blocked),
         });
       }
 
@@ -321,6 +393,10 @@ export function createPlanningService(db, { workOrders }) {
             'schedule_mode',
             'performed_by',
             'supplier',
+            'end_week',
+            'season_from_week',
+            'season_to_week',
+            'version',
           ]),
           warnings: planWarnings(plan, current),
           occurrences,
@@ -342,6 +418,7 @@ export function createPlanningService(db, { workOrders }) {
         capacity: { weekly: capacity.total, by_category: capacity.by_category },
         figures,
         tiles: planningTiles(figures, capacity, CATEGORIES),
+        blocked_weeks: blocked,
         groups: [...groups.values()].sort((a, b) => a.key.localeCompare(b.key)),
       };
     },

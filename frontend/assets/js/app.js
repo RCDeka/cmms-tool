@@ -81,10 +81,15 @@ import {
   checkPlanForm,
   planBody,
   planFieldErrors,
+  renderBlockedWeeksPanel,
   renderPlanForm,
   renderPlanPanel,
 } from './plan-panel.js';
 import { planningUrl, renderPlanner, setPlannerPanel, timelineQuery } from './planning.js';
+import { attachPlannerEditing } from './planner-editing.js';
+import { previewFigures } from './planning-rules.js';
+import { CATEGORIES } from './enums.js';
+import { formatWeek } from './format.js';
 import { renderPlanningSettings } from './planning-settings.js';
 import { openAssetPicker } from './asset-picker.js';
 import {
@@ -180,8 +185,14 @@ async function render(route) {
 
   showLoggedIn(currentUser());
   if (isStaff()) return renderStaffRoute(route, isCurrent);
-  // The planner's timeline is reused only while the user stays on the planner.
-  if (!['planning', 'plan', 'planCreate'].includes(route.name)) plannerCache = null;
+  // The planner's timeline and its undo history last while the user stays on the planner.
+  if (!PLANNER_ROUTES.includes(route.name)) {
+    plannerCache = null;
+    plannerHistory.undo = [];
+    plannerHistory.redo = [];
+    detachEditing?.();
+    detachEditing = null;
+  }
   switch (route.name) {
     case 'list':
     case 'detail':
@@ -219,6 +230,7 @@ async function render(route) {
       return showAccount();
     case 'planning':
     case 'plan':
+    case 'blockedWeeks':
       return showPlanning(route, isCurrent);
     case 'planCreate':
       return hasRole('SUPERVISOR', 'ADMIN')
@@ -763,6 +775,121 @@ async function showFeedbackLog(route, isCurrent) {
 
 /** Timeline last shown, so opening or closing a plan panel does not fetch it again. */
 let plannerCache = null; // { query, data }
+const PLANNER_ROUTES = ['planning', 'plan', 'planCreate', 'blockedWeeks'];
+/** Changes made on the planner in this visit, for Undo / Redo (spec §7). */
+const plannerHistory = { undo: [], redo: [] };
+/** Planner on screen: live preview of a move, messages. */
+let plannerView = null;
+let detachEditing = null;
+/** What to focus once the planner is drawn again after a change. */
+let plannerFocus = null; // { occurrence } | { plan }
+
+/** "PM-0012: visit week 50 → week 52" for messages and the Undo / Redo buttons. */
+function changeText(change) {
+  const week = (w) => formatWeek(w).replace(/, \d{4}$/, '');
+  switch (change.kind) {
+    case 'occurrence':
+      return `${change.code}: visit ${week(change.from)} → ${week(change.week)}`;
+    case 'series':
+      return `${change.code}: series from ${week(change.from)} → ${week(change.anchor)}`;
+    case 'skip':
+      return `${change.code}: visit of ${week(change.week)} skipped`;
+    default:
+      return `${change.code}: visit of ${week(change.week)} restored`;
+  }
+}
+
+/** The change that undoes another. */
+function opposite(change) {
+  if (change.kind === 'occurrence') return { ...change, week: change.from, from: change.week };
+  if (change.kind === 'series') return { ...change, anchor: change.from, from: change.anchor };
+  return { ...change, kind: change.kind === 'skip' ? 'restore' : 'skip' };
+}
+
+/**
+ * Sends one planner change at the current version of the record, after checking it is still
+ * as the change expects (the record may have changed since, e.g. after a series move).
+ */
+async function sendPlannerChange(change) {
+  if (change.kind === 'series') {
+    const plan = await apiFetch(`/plans/${change.planId}`);
+    if (plan.anchor_week !== change.from) throw new Error('This plan changed since: reload it.');
+    return apiFetch(`/plans/${change.planId}/anchor`, {
+      method: 'PUT',
+      body: { anchor_week: change.anchor, version: plan.version },
+    });
+  }
+  const visit = await apiFetch(`/plan-occurrences/${change.id}`);
+  const expected =
+    change.kind === 'occurrence'
+      ? visit.status === 'PLANNED' && visit.week === change.from
+      : visit.status === (change.kind === 'skip' ? 'PLANNED' : 'SKIPPED');
+  if (!expected) throw new Error('This visit changed since: reload the planner.');
+  const { version } = visit;
+  if (change.kind === 'occurrence') {
+    return apiFetch(`/plan-occurrences/${change.id}`, {
+      method: 'PUT',
+      body: { week: change.week, version },
+    });
+  }
+  return apiFetch(`/plan-occurrences/${change.id}/${change.kind}`, {
+    method: 'POST',
+    body: change.kind === 'skip' ? { reason: change.reason, version } : { version },
+  });
+}
+
+/**
+ * Applies a change (a drop, a keyboard move, the panel) or replays one (Undo / Redo), then
+ * draws the planner again. Resolves to an error message, or null.
+ * @param {'do' | 'undo' | 'redo'} mode
+ */
+async function applyPlannerChange(change, mode = 'do') {
+  const sent = mode === 'undo' ? opposite(change) : change;
+  try {
+    await sendPlannerChange(sent);
+  } catch (err) {
+    const message =
+      err.status === 0 ? 'You are offline: nothing was changed.' : `Not changed: ${err.message}`;
+    plannerView?.say(message, 'danger');
+    announce(message);
+    if (mode !== 'do') render(currentRoute()); // show what is there now
+    return message;
+  }
+  if (mode === 'undo') plannerHistory.redo.push(change);
+  else {
+    plannerHistory.undo.push(change);
+    if (mode === 'do') plannerHistory.redo = [];
+  }
+  // Name the change itself ("Undone: visit week 17 → week 18"), not the opposite call.
+  const text = `${{ do: '', undo: 'Undone: ', redo: 'Redone: ' }[mode]}${changeText(change)}.`;
+  announce(text);
+  plannerFocus = change.kind === 'series' ? { plan: change.planId } : { occurrence: change.id };
+  plannerCache = null;
+  await render(currentRoute());
+  plannerView?.say(text, 'success');
+  return null;
+}
+
+const undoPlanner = () => {
+  const change = plannerHistory.undo.pop();
+  if (change) applyPlannerChange(change, 'undo');
+};
+const redoPlanner = () => {
+  const change = plannerHistory.redo.pop();
+  if (change) applyPlannerChange(change, 'redo');
+};
+
+/** Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) on the planner, outside text fields. */
+function onPlannerShortcut(event) {
+  if (!PLANNER_ROUTES.includes(currentRoute().name) || !hasRole('SUPERVISOR', 'ADMIN')) return;
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+  const key = event.key.toLowerCase();
+  if (key === 'z' && !event.shiftKey) undoPlanner();
+  else if (key === 'y' || (key === 'z' && event.shiftKey)) redoPlanner();
+  else return;
+  event.preventDefault();
+}
 
 /** URL of a plan panel over the planner, with the visit clicked. */
 function planUrl(filters, planId, occurrenceId = null) {
@@ -781,10 +908,12 @@ async function showPlanning(route, isCurrent) {
   }
   let data;
   let plan = null;
+  let blocked;
   try {
-    [data, plan] = await Promise.all([
+    [data, plan, blocked] = await Promise.all([
       cached ?? apiFetch(`/planning/timeline?${query}`),
       route.name === 'plan' ? apiFetch(`/plans/${route.id}`) : null,
+      route.name === 'blockedWeeks' ? apiFetch('/planning/blocked-weeks') : null,
     ]);
   } catch (err) {
     if (!isCurrent()) return;
@@ -808,18 +937,54 @@ async function showPlanning(route, isCurrent) {
   const previous = tableContainer.querySelector('.planner-scroll');
   const scroll = previous ? { left: previous.scrollLeft, top: previous.scrollTop } : null;
   const hadFocus = tableContainer.contains(document.activeElement);
-  renderPlanner(tableContainer, {
+  const last = (list) => (list.length ? changeText(list.at(-1)) : null);
+  detachEditing?.();
+  plannerView = renderPlanner(tableContainer, {
     data,
     filters,
     sites,
     canEdit,
     isAdmin: hasRole('ADMIN'),
     selectedId: route.occurrenceId ?? null,
+    history: {
+      undoLabel: last(plannerHistory.undo),
+      redoLabel: last(plannerHistory.redo),
+      onUndo: undoPlanner,
+      onRedo: redoPlanner,
+    },
     onFilter: (next) => navigate(planningUrl(next)),
     onOpen: (planId, occurrenceId) => navigate(planUrl(filters, planId, occurrenceId)),
   });
+  detachEditing = canEdit
+    ? attachPlannerEditing(tableContainer, {
+        data,
+        // Live impact: the tiles and the load strip as if the visit were dropped there.
+        onPreview: (move) => {
+          const preview = previewFigures(data, move.planId, move, CATEGORIES);
+          plannerView.preview(preview);
+          return preview;
+        },
+        onCancel: () => plannerView.reset(),
+        onCommit: (move) => applyPlannerChange(move),
+        onRefuse: (message) => {
+          plannerView.say(message, 'danger');
+          announce(message);
+        },
+        announce,
+      })
+    : null;
   const grid = tableContainer.querySelector('.planner-scroll');
   if (scroll) Object.assign(grid, { scrollLeft: scroll.left, scrollTop: scroll.top });
+  if (plannerFocus) {
+    const target = plannerFocus.occurrence
+      ? grid.querySelector(`.chip[data-occurrence="${plannerFocus.occurrence}"]`)
+      : grid.querySelector(`tr[data-plan="${plannerFocus.plan}"] .chip`);
+    plannerFocus = null;
+    if (target && !detailContainer.contains(document.activeElement)) {
+      target.focus();
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
 
   const close = () => navigate(planningUrl(filters));
   if (!setPlannerPanel(route.name, detailContainer)) {
@@ -847,6 +1012,41 @@ async function showPlanning(route, isCurrent) {
     setTitle('New maintenance plan');
     return showForm(null);
   }
+  if (route.name === 'blockedWeeks') {
+    setTitle('Blocked weeks');
+    renderBlockedWeeksPanel(detailContainer, {
+      items: blocked.items,
+      sites,
+      canEdit,
+      onClose: close,
+      onAdd: async (values, form) => {
+        try {
+          await apiFetch('/planning/blocked-weeks', { method: 'POST', body: values });
+          plannerCache = null;
+          announce(`${formatWeek(values.week)} blocked.`);
+          render(currentRoute());
+        } catch (err) {
+          showErrors(
+            form,
+            apiFieldErrors(err),
+            err.status === 0 ? 'You are offline: nothing was saved.' : err.message,
+          );
+        }
+      },
+      onRemove: async (item) => {
+        try {
+          await apiFetch(`/planning/blocked-weeks/${item.id}`, { method: 'DELETE' });
+          plannerCache = null;
+          announce(`${formatWeek(item.week)} is no longer blocked.`);
+          render(currentRoute());
+        } catch (err) {
+          announce(err.status === 0 ? 'You are offline: nothing was removed.' : err.message);
+        }
+      },
+    });
+    detailContainer.querySelector('.detail-title')?.focus();
+    return;
+  }
   setTitle(`${plan.code} — ${plan.title}`);
   const occurrence = route.occurrenceId
     ? (data.groups
@@ -861,8 +1061,28 @@ async function showPlanning(route, isCurrent) {
     occurrence,
     settings: data.settings,
     canEdit,
+    currentWeek: data.current_week,
     onClose: close,
     onEdit: () => showForm(plan),
+    onMove: (move) => applyPlannerChange(move),
+    onSkip: (visit, reason) =>
+      applyPlannerChange({
+        kind: 'skip',
+        planId: plan.id,
+        code: plan.code,
+        id: visit.id,
+        week: visit.week,
+        reason,
+      }),
+    onRestore: (visit) =>
+      applyPlannerChange({
+        kind: 'restore',
+        planId: plan.id,
+        code: plan.code,
+        id: visit.id,
+        week: visit.week,
+        reason: visit.skip_reason,
+      }),
   });
   detailContainer.querySelector('.detail-title')?.focus();
 }
@@ -1575,6 +1795,7 @@ function init() {
   initNetwork();
   initLayout({ onLogout });
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
+  document.addEventListener('keydown', onPlannerShortcut);
   setRerender(() => render(currentRoute()));
   setServerRecordListener(updateShownRecord);
   setNavigationGuard(leaveGuard);

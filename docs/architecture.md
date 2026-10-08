@@ -71,7 +71,10 @@ frontend/
     comments.js               work order conversation (staff request page, work order panel)
     review.js                 review box of a staff request: approve and assign, or reject (D47)
     planning.js               year planner: filters in the URL, tiles, load strip, 52-week grid (D48)
-    plan-panel.js             plan panel (the visit clicked, details, next visits) and plan form
+    plan-panel.js             plan panel (the visit clicked: move, skip, restore; move the series;
+                              next visits), plan form, blocked weeks panel
+    planner-editing.js        drag (pointer: mouse, pen, touch) and keyboard moves of visits (Phase 18)
+    planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures)
     planning-settings.js      planning settings page (administrators) with the capacity preview
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
     dom.js                    escapeHtml, element helpers
@@ -116,6 +119,7 @@ export const ENTITIES = {
 | `/requests/:id` | a request: progress, next step, details, history, comments (STAFF; the maintenance team is sent to `/work-orders/:id`) |
 | `/planning?from=…\|year=…&group=…&site=…&category=…&type=…&performed_by=…&q=…` | year planner (maintenance roles, online only, D48) |
 | `/planning/plans/new`, `/planning/plans/:id?occurrence=N` | planner + plan form or plan panel (split view; `occurrence`: the visit clicked) (creation: SUPERVISOR, ADMIN) |
+| `/planning/blocked-weeks` | planner + blocked weeks panel (every maintenance role reads; SUPERVISOR, ADMIN edit) |
 | `/admin/planning` | planning settings (ADMIN, online only) |
 
 Staff members only reach `/requests…` and `/account`; any other page sends them to `/requests`. The maintenance roles get a short notice on `/requests` and `/requests/new`.
@@ -236,6 +240,7 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 ## Preventive maintenance (D48, D49)
 
 - **Year planner** (`/planning`, Phase 17): reads `GET /api/planning/timeline`, which releases the work orders due first (BR-P6). Online only (P18): nothing is cached in IndexedDB; offline, the page says it needs a connection. The timeline is kept in memory while the user stays on the planner, so opening or closing a plan panel does not fetch it again (a filter change, a save or leaving the planner does). Plans are created and edited in the side panel (`POST`/`PUT /api/plans`), never queued offline.
+- **Editing** (Phase 18): `planner-editing.js` handles pointer drags (a press becomes a drag after 6 px, so a click still opens the panel; the grid scrolls sideways near its edges) and keyboard moves on the rendered grid. While a visit moves, `planning-rules.js` (copies of the server rules, kept in step by `test/planning-rules.test.js`) gives the allowed weeks, the refusal reason and the figures as if dropped; the tiles and load strip are swapped for these, and put back on cancel. Nothing is sent before the drop. Each change is one API call (`PUT /plan-occurrences/:id`, `PUT /plans/:id/anchor`, skip, restore); the timeline is then fetched again. **Undo / Redo** (buttons, `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z`) keep the changes made since the planner was opened (lost when leaving it); an undo is the opposite call, sent after reading the record again, so it checks the record is still as the change left it and uses its current version.
 - **Release job**: `npm run pm:release` (`node src/db/cli.js release`), run daily by `deploy/systemd/fast-cmms-pm-release.timer` (04:00, after the backup).
 - **Planned**: `/schedule` (week scheduler, days × technicians) and `/my-week` for technicians (readable offline), Phases 18–20, `docs/spec-preventive-maintenance.md` §7–9.
 

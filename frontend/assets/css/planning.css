@@ -477,3 +477,201 @@
     min-width: 180px;
   }
 }
+
+/* --- Editing (Phase 18) ------------------------------------------------------------------ */
+
+.planner-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.planner-help {
+  flex: 1 1 24rem;
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
+.planner-message {
+  flex: 1 1 100%;
+  margin: 0;
+  font-weight: 600;
+}
+
+.planner-message:empty {
+  display: none;
+}
+
+.planner-message[data-tone='danger'] {
+  color: var(--color-danger);
+}
+
+.planner-message[data-tone='success'] {
+  color: var(--color-success);
+}
+
+/* Visits that can move: grab cursor; touch drags them instead of scrolling the grid. */
+.chip.is-movable {
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The first planned visit of a row stands for the series. */
+.chip-series {
+  box-shadow: inset 4px 0 0 var(--color-text);
+}
+
+.is-moving-visit,
+.is-moving-visit .chip {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.chip.is-dragged {
+  outline: 3px solid var(--color-brand-red);
+  outline-offset: 1px;
+}
+
+/* Where the visits would go, and what leaves its week. */
+.chip-ghost {
+  border: 2px dashed var(--color-text);
+  background: var(--color-surface);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.chip.is-leaving {
+  opacity: 0.35;
+}
+
+.plan-row.is-moving > .plan-cell {
+  box-shadow: inset 4px 0 0 var(--color-brand-red);
+}
+
+/* Weeks the dragged visit may go to; the one under the pointer, allowed or refused. */
+.week-cell.is-allowed {
+  background: var(--color-success-bg);
+}
+
+.week-cell.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--color-success);
+}
+
+.week-cell.is-drop-refused {
+  background: var(--color-danger-bg);
+  box-shadow: inset 0 0 0 2px var(--color-danger);
+  cursor: not-allowed;
+}
+
+/* Blocked weeks: hatched cells for the plans of the site, ⛔ in the header. */
+.week-cell.is-blocked {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    var(--color-neutral-bg) 6px 9px
+  );
+}
+
+.week-col.is-blocked {
+  color: var(--color-danger);
+}
+
+.week-blocked {
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+.legend-blocked {
+  font-size: 0.875rem;
+}
+
+/* Figures shown as if a visit were dropped (live impact). */
+.planner-tile.is-preview {
+  border-style: dashed;
+}
+
+.load-row.is-preview .load-title::after {
+  content: ' (preview)';
+  color: var(--color-brand-red);
+}
+
+/* Panel: move, skip, restore, the series, blocked weeks. */
+.panel-action {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.panel-action label {
+  font-weight: 600;
+}
+
+.panel-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.panel-action-row input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.panel-action [aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.panel-action .field-hint,
+.panel-action .field-error {
+  margin: 0;
+}
+
+.plan-series {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.plan-series h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.blocked-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.blocked-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.blocked-list li .button {
+  margin-left: auto;
+}
+
+.blocked-form h3 {
+  font-size: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip.is-leaving,
+  .chip-ghost {
+    transition: none;
+  }
+}

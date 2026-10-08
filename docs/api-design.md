@@ -37,10 +37,11 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
 | Conflict console and resolution | no | no | yes | yes |
 | Read plans, the year planner and the planning settings (D48) | no | yes | yes | yes |
-| `POST /plans`, `PUT /plans/:id`, `POST /planning/release` | no | no | yes | yes |
+| `POST /plans`, `PUT /plans/:id`, `PUT /plans/:id/anchor`, `POST /planning/release` | no | no | yes | yes |
+| Move, skip, restore a visit (`/plan-occurrences/:id…`); add or remove blocked weeks | no | no | yes | yes |
 | `PUT /planning/settings` (reserve, daily capacity, release horizon, longest block) | no | no | no | yes |
 
-Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans` and `/api/planning` (403), whatever the method (D46).
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences` and `/api/planning` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -81,7 +82,10 @@ Plan        { id, code, title, description, type, category, asset_id,
               created_by: UserRef, updated_by: UserRef|null, created_at, updated_at,
               next_week, warnings: ['LONG_VISIT']? }
 Occurrence  { id, due_week, week, status, skip_reason,
-              work_order: { id, number, status } | null, warnings: ['OUT_OF_SEASON']? }
+              work_order: { id, number, status } | null, moved_at, version,
+              warnings: ('OUT_OF_SEASON' | 'BLOCKED_WEEK')[] }
+              (GET /plan-occurrences/:id adds plan_id and moved_by: UserRef|null)
+BlockedWeek { id, week, site | null, reason, created_by: UserRef, created_at }
 ```
 
 `password_hash` is never returned.
@@ -346,7 +350,7 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 
 ## Maintenance plans and the year planner (added, D48, D49)
 
-Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. Occurrence moves and skips, blocked weeks (Phase 18), the week scheduler and My week (Phase 19) and the balancing assistant (Phase 20) are specified in `docs/spec-preventive-maintenance.md` §6.
+Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The week scheduler and My week (Phase 19) and the balancing assistant (Phase 20) are specified in `docs/spec-preventive-maintenance.md` §6.
 
 ### GET /api/plans
 - Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, building, location or supplier), `site?` (`|`-separated), `building?` (`|`), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
@@ -361,6 +365,21 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 ### GET /api/plans/:id, PUT /api/plans/:id
 - `GET` → `200 Plan + { occurrences }` (next 8 visits). Errors: 400 malformed id, 404.
 - `PUT` (SUPERVISOR, ADMIN): any field of the creation body and `is_active`, with `version` (required). `200 { "updated": boolean, "item" }` (`updated: false` when nothing changed). A change of `anchor_week`, `frequency_weeks`, `end_week` or `is_active` replaces the planned visits (BR-P2). Errors: 400 (no field, invalid value); 403; 404; 409 `BR-V1` (changed since the user opened it); 422 `BR-P9`.
+
+### PUT /api/plans/:id/anchor (Phase 18)
+- Roles: SUPERVISOR, ADMIN. Body: `{ "anchor_week": week, "version": number }` (nothing else). Moves the series (BR-P2, D51): what the year planner sends when the first planned visit of a row is dragged. Same answer and errors as `PUT /api/plans/:id`.
+
+### GET /api/plan-occurrences/:id, PUT /api/plan-occurrences/:id (Phase 18)
+- `GET` (maintenance roles) → `200 Occurrence`. Errors: 400, 404.
+- `PUT` (SUPERVISOR, ADMIN): `{ "week": week, "version": number }` moves one visit (BR-P3, BR-P4); logged. `200 { "updated": true, "item": Occurrence }`; the warnings (blocked week, season) do not prevent the move. Errors: 400; 403; 404; 409 `BR-V1` (changed since); 422 `BR-P3` (outside the tolerance, later than a regulatory due week, in the past, with the reason as `message`), `BR-P4` (has a work order), `BR-P7` (skipped).
+
+### POST /api/plan-occurrences/:id/skip, POST /api/plan-occurrences/:id/restore (Phase 18)
+- SUPERVISOR, ADMIN. `skip`: `{ "reason": string (1–500), "version" }`; `restore`: `{ "version" }` (BR-P7). `200 { "updated": true, "item": Occurrence }`. Errors: 400 (no reason); 403; 404; 409 `BR-V1`; 422 `BR-P7` (skip: the visit has a work order or is already skipped; restore: not skipped, or skipped by cancelling its work order).
+
+### GET/POST /api/planning/blocked-weeks, DELETE /api/planning/blocked-weeks/:id (Phase 18)
+- `GET` (maintenance roles), query `from?`, `to?` (weeks; default from the current week on) → `200 { "items": BlockedWeek[] }`, by week then site (every site first).
+- `POST` (SUPERVISOR, ADMIN): `{ "week", "site"?: string | null (left out or null: every site), "reason": 1–200 }` → `201 { "created": true, "item": BlockedWeek }`. Errors: 400; 403; 409 already blocked for that site (`details.fields.week`).
+- `DELETE` (SUPERVISOR, ADMIN) → `204`. Errors: 403; 404.
 
 ### GET /api/planning/timeline
 - Query: `from?` (first week, default the current week) **or** `year?` (calendar year: weeks 1 to 52 or 53 of that year; both → 400), `weeks?` (1–53, default 52; ignored with `year`), `group_by?` (`site` default, `building`, `category`), and the plan filters `q?`, `site?`, `building?`, `category?`, `type?`, `performed_by?`. The range must start between 104 weeks before and 52 weeks after the current week (400 otherwise). Only active plans are shown.
@@ -379,10 +398,12 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
                "peak_week": { week, load, planned_hours, capacity, excess_hours } | null,
                "site_spread": { average, peak },
                "contractor_visits": { total, peak, peak_week } },
+    "blocked_weeks": [{ id, week, site | null, reason }],
     "groups": [{ "key", "site"? , "building"?, "category"?, "hours": [per week, internal only],
                  "plans": [{ id, code, title, type, category, site, building, estimated_hours,
-                             frequency_weeks, anchor_week, tolerance_weeks, schedule_mode,
-                             performed_by, supplier, warnings, occurrences: Occurrence[] }] }] }
+                             frequency_weeks, anchor_week, end_week, tolerance_weeks,
+                             season_from_week, season_to_week, schedule_mode, performed_by,
+                             supplier, version, warnings, occurrences: Occurrence[] }] }] }
   ```
 - `load` is null without capacity (e.g. a trade nobody has as specialty). Errors: 400.
 
@@ -411,4 +432,4 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
-| Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `GET /api/planning/timeline`, `POST /api/planning/release`, `GET/PUT /api/planning/settings` |
+| Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |

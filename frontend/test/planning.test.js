@@ -1,5 +1,5 @@
 // Year planner (D48, Phase 17): URL filters, chips, tiles, load strip, plan form, settings.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AUDIT_TYPES } from '../assets/js/history.js';
 import {
   checkPlanForm,
@@ -115,7 +115,7 @@ describe('chips', () => {
       occ({ week: '2026-W44', status: 'SKIPPED', warnings: ['OUT_OF_SEASON'] }),
     );
     expect(view.classes).toBe('chip chip-skipped chip-contractor chip-moved chip-warning');
-    expect(view.text).toBe('⚠3.5');
+    expect(view.text).toBe('↔⚠3.5');
     expect(view.label).toContain('Skipped');
     expect(view.label).toContain('contractor Veritec Services');
     expect(view.label).toContain('moved from Week 43, 2026');
@@ -298,6 +298,87 @@ describe('renderPlanner', () => {
     expect(opened).toEqual([[7, 70]]);
     expect(container.querySelectorAll('.planner-figures tbody tr')).toHaveLength(3);
     expect(container.querySelector('.planner-reserve').textContent).toContain('30 % reserve');
+    // Read-only: nothing can be dragged, and there is no Undo.
+    expect(container.querySelectorAll('.chip.is-movable')).toHaveLength(0);
+    expect(container.querySelector('.planner-toolbar').textContent).not.toContain('Undo');
+  });
+
+  it('marks movable visits, the series handle and blocked weeks for supervisors', () => {
+    const editable = structuredClone(data);
+    editable.groups[0].plans[0].occurrences.push(
+      {
+        id: 71,
+        week: '2026-W53',
+        due_week: '2026-W53',
+        status: 'PLANNED',
+        version: 1,
+        warnings: ['BLOCKED_WEEK'],
+      },
+      {
+        id: 72,
+        week: '2027-W01',
+        due_week: '2027-W01',
+        status: 'PLANNED',
+        version: 1,
+        warnings: [],
+      },
+    );
+    editable.blocked_weeks = [{ id: 1, week: '2026-W53', site: null, reason: 'Change freeze' }];
+    const container = document.createElement('div');
+    const undo = vi.fn();
+    const view = renderPlanner(container, {
+      data: editable,
+      filters: {},
+      sites: [],
+      canEdit: true,
+      isAdmin: false,
+      history: {
+        undoLabel: 'PM-0007: visit week 52 → week 53',
+        redoLabel: null,
+        onUndo: undo,
+        onRedo: () => {},
+      },
+      onFilter: () => {},
+      onOpen: () => {},
+    });
+    const chips = [...container.querySelectorAll('.planner-grid .chip')];
+    // The released visit cannot move; the first planned one stands for the series.
+    expect(chips.map((c) => c.dataset.move ?? null)).toEqual([null, 'series', 'occurrence']);
+    expect(chips[1].className).toContain('chip-series');
+    expect(chips[1].getAttribute('aria-label')).toContain('moving it moves the whole series');
+    expect(chips[1].getAttribute('aria-label')).toContain('in a blocked week');
+    expect(container.querySelectorAll('.week-col.is-blocked')).toHaveLength(1);
+    expect(container.querySelector('.week-col.is-blocked').textContent).toContain(
+      'blocked: Change freeze (every site)',
+    );
+    expect(container.querySelector('td.week-cell.is-blocked').dataset.index).toBe('1');
+
+    const [undoButton, redoButton] = container.querySelectorAll('.planner-toolbar button');
+    expect(undoButton.disabled).toBe(false);
+    expect(undoButton.textContent).toBe('Undo: PM-0007: visit week 52 → week 53');
+    expect(redoButton.disabled).toBe(true);
+    undoButton.click();
+    expect(undo).toHaveBeenCalled();
+
+    // Live impact: the tiles and the load strip can show other figures, then come back.
+    const figures = editable.figures.map((f) => ({
+      ...f,
+      planned_hours: 0,
+      by_category: {},
+      load: 0,
+      level: 'OK',
+    }));
+    view.preview({
+      figures,
+      tiles: { ...editable.tiles, workload: { ...editable.tiles.workload, average_load: 0 } },
+    });
+    expect(container.querySelector('.load-row').classList.contains('is-preview')).toBe(true);
+    expect(container.querySelector('.planner-tile').textContent).toContain('0%');
+    view.reset();
+    expect(container.querySelector('.load-row').classList.contains('is-preview')).toBe(false);
+    expect(container.querySelector('.planner-tile').textContent).toContain('46%');
+    view.say('Week 1 is outside the tolerance.', 'danger');
+    expect(container.querySelector('.planner-message').dataset.tone).toBe('danger');
   });
 
   it('offers a new plan to supervisors', () => {

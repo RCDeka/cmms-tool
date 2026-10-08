@@ -4,13 +4,18 @@ import {
   defaultTolerance,
   floatingAnchor,
   inSeason,
+  allowedWeeks,
+  isBlocked,
+  isSeriesWeek,
   loadLevel,
+  moveBlocker,
   nextPlanCode,
   occurrenceWarnings,
   planProblems,
   planWarnings,
   planningTiles,
   releaseDueDate,
+  seriesShift,
   seriesWeeks,
   weeklyCapacity,
   weeklyFigures,
@@ -222,5 +227,87 @@ describe('plan creation rules', () => {
     expect(
       planProblems({ ...plan, performed_by: 'CONTRACTOR', supplier: 'Coolair Services' }),
     ).toEqual({});
+  });
+});
+
+describe('moving one visit (BR-P3, BR-P4)', () => {
+  const plan = { type: 'PREVENTIVE', tolerance_weeks: 3, site: 'Lyon' };
+  const occ = { due_week: '2026-W50', status: 'PLANNED' };
+  const now = '2026-W41';
+
+  it('allows the due week ± the tolerance, never the past', () => {
+    expect(allowedWeeks(plan, occ, now)).toEqual({ from: '2026-W47', to: '2026-W53' });
+    expect(allowedWeeks(plan, { due_week: '2026-W42' }, now)).toEqual({
+      from: '2026-W41',
+      to: '2026-W45',
+    });
+    for (const week of ['2026-W47', '2026-W50', '2026-W53']) {
+      expect(moveBlocker(plan, occ, week, now)).toBe(null);
+    }
+  });
+
+  it('refuses outside the tolerance, with the reason', () => {
+    expect(moveBlocker(plan, occ, '2027-W01', now)).toEqual({
+      rule: 'BR-P3',
+      message: "Week 1 is outside this visit's tolerance of ± 3 weeks around week 50.",
+    });
+    expect(moveBlocker(plan, occ, '2026-W46', now).rule).toBe('BR-P3');
+    expect(moveBlocker({ ...plan, tolerance_weeks: 0 }, occ, '2026-W49', now).message).toContain(
+      '± 0 weeks',
+    );
+    expect(moveBlocker(plan, { due_week: '2026-W42' }, '2026-W40', now).message).toBe(
+      'A visit cannot be moved into the past.',
+    );
+  });
+
+  it('moves a regulatory visit earlier only', () => {
+    const regulatory = { ...plan, type: 'REGULATORY' };
+    expect(allowedWeeks(regulatory, occ, now)).toEqual({ from: '2026-W47', to: '2026-W50' });
+    expect(moveBlocker(regulatory, occ, '2026-W48', now)).toBe(null);
+    expect(moveBlocker(regulatory, occ, '2026-W51', now)).toEqual({
+      rule: 'BR-P3',
+      message: 'A regulatory visit can only move earlier: week 50 is its deadline.',
+    });
+  });
+
+  it('never moves a released or skipped visit', () => {
+    expect(moveBlocker(plan, { ...occ, status: 'RELEASED' }, '2026-W49', now).rule).toBe('BR-P4');
+    expect(moveBlocker(plan, { ...occ, status: 'SKIPPED' }, '2026-W49', now).rule).toBe('BR-P7');
+  });
+
+  it('warns about blocked weeks for the site or every site', () => {
+    const blocked = [
+      { week: '2026-W52', site: null },
+      { week: '2026-W51', site: 'Paris' },
+    ];
+    expect(isBlocked('2026-W52', 'Lyon', blocked)).toBe(true);
+    expect(isBlocked('2026-W51', 'Lyon', blocked)).toBe(false);
+    expect(isBlocked('2026-W51', 'Paris', blocked)).toBe(true);
+    expect(occurrenceWarnings(plan, '2026-W52', blocked)).toEqual(['BLOCKED_WEEK']);
+    expect(
+      occurrenceWarnings(
+        { ...plan, season_from_week: 14, season_to_week: 22 },
+        '2026-W52',
+        blocked,
+      ),
+    ).toEqual(['OUT_OF_SEASON', 'BLOCKED_WEEK']);
+  });
+});
+
+describe('series weeks after a change (BR-P2, D51)', () => {
+  const plan = { anchor_week: '2026-W50', frequency_weeks: 13, end_week: '2027-W40' };
+
+  it('knows the weeks of the series', () => {
+    expect(isSeriesWeek(plan, '2026-W50')).toBe(true);
+    expect(isSeriesWeek(plan, '2027-W10')).toBe(true);
+    expect(isSeriesWeek(plan, '2027-W11')).toBe(false);
+    expect(isSeriesWeek(plan, '2026-W37')).toBe(false); // before the anchor
+    expect(isSeriesWeek(plan, '2027-W49')).toBe(false); // after the end
+  });
+
+  it('shifts by the anchor move, unless the frequency changed', () => {
+    expect(seriesShift(plan, { ...plan, anchor_week: '2026-W52' })).toBe(2);
+    expect(seriesShift(plan, { ...plan, anchor_week: '2026-W48' })).toBe(-2);
+    expect(seriesShift(plan, { ...plan, frequency_weeks: 26 })).toBe(0);
   });
 });

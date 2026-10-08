@@ -12,6 +12,7 @@ import {
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { CATEGORIES, PERFORMERS, PLAN_TYPES } from '../rules/enums.js';
+import { isoWeek, WRITE_META } from '../rules/fields.js';
 import { PLAN_SORTS } from '../services/plans.js';
 
 /** Filters shared by the plan list and the year planner (site and building names use "|"). */
@@ -23,6 +24,8 @@ export const planFilterFields = {
   type: listFilter(z.enum(PLAN_TYPES)),
   performed_by: listFilter(z.enum(PERFORMERS)),
 };
+
+const anchorBody = z.strictObject({ anchor_week: isoWeek, version: WRITE_META.version });
 
 const listQuery = z.strictObject({
   ...pageQueryFields,
@@ -56,6 +59,16 @@ export function plansRouter({ plans, timeZone, now }) {
     if (!plan) throw new HttpError(404, 'Plan not found');
     res.json(plan);
   });
+
+  // Moves the series (BR-P2): the drag of a plan's first visit in the year planner.
+  router.put(
+    '/:id/anchor',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ params: idParams, body: anchorBody }),
+    (req, res) => {
+      res.json(plans.update(req.valid.params.id, req.valid.body, req.user, context()));
+    },
+  );
 
   router.put(
     '/:id',

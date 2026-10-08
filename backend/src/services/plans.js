@@ -134,9 +134,10 @@ export function createPlanService(db) {
        WHERE code GLOB 'PM-[0-9]*' AND substr(code, 4) NOT GLOB '*[^0-9]*'`,
     )
     .pluck();
+  const blockedIn = db.prepare('SELECT week, site FROM blocked_weeks WHERE week = ?');
   const upcoming = db.prepare(
-    `SELECT o.id, o.due_week, o.week, o.status, o.skip_reason, o.work_order_id,
-       w.number AS wo_number, w.status AS wo_status
+    `SELECT o.id, o.due_week, o.week, o.status, o.skip_reason, o.work_order_id, o.version,
+       o.moved_at, w.number AS wo_number, w.status AS wo_status
      FROM plan_occurrences o LEFT JOIN work_orders w ON w.id = o.work_order_id
      WHERE o.plan_id = ? AND o.week >= ? ORDER BY o.week, o.id LIMIT 8`,
   );
@@ -171,7 +172,9 @@ export function createPlanService(db) {
         o.work_order_id === null
           ? null
           : { id: o.work_order_id, number: o.wo_number, status: o.wo_status },
-      warnings: occurrenceWarnings(plan, o.week),
+      moved_at: o.moved_at,
+      version: o.version,
+      warnings: occurrenceWarnings(plan, o.week, blockedIn.all(o.week)),
     }));
     return plan;
   }
@@ -352,6 +355,7 @@ export function createPlanService(db) {
               db,
               { ...current, ...columns },
               { currentWeek: currentWeekOf(context), stamp },
+              current,
             );
           }
           return true;

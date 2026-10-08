@@ -6,6 +6,7 @@ import { CATEGORIES, PERFORMERS, PLAN_TYPES, SCHEDULE_MODES } from './enums.js';
 import { formatDateTime, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { formatHours, occurrenceBadge, planWarningText } from './planning.js';
+import { allowedWeeks, moveBlocker } from './planning-rules.js';
 
 /** Frequencies offered first (spec §4), in weeks. */
 export const FREQUENCIES = [1, 2, 4, 8, 13, 26, 52];
@@ -102,7 +103,124 @@ export function checkPlanForm(body, { hasAssetCode }) {
 const field = (dt, dd) =>
   dd === null || dd === undefined || dd === '' ? null : [h('dt', {}, dt), h('dd', {}, dd)];
 
-function occurrenceBox(plan, occurrence) {
+/**
+ * A small one-field form of the panel: a labelled control, a button, and a line for the answer.
+ * `submit` resolves to an error message, or null when done.
+ */
+function actionForm(id, label, control, buttonText, submit, { hint = null, danger = false } = {}) {
+  control.id = id;
+  const error = h('p', { id: `${id}-error`, class: 'field-error', role: 'alert' });
+  control.setAttribute('aria-describedby', `${id}-error${hint ? ` ${id}-hint` : ''}`);
+  const form = h(
+    'form',
+    {
+      class: 'panel-action',
+      novalidate: true,
+      onSubmit: async (event) => {
+        event.preventDefault();
+        error.textContent = '';
+        const message = await submit(control.value.trim());
+        if (message) {
+          error.textContent = message;
+          control.setAttribute('aria-invalid', 'true');
+          control.focus();
+        } else control.removeAttribute('aria-invalid');
+      },
+    },
+    h('label', { for: id }, label),
+    hint ? h('p', { id: `${id}-hint`, class: 'field-hint' }, hint) : null,
+    h(
+      'div',
+      { class: 'panel-action-row' },
+      control,
+      h(
+        'button',
+        {
+          type: 'submit',
+          class: `button ${danger ? 'button-danger' : 'button-secondary'} online-only`,
+        },
+        buttonText,
+      ),
+    ),
+    error,
+  );
+  return form;
+}
+
+/** "Weeks 47 to 53 (± 3 weeks around week 50)". Pure. */
+export function allowedText(plan, occurrence, currentWeek) {
+  const { from, to } = allowedWeeks(plan, occurrence, currentWeek);
+  if (from > to) return 'No week is available any more.';
+  const n = (week) => Number(week.slice(6));
+  const range =
+    from === to ? `Only ${formatWeek(from)}` : `${formatWeek(from)} to ${formatWeek(to)}`;
+  const why =
+    plan.type === 'REGULATORY'
+      ? `regulatory: earlier only, up to week ${n(occurrence.due_week)}`
+      : `± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'} around week ${n(occurrence.due_week)}`;
+  return `Allowed: ${range} (${why}).`;
+}
+
+/** Move, skip and restore of the visit shown (supervisors, admins). */
+function occurrenceActions(plan, occurrence, { currentWeek, onMove, onSkip, onRestore }) {
+  if (occurrence.status === 'SKIPPED') {
+    return occurrence.work_order
+      ? null
+      : h(
+          'div',
+          { class: 'detail-actions' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'button button-secondary online-only',
+              onClick: () => onRestore(occurrence),
+            },
+            'Restore this visit',
+          ),
+        );
+  }
+  if (occurrence.status !== 'PLANNED' || occurrence.week < currentWeek) return null;
+  const week = h('input', { type: 'week', value: occurrence.week, placeholder: '2026-W45' });
+  const reason = h('input', { type: 'text', maxlength: '500', autocomplete: 'off' });
+  return [
+    actionForm(
+      'occ-move-week',
+      'Move this visit to week',
+      week,
+      'Move visit',
+      async (value) => {
+        if (!/^\d{4}-W\d{2}$/.test(value)) return 'Choose a week.';
+        if (value === occurrence.week) return 'The visit is already in this week.';
+        const blocker = moveBlocker(plan, occurrence, value, currentWeek);
+        if (blocker) return blocker.message;
+        return onMove({
+          kind: 'occurrence',
+          planId: plan.id,
+          code: plan.code,
+          id: occurrence.id,
+          week: value,
+          from: occurrence.week,
+          version: occurrence.version,
+        });
+      },
+      { hint: allowedText(plan, occurrence, currentWeek) },
+    ),
+    actionForm(
+      'occ-skip-reason',
+      'Skip this visit',
+      reason,
+      'Skip visit',
+      async (value) => (value ? onSkip(occurrence, value) : 'Say why the visit is skipped.'),
+      {
+        hint: 'e.g. "Building closed for works". The visit leaves the load; it can be restored.',
+        danger: true,
+      },
+    ),
+  ];
+}
+
+function occurrenceBox(plan, occurrence, actions) {
   return h(
     'section',
     { class: 'occurrence-box', 'aria-labelledby': 'occurrence-heading' },
@@ -133,10 +251,46 @@ function occurrenceBox(plan, occurrence) {
       field('Reason for skipping', occurrence.skip_reason),
       field(
         'Warning',
-        occurrence.warnings?.includes('OUT_OF_SEASON')
-          ? `⚠ Outside the season (weeks ${plan.season_from_week} to ${plan.season_to_week})`
-          : null,
+        [
+          occurrence.warnings?.includes('OUT_OF_SEASON')
+            ? `⚠ Outside the season (weeks ${plan.season_from_week} to ${plan.season_to_week}). `
+            : '',
+          occurrence.warnings?.includes('BLOCKED_WEEK') ? '⚠ In a blocked week.' : '',
+        ].join('') || null,
       ),
+    ),
+    actions ? occurrenceActions(plan, occurrence, actions) : null,
+  );
+}
+
+/** Move the whole series from the panel (same as dragging the first planned visit). */
+function seriesForm(plan, { onMove }) {
+  const week = h('input', { type: 'week', value: plan.anchor_week, placeholder: '2026-W45' });
+  return h(
+    'section',
+    { class: 'plan-series', 'aria-labelledby': 'plan-series-heading' },
+    h('h3', { id: 'plan-series-heading' }, 'Move the series'),
+    actionForm(
+      'plan-anchor-week',
+      'First visit of the series',
+      week,
+      'Move series',
+      async (value) => {
+        if (!/^\d{4}-W\d{2}$/.test(value)) return 'Choose a week.';
+        if (value === plan.anchor_week) return 'The series already starts this week.';
+        // An anchor in the past is fine: the series goes on from this week on its own weeks.
+        return onMove({
+          kind: 'series',
+          planId: plan.id,
+          code: plan.code,
+          anchor: value,
+          from: plan.anchor_week,
+          version: plan.version,
+        });
+      },
+      {
+        hint: 'The planned visits follow; visits moved by hand keep their offset; visits with a work order stay.',
+      },
     ),
   );
 }
@@ -149,8 +303,9 @@ function occurrenceBox(plan, occurrence) {
  */
 export function renderPlanPanel(
   container,
-  { plan, occurrence, settings, canEdit, onClose, onEdit },
+  { plan, occurrence, settings, canEdit, currentWeek, onClose, onEdit, onMove, onSkip, onRestore },
 ) {
+  const actions = canEdit ? { currentWeek, onMove, onSkip, onRestore } : null;
   const warning = planWarningText(plan.warnings, settings);
   replaceChildren(
     container,
@@ -159,7 +314,11 @@ export function renderPlanPanel(
       ? null
       : h('p', { class: 'detail-message' }, 'This plan is inactive: it creates no more visits.'),
     occurrence
-      ? occurrenceBox({ ...plan, release_weeks_ahead: settings.release_weeks_ahead }, occurrence)
+      ? occurrenceBox(
+          { ...plan, release_weeks_ahead: settings.release_weeks_ahead },
+          occurrence,
+          actions,
+        )
       : null,
     canEdit
       ? h(
@@ -172,6 +331,7 @@ export function renderPlanPanel(
           ),
         )
       : null,
+    canEdit && plan.is_active ? seriesForm(plan, actions) : null,
     h(
       'dl',
       { class: 'detail-fields' },
@@ -500,4 +660,101 @@ export function renderPlanForm(
 export function planFieldErrors(fields) {
   const { asset_id: asset, ...rest } = fields;
   return asset ? { ...rest, asset_code: asset } : rest;
+}
+
+/**
+ * Blocked weeks panel (BR-P8): the weeks to avoid from this week on, for one site or all.
+ * Supervisors and admins add and remove them; the planner warns, it never refuses.
+ * @param {HTMLElement} container
+ * @param {{ items: object[], sites: string[], canEdit: boolean, onClose: () => void,
+ *   onAdd: (values: object, form: HTMLFormElement) => void, onRemove: (item: object) => void }} options
+ */
+export function renderBlockedWeeksPanel(
+  container,
+  { items, sites, canEdit, onClose, onAdd, onRemove },
+) {
+  const site = h(
+    'select',
+    { name: 'site' },
+    h('option', { value: '' }, 'Every site'),
+    sites.map((s) => h('option', { value: s }, s)),
+  );
+  const form = canEdit
+    ? h(
+        'form',
+        {
+          class: 'detail-form blocked-form',
+          novalidate: true,
+          onSubmit: (event) => {
+            event.preventDefault();
+            const values = Object.fromEntries(new FormData(form));
+            onAdd(
+              { week: values.week, reason: values.reason.trim(), site: values.site || null },
+              form,
+            );
+          },
+        },
+        h('h3', {}, 'Block a week'),
+        h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
+        formRow(
+          'bw-week',
+          'Week',
+          h('input', { name: 'week', type: 'week', placeholder: '2026-W52' }),
+          {
+            required: true,
+          },
+        ),
+        formRow('bw-site', 'Site', site),
+        formRow(
+          'bw-reason',
+          'Reason',
+          h('input', { name: 'reason', type: 'text', maxlength: '200' }),
+          {
+            required: true,
+            hint: 'e.g. "Data center change freeze", "Summer holidays".',
+          },
+        ),
+        h(
+          'div',
+          { class: 'form-actions' },
+          h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Block week'),
+        ),
+      )
+    : null;
+  replaceChildren(
+    container,
+    panelHeader('Blocked weeks', onClose),
+    h(
+      'p',
+      {},
+      'Visits should avoid these weeks. The planner warns about visits planned in them (⛔ in the week header, ⚠ on the visit), it does not refuse them.',
+    ),
+    items.length
+      ? h(
+          'ul',
+          { class: 'blocked-list' },
+          items.map((item) =>
+            h(
+              'li',
+              {},
+              h('strong', {}, formatWeek(item.week)),
+              ` · ${item.site ?? 'Every site'} · ${item.reason}`,
+              canEdit
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      class: 'button button-secondary online-only',
+                      'aria-label': `Remove ${formatWeek(item.week)}, ${item.site ?? 'every site'}`,
+                      onClick: () => onRemove(item),
+                    },
+                    'Remove',
+                  )
+                : null,
+            ),
+          ),
+        )
+      : h('p', { class: 'muted' }, 'No week is blocked from this week on.'),
+    form,
+  );
 }
