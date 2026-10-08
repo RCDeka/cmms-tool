@@ -116,7 +116,7 @@ Every column title of the asset and work order tables is a button. A click sorts
 - **Chips** (44 × 44 px buttons, the hours as text): planned (blue frame), work order created (green, ✓), skipped (gray, struck through), regulatory (§), contractor (dashed outline), outside its season (amber, ⚠), moved (double border, Phase 18). The accessible name and tooltip spell it all out ("PM-0001, Week 43, 2026, Work order created, work order WO-2026-00245, 3 h"). The chip open in the panel gets a red outline.
 - **Plan panel** (split view): the visit clicked (status badge, due and planned week, its work order link, warnings), **Edit plan** (supervisors, admins), the plan's details and its next 8 visits. **Plan form**: plain labels ("What is done", "Every (weeks)", "First visit"), an asset code or a site and building, the frequencies 1, 2, 4, 8, 13, 26, 52 offered, week pickers, and the contractor field shown only for contractor plans. Buttons that need the server are `.online-only`.
 - **Planning settings** (`/admin/planning`): four fields with hints, and before saving the effect on the next 52 weeks ("Capacity of the next 52 weeks: 5,096 h → 5,824 h").
-- The work order panel shows **Maintenance plan** (a link to the plan) and **Planned week** for released visits.
+- The work order panel shows **Maintenance plan** (a link to the plan) and **Planned week**; supervisors and admins edit the planned week there (a week field, D55), and a released visit moves with it on the year planner (↔, "moved from …").
 - The balancing assistant: see below (Phase 20).
 
 ## Year planner editing (Phase 18)

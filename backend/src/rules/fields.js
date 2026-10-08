@@ -54,6 +54,12 @@ export const ASSET_FIELDS = {
   comment: optionalText(2000),
 };
 
+/** ISO week 'YYYY-Www' that exists (2026 has a week 53, 2027 has not). */
+export const isoWeek = z
+  .string()
+  .regex(/^\d{4}-W\d{2}$/, 'Expected a week as YYYY-Www')
+  .refine(isWeek, 'Not a valid week');
+
 /** Editable work order fields and their value schemas. */
 export const WORK_ORDER_FIELDS = {
   type: z.enum(WORK_ORDER_TYPES),
@@ -73,13 +79,10 @@ export const WORK_ORDER_FIELDS = {
   estimated_hours: hours,
   actual_hours: hours,
   work_report: optionalText(4000),
+  // The week the work is planned in: set by the release or the first block of the week
+  // scheduler, and rescheduled by supervisors and admins (D55).
+  planned_week: z.preprocess(blankToNull, isoWeek.nullable()),
 };
-
-/** ISO week 'YYYY-Www' that exists (2026 has a week 53, 2027 has not). */
-export const isoWeek = z
-  .string()
-  .regex(/^\d{4}-W\d{2}$/, 'Expected a week as YYYY-Www')
-  .refine(isWeek, 'Not a valid week');
 
 /** Hours in half-hour steps (P4). */
 const halfHours = (max) =>
@@ -142,9 +145,8 @@ export const READ_ONLY_FIELDS = {
     'reviewed_by',
     'reviewed_at',
     'review_note',
-    // Set by the release of a plan's visit (D48).
+    // Set by the release of a plan's visit (D48); planned_week is editable since D55.
     'plan_id',
-    'planned_week',
     'plan',
   ],
 };

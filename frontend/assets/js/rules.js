@@ -50,6 +50,8 @@ const WORK_ORDER_FIELDS = [
   'estimated_hours',
   'actual_hours',
   'work_report',
+  // Rescheduled by supervisors and admins (D55).
+  'planned_week',
 ];
 
 /** Editable fields (API names) per entity and role (docs/api-design.md → Permission matrix). */

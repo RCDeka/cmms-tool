@@ -21,6 +21,7 @@ import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
 import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { followWorkOrder } from './occurrences.js';
+import { releasedWeekBlocker } from '../rules/planning.js';
 import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
 
 /** POST /api/work-orders body (BR-W9). Status, number, dates and authorship are set by the server. */
@@ -217,6 +218,8 @@ export function createWorkOrderService(db) {
     `${SELECT} WHERE w.assignee_id = ? AND w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')`,
   );
   const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
+  const visitOf = db.prepare('SELECT * FROM plan_occurrences WHERE work_order_id = ?');
+  const planOf = db.prepare('SELECT * FROM maintenance_plans WHERE id = ?');
   // Only active people can be assigned or supervise (BR-W3, BR-U7).
   const roleOf = db.prepare('SELECT role FROM users WHERE id = ? AND is_active = 1').pluck();
   const toReviewCount = db
@@ -274,6 +277,13 @@ export function createWorkOrderService(db) {
     }
     const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
     if (workflow.error) throw ruleError(workflow.error);
+    // The work order of a plan's visit carries the visit's week (BR-P4, D55).
+    if ('planned_week' in changes && current.plan_id !== null) {
+      const occurrence = visitOf.get(current.id);
+      const plan = planOf.get(current.plan_id);
+      const blocker = occurrence && releasedWeekBlocker(plan, occurrence, changes.planned_week);
+      if (blocker) throw ruleError(blocker);
+    }
     const derived = checkReferences({ ...current, ...workflow.changes }, changes);
     return { ...workflow.changes, ...derived };
   }

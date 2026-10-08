@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { weekRange } from '../../src/lib/iso-week.js';
 import {
+  allowedWeeks,
   defaultTolerance,
   floatingAnchor,
   inSeason,
-  allowedWeeks,
   isBlocked,
   isSeriesWeek,
   loadLevel,
@@ -15,6 +15,7 @@ import {
   planWarnings,
   planningTiles,
   releaseDueDate,
+  releasedWeekBlocker,
   seriesShift,
   seriesWeeks,
   weeklyCapacity,
@@ -309,5 +310,26 @@ describe('series weeks after a change (BR-P2, D51)', () => {
     expect(seriesShift(plan, { ...plan, anchor_week: '2026-W52' })).toBe(2);
     expect(seriesShift(plan, { ...plan, anchor_week: '2026-W48' })).toBe(-2);
     expect(seriesShift(plan, { ...plan, frequency_weeks: 26 })).toBe(0);
+  });
+});
+
+describe('releasedWeekBlocker (BR-P4, D55)', () => {
+  const occurrence = { due_week: '2026-W43' };
+
+  it('lets the work order of a visit go to any week, outside its tolerance too', () => {
+    const plan = { type: 'PREVENTIVE' };
+    expect(releasedWeekBlocker(plan, occurrence, '2026-W50')).toBeNull();
+    expect(releasedWeekBlocker(plan, occurrence, '2026-W40')).toBeNull();
+  });
+
+  it('keeps a week, and a regulatory visit by its deadline', () => {
+    expect(releasedWeekBlocker({ type: 'PREVENTIVE' }, occurrence, null)?.rule).toBe('BR-P4');
+    const regulatory = { type: 'REGULATORY' };
+    expect(releasedWeekBlocker(regulatory, occurrence, '2026-W43')).toBeNull();
+    expect(releasedWeekBlocker(regulatory, occurrence, '2026-W41')).toBeNull();
+    expect(releasedWeekBlocker(regulatory, occurrence, '2026-W44')).toEqual({
+      rule: 'BR-P3',
+      message: 'A regulatory visit can only move earlier: week 43 is its deadline.',
+    });
   });
 });

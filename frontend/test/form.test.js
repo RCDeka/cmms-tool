@@ -159,6 +159,41 @@ describe('buildEditForm', () => {
     expect($('#f-work_report-error').textContent).toBe('');
   });
 
+  it('edits the planned week as a week field for supervisors, read-only for technicians (D55)', async () => {
+    const { EDITABLE_BY_ROLE } = await import('../assets/js/rules.js');
+    const record = { ...workOrder, planned_week: '2026-W43' };
+    const form = buildEditForm({
+      entity: 'work_orders',
+      record,
+      editable: EDITABLE_BY_ROLE.work_orders.SUPERVISOR,
+      ctx: ctx(),
+      onSave() {},
+      onDiscard() {},
+    });
+    host.append(form.form);
+    const week = $('#f-planned_week');
+    expect(week.type).toBe('week');
+    expect(week.value).toBe('2026-W43');
+    expect(host.querySelector('label[for="f-planned_week"]').textContent).toContain('Planned week');
+    type(week, '2026-W45');
+    expect(form.getChanges().changes).toEqual({ planned_week: '2026-W45' });
+    type(week, '');
+    expect(form.getChanges().changes).toEqual({ planned_week: null });
+
+    host.replaceChildren();
+    const tech = buildEditForm({
+      entity: 'work_orders',
+      record,
+      editable: EDITABLE_BY_ROLE.work_orders.TECHNICIAN,
+      ctx: ctx(),
+      onSave() {},
+      onDiscard() {},
+    });
+    host.append(tech.form);
+    expect($('#f-planned_week')).toBeNull();
+    expect(host.textContent).toContain('Week 43, 2026');
+  });
+
   it('turns a booleans into a checkbox for assets', () => {
     const form = buildEditForm({
       entity: 'assets',

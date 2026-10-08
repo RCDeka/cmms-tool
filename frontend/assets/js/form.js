@@ -137,6 +137,21 @@ function buildControl(entity, apiField, value, ctx) {
     };
   }
   if (def.type === 'asset') return buildAssetControl(common, id, value, ctx);
+  if (def.type === 'week') {
+    // ISO week 'YYYY-Www' (D55); browsers without a week picker show a text field.
+    const el = h('input', {
+      ...common,
+      type: 'week',
+      placeholder: 'YYYY-Www, e.g. 2026-W43',
+      value: value ?? '',
+    });
+    return {
+      el,
+      input: el,
+      read: () => (el.value.trim() === '' ? null : el.value.trim()),
+      write: (v) => (el.value = v ?? ''),
+    };
+  }
   if (def.type === 'date') {
     const el = h('input', { ...common, type: 'date', value: value ?? '' });
     return {

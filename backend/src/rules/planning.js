@@ -142,6 +142,28 @@ export function moveBlocker(plan, occurrence, week, currentWeek) {
 }
 
 /**
+ * Why the work order of a released visit cannot be planned in `week`, or null (BR-P4, D55):
+ * a visit always has a week, and a regulatory visit cannot go past its due week (its legal
+ * deadline). The tolerance does not apply: the work order is what is really done.
+ * @param {{ type: string }} plan
+ * @param {{ due_week: string }} occurrence
+ * @param {string | null} week
+ * @returns {{ rule: string, message: string } | null}
+ */
+export function releasedWeekBlocker(plan, occurrence, week) {
+  if (week === null) {
+    return { rule: 'BR-P4', message: 'A maintenance visit always has a planned week.' };
+  }
+  if (plan.type === 'REGULATORY' && week > occurrence.due_week) {
+    return {
+      rule: 'BR-P3',
+      message: `A regulatory visit can only move earlier: ${weekWords(occurrence.due_week)} is its deadline.`,
+    };
+  }
+  return null;
+}
+
+/**
  * Weekly capacity (BR-Y2, P16, P17): every active technician and supervisor works
  * `daily_hours` on each working day, minus the corrective reserve. Counted per trade
  * (`specialty`, GENERAL without one) and per site.

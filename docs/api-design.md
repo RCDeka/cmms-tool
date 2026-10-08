@@ -228,7 +228,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Reject: `{ "decision": "REJECT", "version": number, "reason": string (1–2000) }`. The work order becomes `CANCELLED`.
 - `200 { "reviewed": true, "version": N+1, "item": WorkOrder }`.
 - Errors: 400 invalid body (missing `assignee_id` or `reason`, unknown field); 403; 404; 409 already reviewed (`BR-R6`), changed since (`BR-V1`) or open conflict (`BR-V4`); 422 not a staff request (`BR-R6`), assignee or supervisor not eligible (`BR-W3`), due date before creation (`BR-W8`).
-- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403), as are `plan_id`, `plan` and `planned_week` (set by the release, D48, or by the first block of the week scheduler, D52).
+- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403), as are `plan_id` and `plan` (set by the release, D48). `planned_week` (set by the release or by the first block of the week scheduler, D52) is editable by supervisors and admins (D55): a week or null; for a plan's visit, the visit follows its work order (BR-P4), null → 422 `BR-P4`, a regulatory visit past its due week → 422 `BR-P3`.
 - A plan's visit follows its work order: cancelling it skips the occurrence (BR-P7), closing it restarts a floating plan (BR-P5). While a request is `PENDING`, that `PUT` refuses `status` and `assignee_id` changes (422 `BR-R7`).
 
 ### GET /api/work-orders/:id/comments, POST /api/work-orders/:id/comments (added, D46)

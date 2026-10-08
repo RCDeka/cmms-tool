@@ -103,6 +103,36 @@ export function recomputeOccurrences(db, plan, context, previous = null) {
 }
 
 /**
+ * A released visit follows its work order to another week (BR-P4, D55): the occurrence's
+ * `week` changes (a moved visit unless back on its due week), logged on the visit, so the year
+ * planner shows the visit where the work is planned.
+ */
+function followPlannedWeek(db, workOrder, week, { userId, stamp }) {
+  const occurrence = db
+    .prepare("SELECT * FROM plan_occurrences WHERE work_order_id = ? AND status = 'RELEASED'")
+    .get(workOrder.id);
+  if (!occurrence || occurrence.week === week) return;
+  const plan = db.prepare('SELECT * FROM maintenance_plans WHERE id = ?').get(workOrder.plan_id);
+  const back = week === occurrence.due_week;
+  const moved = { week, moved_by: back ? null : userId, moved_at: back ? null : stamp };
+  db.prepare(
+    `UPDATE plan_occurrences SET week = @week, moved_by = @moved_by, moved_at = @moved_at,
+       version = version + 1, updated_at = @stamp WHERE id = @id`,
+  ).run({ ...moved, stamp, id: occurrence.id });
+  recordAudit(db, {
+    entityType: 'plan_occurrences',
+    entityId: occurrence.id,
+    action: 'UPDATE',
+    changes: diffChanges(occurrence, { week }),
+    note: { work_order: workOrder.number },
+    label: occurrenceLabel(plan, occurrence.due_week),
+    userId,
+    version: occurrence.version + 1,
+    at: stamp,
+  });
+}
+
+/**
  * Keeps a plan's visit in step with its work order, after a change of status:
  * - cancelled: the occurrence is skipped (BR-P7);
  * - closed, in a FLOATING plan: the series restarts from the closing week (BR-P5).
@@ -112,7 +142,11 @@ export function recomputeOccurrences(db, plan, context, previous = null) {
  * @param {{ userId: number, stamp: string, timeZone: string }} context
  */
 export function followWorkOrder(db, workOrder, changes, { userId, stamp, timeZone }) {
-  if (!workOrder.plan_id || !['CANCELLED', 'CLOSED'].includes(changes.status)) return;
+  if (!workOrder.plan_id) return;
+  if ('planned_week' in changes && changes.planned_week !== workOrder.planned_week) {
+    followPlannedWeek(db, workOrder, changes.planned_week, { userId, stamp });
+  }
+  if (!['CANCELLED', 'CLOSED'].includes(changes.status)) return;
   const occurrence = db
     .prepare('SELECT * FROM plan_occurrences WHERE work_order_id = ?')
     .get(workOrder.id);
