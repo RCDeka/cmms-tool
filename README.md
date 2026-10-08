@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: 
 
 This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
 
-> **Status:** MVP complete (phases 0–7). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. Phases 0–6: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Phase 7 added the accessibility, performance and security passes, backups and the deployment guide below.
+> **Status:** MVP complete (phases 0–7). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. Phases 0–6: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Phase 7 added the accessibility, performance and security passes, backups and the deployment guide below. Phases 8–15 followed (see `docs/roadmap-mvp.md`), the latest being a simple interface for bank staff to submit and follow maintenance requests.
 
 ## Tech stack
 
@@ -31,7 +31,8 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 - **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a record).
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).
 - **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today".
-- **Roles**: `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
+- **Staff requests**: bank staff (role `STAFF`) submit requests ("I don't know" is accepted for the kind of problem and the urgency; the location is typed), follow their open requests with a plain-words status and next step, see all past requests, and exchange comments with the maintenance team, who handle each request as a work order. A supervisor or admin reviews each request first (dashboard tile "Staff requests to review"): approve it and assign a technician or supervisor, or reject it with a reason the requester sees.
+- **Roles**: `STAFF`, `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
 Out of scope for the MVP: deleting work orders (they are cancelled), user administration (Phase 11), AI features, preventive maintenance, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`).
 
@@ -47,7 +48,7 @@ npm run db:reset                     # (re)create the database, migrate and seed
 npm run dev                          # API + frontend on http://localhost:3000, restarts on changes
 ```
 
-Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`. Administrators manage accounts under **Users** (`/admin/users`); everyone can change their password with **Change my password** under their name in the sidebar. The **Suggest an improvement** button in the top bar saves ideas about the page on screen; administrators read them under **Suggestions**.
+Mock users (password = `SEED_PASSWORD`): `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`, and the staff member `user1`, who only sees the request screens. Administrators manage accounts under **Users** (`/admin/users`); everyone can change their password with **Change my password** under their name in the sidebar. The **Suggest an improvement** button in the top bar saves ideas about the page on screen; administrators read them under **Suggestions**.
 
 | URL | |
 |---|---|
@@ -148,7 +149,7 @@ The database is created and migrated when the service starts.
 
 ### 5. Demo data (optional)
 
-Loads the mock dataset (5 users, 500 assets, 200 work orders) into the empty database. The users' password is `SEED_PASSWORD`.
+Loads the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests) into the empty database. The users' password is `SEED_PASSWORD`.
 
 ```bash
 sudo -u fast-cmms bash -c 'set -a; . /etc/fast-cmms/fast-cmms.env; cd /opt/fast-cmms/backend && npm run db:seed'

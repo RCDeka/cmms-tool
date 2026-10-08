@@ -16,14 +16,14 @@ const toAssetRef = (a) => ({
 
 /**
  * Sites and users for the form dropdowns: from the server when online (and cached), else from
- * the cache. Technicians cannot list users (403): they only get themselves.
+ * the cache. Technicians and staff cannot list users (403): they only get themselves.
  * @param {{ id: number, first_name: string, last_name: string, role: string }} user
  * @returns {Promise<{ sites: string[], users: object[] }>}
  */
 export async function loadRefs(user) {
   let reference = await DB.getConfig('reference_data');
   let users = await DB.getConfig('assignable_users');
-  const canListUsers = user.role !== 'TECHNICIAN';
+  const canListUsers = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (isOnline()) {
     try {
       reference = await apiFetch('/reference-data');

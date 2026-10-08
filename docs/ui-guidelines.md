@@ -81,6 +81,16 @@ Badges always show text. Badge class names come from the field and the code in k
 - The frame grows with the number of bars (no nested scroll). A refresh keeps the previous render, dimmed, until the new figures arrive (no skeleton flash).
 - Offline, the last saved figures are shown with "Offline: figures saved on this device on <date>".
 
+## Staff screens (D46)
+
+- **Sidebar** for `STAFF`: My open requests (home), All my requests, New request; then their account and Log out. The maintenance links are not shown.
+- **Request lists**: cards rather than a table (staff read a handful of requests, on any screen size). Each card: the title as a link, a stage badge with text (Received, Assigned, In progress, On hold, Done, Cancelled), a **Next step** sentence, then number, location, date sent and comment count. In-progress cards have a red side line, on-hold cards an amber one; the badge text always says it too.
+- **Request page**: a status box (badge, four steps Received → Assigned → In progress → Done with ✓ on done steps, the current one in bold over a red line, `aria-current="step"`, and a visually hidden "(done)" / "(current step)" / "(to come)"; "On hold" replaces "In progress" when paused), the next step, "What was done" (work report) once closed, the details sent, a history of the status steps, and the comments with an "Add a comment" form.
+- **Request form**: plain questions ("What is the problem?", "Where exactly?", "Kind of problem", "How urgent is it?"), with examples in the hints. The two lists start with **"I don't know"**, selected by default. The site defaults to the user's site.
+- **Review box** (D47): at the top of the work order panel of a request waiting for review, for supervisors and admins: amber frame, "Staff request to review", who sent it and when, then *Assign to* (required; technicians first, then supervisors), type, priority, category, due date and **Approve and assign** (primary); below a line, *Reason for rejection* and **Reject request** (danger, with a confirmation). Both buttons are `.online-only`. Technicians see an info notice. The dashboard tile **Staff requests to review** uses the attention style when above zero; the list filter is the checkbox **Requests to review** (supervisors and admins).
+- Staff wording of the review: "Waiting for review" (step Received), "Approved" (step Approved and assigned), "Rejected" (danger badge, the reason quoted in the next step, no step line).
+- **Comments** (staff page and work order panel): oldest first, author and time on top; the requester's comments carry a red side line, the team's a gray one. Staff see team members as "Name (maintenance team)"; the team sees "Name (requester)" and roles. Send buttons are `.online-only`.
+
 ## Pagination (brief)
 
 `◀◀ First` · `◀ Previous` · `Page X / Y` · `Next ▶` · `Last ▶▶`. Buttons are disabled at the bounds. 50 rows per page. On the asset and work order tables, a second copy sits at the start of the row above the table (record count and "New …" at its end) when there is more than one page, so changing page needs no scrolling (D42). Focus stays on the button used, in the copy used.

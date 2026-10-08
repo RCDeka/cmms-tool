@@ -18,20 +18,26 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 
 ## Permission matrix (D23)
 
-| Action | TECHNICIAN | SUPERVISOR | ADMIN |
-|---|---|---|---|
-| Read assets, work orders, reference data, dashboard | yes | yes | yes |
-| `PUT /assets/:id` | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
-| `POST /assets`, `DELETE /assets/:id` | no | yes | yes |
-| `POST /work-orders` (create) | yes, assigned to themselves only (BR-W12) | yes | yes |
-| `PUT /work-orders/:id` | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
-| `GET /users` | no | yes | yes |
-| `GET /audit-log` | no | yes, without user accounts | yes |
-| `/admin/users` (user administration) | no | no | yes |
-| `POST /auth/change-password` (own password) | yes | yes | yes |
-| `POST /feedback` (suggest an improvement) | yes | yes | yes |
-| `GET /feedback`, `PUT /feedback/:id` | no | no | yes |
-| Conflict console and resolution | no | yes | yes |
+| Action | STAFF | TECHNICIAN | SUPERVISOR | ADMIN |
+|---|---|---|---|---|
+| Read assets, work orders, dashboard, record history | no (403) | yes | yes | yes |
+| Read reference data (`GET /reference-data`) | yes | yes | yes | yes |
+| `/requests` (own requests: list, create, read, comment; D46) | yes | no | no | no |
+| `GET/POST /work-orders/:id/comments` | no | yes | yes | yes |
+| `PUT /work-orders/:id/review` (approve and assign, or reject a staff request; D47) | no | no | yes | yes |
+| `PUT /assets/:id` | no | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
+| `POST /assets`, `DELETE /assets/:id` | no | no | yes | yes |
+| `POST /work-orders` (create) | no | yes, assigned to themselves only (BR-W12) | yes | yes |
+| `PUT /work-orders/:id` | no | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
+| `GET /users` | no | no | yes | yes |
+| `GET /audit-log` | no | no | yes, without user accounts | yes |
+| `/admin/users` (user administration) | no | no | no | yes |
+| `POST /auth/change-password` (own password) | yes | yes | yes | yes |
+| `POST /feedback` (suggest an improvement) | yes | yes | yes | yes |
+| `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
+| Conflict console and resolution | no | no | yes | yes |
+
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard` and `/api/audit-log` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -51,14 +57,19 @@ Asset       { id, code, name, site, building, floor, category, subcategory, crit
               created_at, updated_at }
 WorkOrder   { id, number, type, status, priority, title, description,
               asset_id, asset: { id, code, name, site, status } | null,
-              site, category,
+              site, location, category,
               assignee_id, assignee: UserRef|null,
               supervisor_id, supervisor: UserRef|null,
               created_on, due_on, started_on, closed_on,
               estimated_hours, actual_hours, work_report,
               client_id, created_by: UserRef,
+              review_status, reviewed_by: UserRef|null, reviewed_at, review_note,
               version, has_conflict, updated_by: UserRef|null, created_at, updated_at }
 Page<T>     { total, page, pages, items: T[] }
+Request     { id, number, status, priority, title, description, site, location, category,
+              created_on, due_on, started_on, closed_on, work_report, client_id,
+              review_status, review_note, reviewed_at, assignee: UserRef|null, comment_count, last_comment_at, created_at, updated_at }
+Comment     { id, work_order_id, body, user: UserRef, user_role, created_at }
 ```
 
 `password_hash` is never returned.
@@ -96,7 +107,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### Search and filters (D38)
 - `q`: full-text search (SQLite FTS5). Each word is a required prefix (`chil lyon` finds records containing a word starting with "chil" **and** one starting with "lyon"), case and accents are ignored (`defense` finds "Défense"), search syntax typed by users is treated as plain words. A `q` without any letter or digit matches nothing. Max 100 characters.
-- Indexed text: assets → code, name, site, building, subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report. Database triggers keep the indexes in sync.
+- Indexed text: assets → code, name, site, building, subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report, location. Database triggers keep the indexes in sync.
 - Every enum filter, `site` and `assignee_id` take one value or several (D45): `status=OPEN,ON_HOLD`, `assignee_id=4,5`. Values of one filter are alternatives (OR); different filters combine with `q` and each other (AND). `site` values are separated by `|` instead of `,` because site names can contain commas. An invalid value, or more than 50 values, → 400.
 - Filters combine with `q`, with each other (AND), with `sort` and with pagination: `total` and `pages` count the matching records.
 
@@ -148,6 +159,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 ### GET /api/work-orders
 - Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?`, `priority?`, `type?`, `category?`, `site?`, `assignee_id?` (each one value or several, e.g. `status=OPEN,IN_PROGRESS,ON_HOLD`);
+  - `to_review?=true`: staff requests waiting for a review (`review_status = PENDING`, D47);
   - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
 - `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
@@ -165,8 +177,8 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Declared before `/:id` in the router.
 
 ### POST /api/work-orders
-- Roles: TECHNICIAN, SUPERVISOR, ADMIN (rules BR-W9 to BR-W13).
-- Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "site"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or `site` is required.
+- Roles: TECHNICIAN, SUPERVISOR, ADMIN (rules BR-W9 to BR-W13). Staff members use `POST /api/requests`.
+- Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "site"?: string, "location"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or `site` is required.
 - `201 { "created": true, "item": WorkOrder }`
 - `200 { "created": false, "item": WorkOrder }` when `client_id` was already used (replay, BR-W11).
 - Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+`site`; 403 technician assigning someone else; 422 rule violated: unknown asset or site different from the asset's (BR-W2), assignee or supervisor not eligible (BR-W3), `due_on` before `created_on` (BR-W8), `edited_at` out of range (BR-W9).
@@ -179,6 +191,42 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### PUT /api/work-orders/:id/resolve-conflict
 - Same contract as for assets.
+
+### PUT /api/work-orders/:id/review (added, D47)
+- Roles: SUPERVISOR, ADMIN. Rules BR-R6 to BR-R9. Online only in the interface.
+- Approve: `{ "decision": "APPROVE", "version": number, "assignee_id": number, "supervisor_id"?: number | null, "type"?: WorkOrderType, "priority"?: WorkOrderPriority, "category"?: Category | null, "due_on"?: date | null }`. `supervisor_id` defaults to the reviewer.
+- Reject: `{ "decision": "REJECT", "version": number, "reason": string (1–2000) }`. The work order becomes `CANCELLED`.
+- `200 { "reviewed": true, "version": N+1, "item": WorkOrder }`.
+- Errors: 400 invalid body (missing `assignee_id` or `reason`, unknown field); 403; 404; 409 already reviewed (`BR-R6`), changed since (`BR-V1`) or open conflict (`BR-V4`); 422 not a staff request (`BR-R6`), assignee or supervisor not eligible (`BR-W3`), due date before creation (`BR-W8`).
+- `review_status`, `reviewed_by`, `reviewed_at` and `review_note` are read-only in `PUT /api/work-orders/:id` (403). While a request is `PENDING`, that `PUT` refuses `status` and `assignee_id` changes (422 `BR-R7`).
+
+### GET /api/work-orders/:id/comments, POST /api/work-orders/:id/comments (added, D46)
+- Roles: TECHNICIAN, SUPERVISOR, ADMIN, on any work order.
+- `GET` → `200 { "items": [Comment] }`, oldest first.
+- `POST` body: `{ "body": string }` (1–2000 characters, trimmed) → `201 { "created": true, "item": Comment }`. The work order itself is not changed (no new version).
+- Errors: 400; 403 (staff); 404 work order not found.
+
+## Staff requests (added, D46)
+
+All routes: role STAFF (403 otherwise). A request is a work order the user created (BR-R1 to BR-R5 in `docs/data-model.md`); the maintenance team sees it under `/api/work-orders`.
+
+### GET /api/requests
+- Query: `page`, `size` (max 100), `scope` (`open` = `OPEN`, `IN_PROGRESS`, `ON_HOLD`, default; `all`).
+- `200 Page<Request>`: the user's requests, newest first.
+
+### POST /api/requests
+- Body: `{ "client_id": uuid, "title": string, "site": string, "location": string, "description"?: string, "category"?: Category | null, "priority"?: WorkOrderPriority, "edited_at"?: ISO }`. Leaving out `category` or `priority` is the form's "I don't know".
+- `201 { "created": true, "item": Request }`; `200 { "created": false, "item": Request }` when the `client_id` was already used (BR-W11).
+- The work order gets `type = CORRECTIVE`, `status = OPEN`, `review_status = PENDING` (D47), no assignee, supervisor or asset.
+- Errors: 400 invalid body (missing `title`, `site` or `location`; any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9).
+
+### GET /api/requests/:id
+- `200 { ...Request, "status_history": [{ "status", "at" }], "comments": [Comment] }`. `status_history` lists the creation (`OPEN`), the review (`APPROVED` or `REJECTED`) and each status change, oldest first (BR-R5).
+- Errors: 400 malformed id; 404 not found **or created by someone else**.
+
+### POST /api/requests/:id/comments
+- Body: `{ "body": string }` (1–2000 characters). `201 { "created": true, "item": Comment }`.
+- Errors: 400; 404 not found or someone else's.
 
 ## Conflicts (added)
 
@@ -266,18 +314,20 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 ## Dashboard (added)
 
 ### GET /api/dashboard
+- Maintenance roles (staff: 403).
 - `200`:
   ```
   { "today": "2026-10-04", "generated_at": "2026-10-04T12:00:00.000Z",
     "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
               "closed_this_month": 40, "assets_broken_down": 21,
-              "overdue_work_orders": 9, "pending_conflicts": 2 },
+              "overdue_work_orders": 9, "pending_conflicts": 2,
+              "requests_to_review": 1 },
     "week_end": "2026-10-10",
     "recent_activity": [WorkOrder x5],
     "my_work_today": [WorkOrder],
     "my_work_week": [WorkOrder] }
   ```
-- `pending_conflicts` is present for SUPERVISOR and ADMIN only. Definitions: `docs/data-model.md` → KPI definitions.
+- `pending_conflicts` and `requests_to_review` (staff requests waiting for a review, D47) are present for SUPERVISOR and ADMIN only. Definitions: `docs/data-model.md` → KPI definitions.
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
@@ -292,7 +342,8 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 | Ops | `GET /api/health` |
 | Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Assets | `GET/POST /api/assets`, `GET /api/assets/search`, `GET/PUT/DELETE /api/assets/:id`, `PUT /api/assets/:id/resolve-conflict` |
-| Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict` |
+| Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict`, `PUT /api/work-orders/:id/review`, `GET/POST /api/work-orders/:id/comments` |
+| Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard` |

@@ -11,7 +11,9 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /**
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
- *   |'users'|'user'|'userCreate'|'account'|'feedback'|'notFound'} name
+ *   |'users'|'user'|'userCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
+ *   |'notFound'} name
+ * @property {'open'|'all'} [scope] staff request list: unfinished requests, or all (D46)
  * @property {string} [entity] 'assets' | 'work_orders'
  * @property {number | string} [id] number, or `tmp-<uuid>` for a work order not yet created
  * @property {number} [assetId] creation form: asset to pre-fill
@@ -69,6 +71,15 @@ export function parseRoute(pathname, search = '') {
     if (!second) return { name: 'conflicts', page };
     return ID.test(second)
       ? { name: 'conflict', id: Number(second), page }
+      : { name: 'notFound', page };
+  }
+
+  if (first === 'requests') {
+    if (!second) return { name: 'requests', scope: 'open', page };
+    if (second === 'all') return { name: 'requests', scope: 'all', page };
+    if (second === 'new') return { name: 'requestCreate', page };
+    return ID.test(second)
+      ? { name: 'request', id: Number(second), page }
       : { name: 'notFound', page };
   }
 

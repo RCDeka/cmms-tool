@@ -40,8 +40,11 @@ export function createDashboardService(db, { workOrders }) {
         assets_broken_down: assetsBrokenDown.get(),
         overdue_work_orders: counts.overdue_work_orders,
       };
-      if (['SUPERVISOR', 'ADMIN'].includes(user.role))
+      if (['SUPERVISOR', 'ADMIN'].includes(user.role)) {
         kpis.pending_conflicts = pendingConflicts.get();
+        // Staff requests waiting for a supervisor (D47).
+        kpis.requests_to_review = workOrders.countToReview();
+      }
 
       const lastDay = weekEnd(today);
       const myWeek = workOrders

@@ -29,6 +29,8 @@ export const FILTERS = {
     assignee_id: { kind: 'user', label: 'Assignee' },
     mine: { kind: 'flag', label: 'Assigned to me' },
     overdue: { kind: 'flag', label: 'Overdue' },
+    // Staff requests waiting for a supervisor (D47); shown to supervisors and admins.
+    to_review: { kind: 'flag', label: 'Requests to review', supervisors: true },
   },
 };
 
@@ -336,7 +338,7 @@ export function renderFilterBar({
         `${u.first_name} ${u.last_name}`,
       ]);
       parts.push(select(name, def.label, people));
-    } else if (def.kind === 'flag') {
+    } else if (def.kind === 'flag' && (!def.supervisors || canFilterAssignee)) {
       const el = h('input', { id: `filter-${name}`, name, type: 'checkbox', onChange: changed });
       controls.set(name, el);
       parts.push(

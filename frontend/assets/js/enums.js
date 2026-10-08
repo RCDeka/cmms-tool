@@ -1,7 +1,7 @@
 // Enumerated values, defined once for the frontend. Must match docs/data-model.md and
 // backend/src/rules/enums.js.
 
-export const ROLES = ['TECHNICIAN', 'SUPERVISOR', 'ADMIN'];
+export const ROLES = ['STAFF', 'TECHNICIAN', 'SUPERVISOR', 'ADMIN'];
 
 export const CATEGORIES = [
   'HVAC',
@@ -24,6 +24,9 @@ export const TERMINAL_WORK_ORDER_STATUSES = ['CLOSED', 'CANCELLED'];
 
 export const WORK_ORDER_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 
+/** Review of a staff request by a supervisor (D47). */
+export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+
 /** Enum lists by name, as referenced by field definitions in entities.js. */
 export const ENUMS = {
   role: ROLES,
@@ -33,4 +36,5 @@ export const ENUMS = {
   work_order_type: WORK_ORDER_TYPES,
   work_order_status: WORK_ORDER_STATUSES,
   work_order_priority: WORK_ORDER_PRIORITIES,
+  review_status: REVIEW_STATUSES,
 };

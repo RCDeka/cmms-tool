@@ -1,7 +1,12 @@
 // UI labels for enum codes and fields (docs/data-model.md → Enumerated values).
 
 export const VALUE_LABELS = {
-  role: { TECHNICIAN: 'Technician', SUPERVISOR: 'Supervisor', ADMIN: 'Administrator' },
+  role: {
+    STAFF: 'Staff',
+    TECHNICIAN: 'Technician',
+    SUPERVISOR: 'Supervisor',
+    ADMIN: 'Administrator',
+  },
   category: {
     HVAC: 'HVAC',
     ELECTRICAL: 'Electrical',
@@ -32,6 +37,7 @@ export const VALUE_LABELS = {
     CANCELLED: 'Cancelled',
   },
   work_order_priority: { LOW: 'Low', NORMAL: 'Normal', HIGH: 'High', URGENT: 'Urgent' },
+  review_status: { PENDING: 'To review', APPROVED: 'Approved', REJECTED: 'Rejected' },
 };
 
 /**
@@ -54,6 +60,7 @@ export const VALUE_TONES = {
     CANCELLED: 'neutral',
   },
   work_order_priority: { LOW: 'neutral', NORMAL: 'info', HIGH: 'warning', URGENT: 'danger' },
+  review_status: { PENDING: 'warning', APPROVED: 'success', REJECTED: 'neutral' },
 };
 
 /** Label of an enum code; falls back to the code itself. */

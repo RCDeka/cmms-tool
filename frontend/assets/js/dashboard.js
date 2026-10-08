@@ -32,6 +32,12 @@ export const KPI_TILES = [
     attention: true,
   },
   {
+    key: 'requests_to_review',
+    label: 'Staff requests to review',
+    href: '/work-orders?to_review=true',
+    attention: true,
+  },
+  {
     key: 'pending_conflicts',
     label: 'Conflicts to arbitrate',
     href: '/conflicts',

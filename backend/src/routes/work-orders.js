@@ -34,6 +34,7 @@ const listQuery = z.strictObject({
   assignee_id: listFilter(z.coerce.number().int().positive()),
   mine: flagFilter,
   overdue: flagFilter,
+  to_review: flagFilter,
 });
 
 const statsQuery = z.strictObject({
@@ -82,6 +83,17 @@ export function workOrdersRouter({ workOrders, timeZone, now }) {
     });
     sendUpdateResult(res, result);
   });
+
+  // Staff requests: approve and allocate, or reject (D47).
+  router.put(
+    '/:id/review',
+    requireRole('SUPERVISOR', 'ADMIN'),
+    validate({ params: idParams }),
+    (req, res) => {
+      const item = workOrders.review(req.valid.params.id, req.body, req.user, { now: now() });
+      res.json({ reviewed: true, version: item.version, item });
+    },
+  );
 
   router.put(
     '/:id/resolve-conflict',

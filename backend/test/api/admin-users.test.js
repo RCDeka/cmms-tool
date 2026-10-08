@@ -46,7 +46,7 @@ describe('access', () => {
 describe('GET /api/admin/users', () => {
   it('lists every user with search and filters, without password data', async () => {
     const all = (await admin().get('/api/admin/users').expect(200)).body;
-    expect(all.total).toBe(5);
+    expect(all.total).toBe(6);
     expect(all.items[0]).toHaveProperty('is_active', true);
     expectNoSecrets(all);
     expect((await admin().get('/api/admin/users?role=SUPERVISOR').expect(200)).body.total).toBe(2);

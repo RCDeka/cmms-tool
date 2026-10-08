@@ -40,6 +40,7 @@ const WORK_ORDER_FIELDS = [
   'description',
   'asset_id',
   'site',
+  'location',
   'category',
   'assignee_id',
   'supervisor_id',
@@ -73,6 +74,7 @@ export const CREATION_FIELDS = {
     'priority',
     'asset_id',
     'site',
+    'location',
     'category',
     'description',
     'due_on',
@@ -84,6 +86,7 @@ export const CREATION_FIELDS = {
     'priority',
     'asset_id',
     'site',
+    'location',
     'category',
     'description',
     'assignee_id',
@@ -125,10 +128,16 @@ export function statusOptions(current) {
   return [current, ...(TRANSITIONS[current] ?? [])];
 }
 
+/** Set by the review only while a staff request waits for it (BR-R7, D47). */
+const SET_BY_REVIEW = ['status', 'assignee_id'];
+
+/** Supervisors and admins approve or reject staff requests (D47). */
+export const canReviewRequests = (user) => ['SUPERVISOR', 'ADMIN'].includes(user?.role);
+
 /**
  * Fields this user may change on this record now. Empty when the record is read-only for
  * them: open conflict (BR-V4), terminal work order (BR-W7), or a technician who is not the
- * assignee.
+ * assignee. A staff request waiting for review is assigned and cancelled by the review only.
  */
 export function editableFields(entity, user, record) {
   if (!user || record.has_conflict) return [];
@@ -136,7 +145,18 @@ export function editableFields(entity, user, record) {
     if (isTerminal(record.status)) return [];
     if (user.role === 'TECHNICIAN' && record.assignee_id !== user.id) return [];
   }
-  return EDITABLE_BY_ROLE[entity]?.[user.role] ?? [];
+  const fields = EDITABLE_BY_ROLE[entity]?.[user.role] ?? [];
+  return record.review_status === 'PENDING'
+    ? fields.filter((f) => !SET_BY_REVIEW.includes(f))
+    : fields;
+}
+
+/** Checks of the review form before asking the server (D47). Pure. */
+export function checkReview(decision, values) {
+  if (decision === 'APPROVE') {
+    return values.assignee_id ? {} : { assignee_id: 'Choose who will do the work' };
+  }
+  return String(values.reason ?? '').trim() ? {} : { reason: 'Say why the request is rejected' };
 }
 
 /**

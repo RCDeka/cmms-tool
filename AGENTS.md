@@ -6,7 +6,7 @@ Before writing code, read `docs/decisions.md` (reference hierarchy and deviation
 
 ## Project summary
 
-Fast-CMMS: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, work order creation, offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
+Fast-CMMS: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, work order creation, staff requests (D46), offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
 
 Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML + CSS + vanilla JavaScript (ES modules) + IndexedDB (`idb`) + Chart.js on the frontend; Nginx + systemd on a Linux VPS. Keep it simple.
 

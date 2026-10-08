@@ -15,10 +15,17 @@ export const TEST_CONFIG = loadConfig({
 export const NOW = new Date('2026-10-04T12:00:00Z');
 export const TODAY = dateInZone(TEST_CONFIG.timeZone, NOW);
 
-export const USERNAMES = ['admin', 'supervisor1', 'supervisor2', 'technician1', 'technician2'];
+export const USERNAMES = [
+  'admin',
+  'supervisor1',
+  'supervisor2',
+  'technician1',
+  'technician2',
+  'user1',
+];
 
 /**
- * App on a freshly seeded database (5 users, 500 assets, 200 work orders). Every seeded user
+ * App on a freshly seeded database (6 users, 500 assets, 206 work orders). Every seeded user
  * is logged in once up front, so `getAs` can return a Supertest request synchronously.
  * @param {object} [options] extra createApp options, e.g. a lower loginRateLimit
  * @param {boolean} [options.preLogin] set false when the test counts login attempts

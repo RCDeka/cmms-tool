@@ -7,6 +7,8 @@ import { forbiddenCreationFields } from '../rules/permissions.js';
 import { creationDate, nextWorkOrderNumber } from '../rules/work-order-creation.js';
 import { toFtsQuery } from '../rules/search.js';
 import { applyWorkOrderRules } from '../rules/work-order-status.js';
+import { fieldsAwaitingReview, reviewBlocker } from '../rules/requests.js';
+import { snapshotToApi } from '../rules/conflict-diff.js';
 import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/pagination.js';
 import {
   CATEGORIES,
@@ -15,7 +17,7 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
-import { auditLabel, creationChanges } from '../rules/audit.js';
+import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
 import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, versionedUpdate } from './writes.js';
@@ -29,6 +31,7 @@ const createSchema = z.strictObject({
   description: WORK_ORDER_FIELDS.description.optional(),
   asset_id: WORK_ORDER_FIELDS.asset_id.optional(),
   site: WORK_ORDER_FIELDS.site.optional(),
+  location: WORK_ORDER_FIELDS.location.optional(),
   category: WORK_ORDER_FIELDS.category.optional(),
   assignee_id: WORK_ORDER_FIELDS.assignee_id.optional(),
   supervisor_id: WORK_ORDER_FIELDS.supervisor_id.optional(),
@@ -36,6 +39,26 @@ const createSchema = z.strictObject({
   estimated_hours: WORK_ORDER_FIELDS.estimated_hours.optional(),
   edited_at: WRITE_META.edited_at,
 });
+
+/** PUT /api/work-orders/:id/review body (D47): approve and assign, or reject with a reason. */
+const reviewSchema = z.discriminatedUnion('decision', [
+  z.strictObject({
+    decision: z.literal('APPROVE'),
+    version: WRITE_META.version,
+    // BR-R9: an approved request is always allocated to someone.
+    assignee_id: z.number().int().positive(),
+    supervisor_id: WORK_ORDER_FIELDS.supervisor_id.optional(),
+    type: WORK_ORDER_FIELDS.type.optional(),
+    priority: WORK_ORDER_FIELDS.priority.optional(),
+    category: WORK_ORDER_FIELDS.category.optional(),
+    due_on: WORK_ORDER_FIELDS.due_on.optional(),
+  }),
+  z.strictObject({
+    decision: z.literal('REJECT'),
+    version: WRITE_META.version,
+    reason: z.string().trim().min(1, 'Say why the request is rejected').max(2000),
+  }),
+]);
 
 const ruleError = ({ rule, message }) => new HttpError(422, message, { rule });
 
@@ -49,6 +72,7 @@ const FIELDS = [
   'description',
   'asset_id',
   'site',
+  'location',
   'category',
   'assignee_id',
   'supervisor_id',
@@ -62,19 +86,24 @@ const FIELDS = [
   'client_id',
   'version',
   'has_conflict',
+  'review_status',
+  'reviewed_at',
+  'review_note',
   'created_at',
   'updated_at',
 ];
 
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
     a.id AS a__id, a.code AS a__code, a.name AS a__name, a.site AS a__site, a.status AS a__status,
-    ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')}
+    ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')},
+    ${userRefColumns('rv')}
   FROM work_orders w
   LEFT JOIN assets a ON a.id = w.asset_id
   LEFT JOIN users asg ON asg.id = w.assignee_id
   LEFT JOIN users sup ON sup.id = w.supervisor_id
   LEFT JOIN users cb ON cb.id = w.created_by
-  LEFT JOIN users ub ON ub.id = w.updated_by`;
+  LEFT JOIN users ub ON ub.id = w.updated_by
+  LEFT JOIN users rv ON rv.id = w.reviewed_by`;
 
 /** Whitelisted sort keys (docs/api-design.md → GET /api/work-orders). */
 export const WORK_ORDER_SORTS = {
@@ -110,6 +139,7 @@ export function toWorkOrder(row) {
   wo.supervisor = userRef(row, 'sup');
   wo.created_by = userRef(row, 'cb');
   wo.updated_by = userRef(row, 'ub');
+  wo.reviewed_by = userRef(row, 'rv');
   return wo;
 }
 
@@ -119,7 +149,18 @@ export function toWorkOrder(row) {
  * @returns {{ clause: string, params: object }}
  */
 export function workOrderFilters(
-  { q, status, priority, type, category, site, assignee_id: assigneeId, mine, overdue },
+  {
+    q,
+    status,
+    priority,
+    type,
+    category,
+    site,
+    assignee_id: assigneeId,
+    mine,
+    overdue,
+    to_review: toReview,
+  },
   { userId, today },
 ) {
   const where = [];
@@ -147,6 +188,8 @@ export function workOrderFilters(
     where.push("w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD') AND w.due_on < @today");
     params.today = today;
   }
+  if (toReview) where.push("w.review_status = 'PENDING'");
+  else if (toReview === false) where.push("w.review_status IS NOT 'PENDING'");
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
@@ -170,6 +213,9 @@ export function createWorkOrderService(db) {
   const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
   // Only active people can be assigned or supervise (BR-W3, BR-U7).
   const roleOf = db.prepare('SELECT role FROM users WHERE id = ? AND is_active = 1').pluck();
+  const toReviewCount = db
+    .prepare("SELECT count(*) FROM work_orders WHERE review_status = 'PENDING'")
+    .pluck();
   const idByClientId = db.prepare('SELECT id FROM work_orders WHERE client_id = ?').pluck();
   const highestNumber = db
     .prepare("SELECT max(number) FROM work_orders WHERE number LIKE 'WO-' || ? || '-%'")
@@ -212,6 +258,14 @@ export function createWorkOrderService(db) {
    * (BR-W2, BR-W3). Shared by updates and conflict resolutions. Returns the final changes.
    */
   function prepareChanges(current, changes, now, timeZone) {
+    const awaiting = fieldsAwaitingReview(current, changes);
+    if (awaiting.length) {
+      throw new HttpError(
+        422,
+        'Review this staff request first: approve it to assign it, or reject it.',
+        { rule: 'BR-R7', fields: awaiting },
+      );
+    }
     const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
     if (workflow.error) throw ruleError(workflow.error);
     const derived = checkReferences({ ...current, ...workflow.changes }, changes);
@@ -289,7 +343,7 @@ export function createWorkOrderService(db) {
      * work order instead of creating a second one (BR-W11, D26).
      * @returns {{ created: boolean, item: object }}
      */
-    create(body, user, { now, timeZone }) {
+    create(body, user, { now, timeZone }, { reviewStatus = null } = {}) {
       const parsed = createSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
       const input = parsed.data;
@@ -317,6 +371,7 @@ export function createWorkOrderService(db) {
             description: null,
             asset_id: null,
             site: null,
+            location: null,
             category: null,
             assignee_id: user.role === 'TECHNICIAN' ? user.id : null,
             supervisor_id: null,
@@ -327,6 +382,7 @@ export function createWorkOrderService(db) {
             created_on: when.date,
             created_by: user.id,
             updated_by: user.id,
+            review_status: reviewStatus,
           };
           if (user.role === 'TECHNICIAN') row.assignee_id = user.id;
           Object.assign(row, checkReferences(row, fields));
@@ -347,11 +403,11 @@ export function createWorkOrderService(db) {
             .prepare(
               `INSERT INTO work_orders
                 (number, client_id, type, status, priority, title, description, asset_id, site,
-                 category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
-                 created_by, updated_by, created_at, updated_at)
+                 location, category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
+                 created_by, updated_by, review_status, created_at, updated_at)
                VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
-                 @asset_id, @site, @category, @assignee_id, @supervisor_id, @created_on, @due_on,
-                 @estimated_hours, @created_by, @updated_by, @stamp, @stamp)`,
+                 @asset_id, @site, @location, @category, @assignee_id, @supervisor_id, @created_on, @due_on,
+                 @estimated_hours, @created_by, @updated_by, @review_status, @stamp, @stamp)`,
             )
             .run({ ...row, stamp }).lastInsertRowid;
           const { created_by: _createdBy, updated_by: _updatedBy, ...logged } = row;
@@ -369,6 +425,64 @@ export function createWorkOrderService(db) {
         })
         .immediate();
       return { created: id.created, item: getById(id.id) };
+    },
+
+    /**
+     * PUT /api/work-orders/:id/review (D47, BR-R6 to BR-R9): a supervisor or an admin approves
+     * a staff request and allocates it, or rejects it (cancelled, with the reason).
+     * @returns {object} the work order after the review
+     */
+    review(id, body, user, { now }) {
+      const parsed = reviewSchema.safeParse(body ?? {});
+      if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
+      const { decision, version, reason, ...fields } = parsed.data;
+      db.transaction(() => {
+        const current = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(id);
+        if (!current) throw new HttpError(404, 'Work order not found');
+        const blocker = reviewBlocker(current, version);
+        if (blocker) throw new HttpError(blocker.status, blocker.message, { rule: blocker.rule });
+
+        let changes;
+        if (decision === 'APPROVE') {
+          // The reviewer supervises the work unless they choose someone else.
+          changes = { supervisor_id: user.id, ...fields };
+          checkReferences({ ...current, ...changes }, changes);
+          if (changes.due_on && changes.due_on < current.created_on) {
+            throw ruleError({
+              rule: 'BR-W8',
+              message: 'The due date cannot be earlier than the creation date.',
+            });
+          }
+          changes.review_status = 'APPROVED';
+        } else {
+          changes = { status: 'CANCELLED', review_status: 'REJECTED', review_note: reason };
+        }
+        const stamp = now.toISOString();
+        const columns = { ...changes, reviewed_by: user.id, reviewed_at: stamp };
+        // Column names come from the schemas above, never from the request as is.
+        const sets = Object.keys(columns).map((k) => `${k} = @${k}`);
+        db.prepare(
+          `UPDATE work_orders SET ${sets.join(', ')}, version = version + 1,
+             updated_by = @__user, updated_at = @__now WHERE id = @__id`,
+        ).run({ ...columns, __user: user.id, __now: stamp, __id: id });
+        recordAudit(db, {
+          entityType: 'work_orders',
+          entityId: id,
+          action: 'UPDATE',
+          changes: diffChanges(snapshotToApi('work_orders', current), changes),
+          note: { review: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED' },
+          label: auditLabel('work_orders', current),
+          userId: user.id,
+          version: current.version + 1,
+          at: stamp,
+        });
+      }).immediate();
+      return getById(id);
+    },
+
+    /** Staff requests waiting for a review (dashboard tile, D47). */
+    countToReview() {
+      return toReviewCount.get();
     },
 
     /**

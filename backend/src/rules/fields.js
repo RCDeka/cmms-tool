@@ -59,6 +59,7 @@ export const WORK_ORDER_FIELDS = {
   description: optionalText(4000),
   asset_id: optionalId,
   site: requiredText(200),
+  location: optionalText(200),
   category: z.enum(CATEGORIES).nullable(),
   assignee_id: optionalId,
   supervisor_id: optionalId,
@@ -91,6 +92,11 @@ export const READ_ONLY_FIELDS = {
     'asset',
     'assignee',
     'supervisor',
+    // Set by PUT /api/work-orders/:id/review only (D47).
+    'review_status',
+    'reviewed_by',
+    'reviewed_at',
+    'review_note',
   ],
 };
 

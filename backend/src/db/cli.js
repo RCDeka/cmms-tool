@@ -73,7 +73,8 @@ async function main() {
         withConflicts: flags.includes('--with-conflicts'),
       });
       console.log(
-        `Seeded ${counts.users} users, ${counts.assets} assets, ${counts.workOrders} work orders, ` +
+        `Seeded ${counts.users} users, ${counts.assets} assets, ${counts.workOrders} work orders ` +
+          `(${counts.requests} staff requests), ` +
           `${counts.conflicts} conflicts.`,
       );
     }

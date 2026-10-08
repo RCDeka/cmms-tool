@@ -1,5 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openDb } from '../../src/db/connection.js';
 import { listMigrations, runMigrations } from '../../src/db/migrate.js';
+
+const MIGRATIONS = path.join(import.meta.dirname, '../../src/db/migrations');
 import * as enums from '../../src/rules/enums.js';
 import { createTestDb } from '../helpers/db.js';
 
@@ -74,6 +80,99 @@ describe('migrations', () => {
     expect(runMigrations(db)).toEqual([]);
   });
 
+  it('keeps the foreign keys to rebuilt tables working (006 rebuilds users)', () => {
+    expect(() => insert('work_orders', workOrder(9999))).toThrow(/FOREIGN KEY constraint failed/);
+    const u = insert('users', user({ role: 'STAFF' }));
+    expect(() =>
+      insert('work_order_comments', {
+        work_order_id: 9999,
+        user_id: u,
+        user_role: 'STAFF',
+        body: 'Hello',
+        created_at: '2026-10-04T12:00:00.000Z',
+      }),
+    ).toThrow(/FOREIGN KEY constraint failed/);
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+  });
+
+  it('reviews staff requests sent before 007 according to their state', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-006-'));
+    try {
+      // A database as it was after 006, then 007 applied to it.
+      for (const name of listMigrations().filter((n) => n < '007')) {
+        fs.copyFileSync(path.join(MIGRATIONS, name), path.join(dir, name));
+      }
+      const legacy = openDb(path.join(dir, 'legacy.sqlite'));
+      runMigrations(legacy, dir);
+      const ins = (table, row) => {
+        const cols = Object.keys(row);
+        return Number(
+          legacy
+            .prepare(
+              `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map((c) => '@' + c).join(', ')})`,
+            )
+            .run(row).lastInsertRowid,
+        );
+      };
+      const staff = ins('users', user({ role: 'STAFF' }));
+      const tech = ins('users', user());
+      const waiting = ins('work_orders', workOrder(staff));
+      const taken = ins('work_orders', workOrder(staff, { assignee_id: tech }));
+      const cancelled = ins('work_orders', workOrder(staff, { status: 'CANCELLED' }));
+      const regular = ins('work_orders', workOrder(tech));
+      fs.copyFileSync(
+        path.join(MIGRATIONS, '007_request_review.sql'),
+        path.join(dir, '007_request_review.sql'),
+      );
+      runMigrations(legacy, dir);
+      const status = (id) =>
+        legacy.prepare('SELECT review_status FROM work_orders WHERE id = ?').pluck().get(id);
+      expect([waiting, taken, cancelled, regular].map(status)).toEqual([
+        'PENDING',
+        'APPROVED',
+        'REJECTED',
+        null,
+      ]);
+      legacy.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a request waiting for review open and unassigned, a rejected one cancelled', () => {
+    const u = insert('users', user());
+    expect(() =>
+      insert('work_orders', workOrder(u, { review_status: 'PENDING', assignee_id: u })),
+    ).toThrow(/CHECK constraint failed/);
+    expect(() =>
+      insert('work_orders', workOrder(u, { review_status: 'PENDING', status: 'IN_PROGRESS' })),
+    ).toThrow(/CHECK constraint failed/);
+    expect(() => insert('work_orders', workOrder(u, { review_status: 'REJECTED' }))).toThrow(
+      /CHECK constraint failed/,
+    );
+    expect(() =>
+      insert('work_orders', workOrder(u, { review_status: 'REJECTED', status: 'CANCELLED' })),
+    ).not.toThrow();
+    expect(() => insert('work_orders', workOrder(u, { review_status: 'MAYBE' }))).toThrow(
+      /CHECK constraint failed/,
+    );
+  });
+
+  it('rolls back a migration that breaks a foreign key', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-migration-'));
+    try {
+      fs.writeFileSync(
+        path.join(dir, '900_orphan.sql'),
+        'CREATE TABLE t (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users (id)) STRICT;\nINSERT INTO t VALUES (1, 9999);',
+      );
+      expect(() => runMigrations(db, dir)).toThrow(/breaks 1 foreign key/);
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 't'").get()).toBeUndefined();
+      expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('enables foreign keys and WAL', () => {
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
@@ -123,6 +222,34 @@ describe('CHECK constraints match src/rules/enums.js', () => {
           created_at: '2026-10-04T12:00:00.000Z',
           updated_at: '2026-10-04T12:00:00.000Z',
         }),
+    ],
+    [
+      'feedback.user_role',
+      enums.ROLES,
+      (v) =>
+        insert('feedback', {
+          message: 'Idea',
+          page_path: '/requests',
+          page_title: 'My requests',
+          user_id: insert('users', user()),
+          user_role: v,
+          created_at: '2026-10-04T12:00:00.000Z',
+          updated_at: '2026-10-04T12:00:00.000Z',
+        }),
+    ],
+    [
+      'work_order_comments.user_role',
+      enums.ROLES,
+      (v) => {
+        const u = insert('users', user());
+        insert('work_order_comments', {
+          work_order_id: insert('work_orders', workOrder(u)),
+          user_id: u,
+          user_role: v,
+          body: 'Any news?',
+          created_at: '2026-10-04T12:00:00.000Z',
+        });
+      },
     ],
     [
       'conflicts.entity_type',

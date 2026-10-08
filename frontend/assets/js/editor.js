@@ -7,7 +7,9 @@ import { notice, renderDetail } from './detail.js';
 import { h } from './dom.js';
 import { formatDateTime } from './format.js';
 import { buildCreateForm, buildEditForm } from './form.js';
+import { commentsSection } from './comments.js';
 import { historySection } from './history.js';
+import { reviewPanel } from './review.js';
 import { announce, confirmDialog } from './layout.js';
 import { apiFetch } from './api.js';
 import { applyToPage, isOnline } from './network.js';
@@ -17,6 +19,7 @@ import { detailUrl, listUrl, navigate, parseRoute } from './router.js';
 import {
   ASSET_CREATION_FIELDS,
   canManageAssets,
+  canReviewRequests,
   checkBeforeCreate,
   checkBeforeCreateAsset,
   checkBeforeSave,
@@ -40,6 +43,8 @@ let refsPromise = Promise.resolve({ sites: [], users: [] });
 const assetRefs = new Map();
 /** Called after a save to show the record again (app.js re-renders the current route). */
 let rerender = () => {};
+/** Tells the view a record changed on the server through a direct (online) action. */
+let serverRecordListener = () => {};
 
 /**
  * The form open in the detail panel, or null.
@@ -59,6 +64,11 @@ export function getRefs() {
 
 export function setRerender(fn) {
   rerender = fn;
+}
+
+/** @param {(entity: string, item: object) => void} fn */
+export function setServerRecordListener(fn) {
+  serverRecordListener = fn;
 }
 
 export function currentEditor() {
@@ -192,6 +202,20 @@ export async function showRecord({ route, record, onClose }) {
   const editable = editableFields(entity, user, record);
 
   const notices = [];
+  if (entity === 'work_orders' && record.review_status === 'PENDING') {
+    notices.push(
+      canReviewRequests(user)
+        ? reviewPanel({
+            record,
+            users: (await getRefs()).users,
+            onReview: (body) => submitReview(record, body),
+          })
+        : notice(
+            'info',
+            'This staff request is waiting for a supervisor’s review: it will then be assigned.',
+          ),
+    );
+  }
   if (record._pending) {
     notices.push(
       notice(
@@ -243,7 +267,7 @@ export async function showRecord({ route, record, onClose }) {
   if (!editable.length) {
     editor = null;
     renderDetail(detailContainer, { entity, record, onClose, notices, actions, consoleLink });
-    detailContainer.append(historySection(entity, record.id, historyLookups));
+    detailContainer.append(...recordSections(entity, record, user));
     applyToPage(detailContainer);
     return;
   }
@@ -288,13 +312,25 @@ export async function showRecord({ route, record, onClose }) {
     actions,
     body: ed.handle.form,
   });
-  detailContainer.append(historySection(entity, record.id, historyLookups));
+  detailContainer.append(...recordSections(entity, record, user));
   applyToPage(detailContainer);
   if (draft?.error && editable.length) {
     await ed.handle.setValues(draft.changes);
     ed.handle.setErrors(mapErrorFields(draft.error.fields), '');
     onInput();
   }
+}
+
+/**
+ * Sections below a record: the conversation with the requester (work orders, D46) and the
+ * history. A work order not yet created on the server has neither.
+ */
+function recordSections(entity, record, user) {
+  const sections = [historySection(entity, record.id, historyLookups)];
+  if (entity === 'work_orders' && typeof record.id === 'number') {
+    sections.unshift(commentsSection(record.id, user));
+  }
+  return sections;
 }
 
 /** Names of people and assets that appear in history entries. */
@@ -386,6 +422,49 @@ async function deleteAsset(route, record) {
   await DB.evict(storesOf('assets').pages, []); // page contents changed: fetch them again
   announce(`${record.code} was deleted.`);
   navigate(listUrl('assets', route.page), { force: true });
+}
+
+/**
+ * Sends the review of a staff request (D47). Resolves to the errors to show in the review
+ * box, or null when it is done (or the user changed their mind).
+ */
+async function submitReview(record, body) {
+  if (body.decision === 'REJECT') {
+    const choice = await confirmDialog({
+      title: 'Reject this request?',
+      message: `${record.number} will be cancelled. The requester will see your reason.`,
+      actions: [
+        { value: 'reject', label: 'Reject', primary: true },
+        { value: 'cancel', label: 'Cancel' },
+      ],
+    });
+    if (choice !== 'reject') return null;
+  }
+  let item;
+  try {
+    ({ item } = await apiFetch(`/work-orders/${record.id}/review`, { method: 'PUT', body }));
+  } catch (err) {
+    const fields = err.body?.details?.fields;
+    return {
+      fields: fields && !Array.isArray(fields) ? fields : {},
+      message:
+        err.status === 0 ? 'The server cannot be reached: try again once connected.' : err.message,
+    };
+  }
+  await DB.saveRecord(storesOf('work_orders').records, item.id, {
+    ...item,
+    _fetched_at: new Date().toISOString(),
+  });
+  await deleteDraft('work_orders', item.id);
+  editor = null;
+  serverRecordListener('work_orders', item);
+  announce(
+    body.decision === 'APPROVE'
+      ? `${item.number} approved and assigned to ${item.assignee.first_name} ${item.assignee.last_name}.`
+      : `${item.number} rejected.`,
+  );
+  rerender();
+  return null;
 }
 
 /** Asset creation form (/assets/new): supervisors and admins, online. */

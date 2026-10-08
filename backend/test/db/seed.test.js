@@ -36,8 +36,14 @@ describe('seedDatabase', () => {
   });
   afterAll(() => ctx.cleanup());
 
-  it('creates 5 users, 500 assets, 200 work orders and no conflict', () => {
-    expect(ctx.counts).toEqual({ users: 5, assets: 500, workOrders: 200, conflicts: 0 });
+  it('creates 6 users, 500 assets, 207 work orders (7 staff requests) and no conflict', () => {
+    expect(ctx.counts).toEqual({
+      users: 6,
+      assets: 500,
+      workOrders: 207,
+      requests: 7,
+      conflicts: 0,
+    });
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
   });
 
@@ -49,6 +55,7 @@ describe('seedDatabase', () => {
       ['supervisor2', 'SUPERVISOR', 1],
       ['technician1', 'TECHNICIAN', 0],
       ['technician2', 'TECHNICIAN', 0],
+      ['user1', 'STAFF', 0],
     ]);
     for (const u of users) {
       expect(u.password_hash).toMatch(/^\$argon2id\$/);
@@ -156,7 +163,7 @@ describe('seedDatabase', () => {
   it('numbers work orders in creation order (BR-W10)', () => {
     const rows = all('SELECT number, created_at FROM work_orders ORDER BY number');
     expect(rows[0].number).toBe('WO-2026-00001');
-    expect(rows.at(-1).number).toBe('WO-2026-00200');
+    expect(rows.at(-1).number).toBe('WO-2026-00207');
     const createdAt = rows.map((r) => r.created_at);
     expect(createdAt).toEqual([...createdAt].sort());
   });

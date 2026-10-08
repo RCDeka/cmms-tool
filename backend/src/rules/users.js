@@ -48,4 +48,4 @@ export function isTokenCurrent(issuedAt, credentialsChangedAt) {
 }
 
 /** Power-user mode by default for supervisors and admins (D21). */
-export const defaultPowerUser = (role) => role !== 'TECHNICIAN';
+export const defaultPowerUser = (role) => role === 'SUPERVISOR' || role === 'ADMIN';

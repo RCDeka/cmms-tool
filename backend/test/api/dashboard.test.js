@@ -115,6 +115,7 @@ describe('GET /api/dashboard on a hand-made dataset', () => {
       assets_broken_down: 2,
       overdue_work_orders: 2,
       pending_conflicts: 1,
+      requests_to_review: 0,
     });
     expectNoSecrets(res.body);
   });
@@ -139,6 +140,7 @@ describe('GET /api/dashboard on a hand-made dataset', () => {
 
   it('does not give the conflict count to technicians', async () => {
     const res = await dashboardAs('tech1');
+    expect(res.body.kpis).not.toHaveProperty('requests_to_review');
     expect(res.body.kpis).not.toHaveProperty('pending_conflicts');
     expect(res.body.kpis.open_work_orders).toBe(2);
   });

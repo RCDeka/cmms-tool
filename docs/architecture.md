@@ -66,6 +66,9 @@ frontend/
     layout.js                 shell: sidebar, menu, title, status bar, live region, split view
     conflicts.js              conflict badges, banner, supervisor console
     dashboard.js              KPI tiles, chart, lists
+    requests.js               staff pages: open / all requests, request form, request page (D46)
+    comments.js               work order conversation (staff request page, work order panel)
+    review.js                 review box of a staff request: approve and assign, or reject (D47)
     dom.js                    escapeHtml, element helpers
   assets/vendor/              idb, chart.js (vendored, D17)
   test/                       Vitest + fake-indexeddb + jsdom
@@ -87,7 +90,7 @@ export const ENTITIES = {
 
 | URL | View |
 |---|---|
-| `/` | redirect to `/dashboard` |
+| `/` | redirect to `/dashboard` (staff: `/requests`) |
 | `/login` | login form |
 | `/dashboard` | home dashboard |
 | `/assets?page=N` | assets table |
@@ -102,6 +105,12 @@ export const ENTITIES = {
 | `/admin/users/new`, `/admin/users/:id` | list + creation form or user panel (split view) |
 | `/account` | change my password (every role) |
 | `/admin/feedback?status=…` | suggestions sent with the top bar button (ADMIN, online only, D40) |
+| `/requests?page=N` | staff home page: my open requests, with status and next step (STAFF, online only, D46) |
+| `/requests/all?page=N` | all my requests (STAFF) |
+| `/requests/new` | request form (STAFF) |
+| `/requests/:id` | a request: progress, next step, details, history, comments (STAFF; the maintenance team is sent to `/work-orders/:id`) |
+
+Staff members only reach `/requests…` and `/account`; any other page sends them to `/requests`. The maintenance roles get a short notice on `/requests` and `/requests/new`.
 
 All navigation goes through `router.navigate(url)` → `history.pushState` → render. `popstate` re-renders from the URL. On load, the router parses `location` and shows the matching view. The servers return `index.html` for any non-API path without a file extension (SPA fallback). The static folder `frontend/assets/` shares the `/assets` prefix with the asset routes, so the servers must never redirect a directory path: Express uses `express.static(..., { redirect: false })`, and Nginx must use `try_files $uri /index.html` (without `$uri/`).
 
@@ -196,6 +205,14 @@ Both modes write through the same queue (D11). They differ only in what triggers
 | 400 / 403 / 404 / 422 | Delete the queue entry, keep the edits as a draft, show the error in the detail panel. For a `create`, the temporary record stays visible, marked "Creation failed", until the user fixes it and retries or discards it. |
 | 401 | Pause the queue, ask the user to log in again, then resume. |
 | Network error / 5xx | Keep the entry; retry with backoff (5 s, 15 s, 60 s, then every 5 min). |
+
+## Staff requests (D46)
+
+- A request is a work order created by a `STAFF` user. Staff pages read `/api/requests` and need a connection: nothing is cached in IndexedDB for them (the request form and unsent comments keep their text while the app is open; the form reuses its `client_id` until the request is sent, so a retry after a lost answer never creates two).
+- The status shown to staff is computed by `requestProgress()` in `requests.js`: Waiting for review → Approved (and assigned) → In progress / On hold → Done, or Rejected (with the supervisor's reason) or Cancelled, each with a "next step" sentence naming the technician and the planned date when known.
+- Review (D47): a request waiting for review opens in the work order panel with a **review box** on top for supervisors and admins (approve with an assignee, or reject with a reason, `PUT /api/work-orders/:id/review`, online only); technicians see a notice instead. The edit form leaves out status and assignee until the review. The reviewed record is stored in IndexedDB and replaces the row on screen. The dashboard tile "Staff requests to review" opens `/work-orders?to_review=true`.
+- The open-request list is fetched again when the window gets the focus back (at most every 10 s), so a staff member coming back to the tab sees the latest status.
+- The work order panel of the maintenance team shows the same conversation (`comments.js`, loaded when the panel opens, online only) above the history, with the requester's comments marked.
 
 ## Conflicts
 

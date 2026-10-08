@@ -417,6 +417,7 @@ const CREATION_ORDER = [
   'priority',
   'asset',
   'site',
+  'location',
   'category',
   'description',
   'assignee',

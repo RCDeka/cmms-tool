@@ -31,6 +31,7 @@ import {
   onBeforeUnload,
   setRefs,
   setRerender,
+  setServerRecordListener,
   showCreate,
   showCreateAsset,
   showPendingCreation,
@@ -76,6 +77,13 @@ import {
   startQueue,
 } from './queue.js';
 import { findAssetById, loadRefs } from './refs.js';
+import {
+  renderRequestDetail,
+  renderRequestForm,
+  renderRequestList,
+  requestsUrl,
+  showRequestErrors,
+} from './requests.js';
 import {
   currentRoute,
   detailUrl,
@@ -132,11 +140,15 @@ function resetViews() {
   replaceChildren(detailContainer);
 }
 
+/** Staff members only submit requests (D46): their home page is their open requests. */
+const isStaff = () => hasRole('STAFF');
+const homeUrl = () => (isStaff() ? '/requests' : '/dashboard');
+
 async function render(route) {
   const seq = ++renderSeq;
   const isCurrent = () => seq === renderSeq;
 
-  if (route.name === 'root') return navigate('/dashboard', { replace: true, force: true });
+  if (route.name === 'root') return navigate(homeUrl(), { replace: true, force: true });
 
   if (!isLoggedIn()) {
     if (route.name !== 'login') {
@@ -157,6 +169,7 @@ async function render(route) {
   if (route.name === 'login') return navigate(route.next, { replace: true, force: true });
 
   showLoggedIn(currentUser());
+  if (isStaff()) return renderStaffRoute(route, isCurrent);
   switch (route.name) {
     case 'list':
     case 'detail':
@@ -196,6 +209,17 @@ async function render(route) {
       return hasRole('ADMIN')
         ? showFeedbackLog(route, isCurrent)
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+    case 'request':
+      // A link to a staff request: the maintenance team opens it as the work order it is.
+      return navigate(`/work-orders/${route.id}`, { replace: true, force: true });
+    case 'requests':
+    case 'requestCreate':
+      return showPlaceholder(
+        null,
+        'Staff requests',
+        'This page is for staff members. Their requests are listed under Work orders.',
+        true,
+      );
     default:
       return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
   }
@@ -227,9 +251,153 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
   if (withHomeLink) {
     tableContainer
       .querySelector('.placeholder')
-      .append(h('p', {}, h('a', { href: '/dashboard', 'data-link': true }, 'Go to the dashboard')));
+      .append(
+        h(
+          'p',
+          {},
+          h(
+            'a',
+            { href: homeUrl(), 'data-link': true },
+            isStaff() ? 'Go to my open requests' : 'Go to the dashboard',
+          ),
+        ),
+      );
   }
   tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+// --- Staff requests (D46, online only) ------------------------------------------------------
+
+const REQUESTS_PAGE_SIZE = 20;
+
+/** Pages of a staff member; everything else leads to their open requests. */
+function renderStaffRoute(route, isCurrent) {
+  switch (route.name) {
+    case 'requests':
+      return showRequests(route, isCurrent);
+    case 'requestCreate':
+      return showRequestCreate(isCurrent);
+    case 'request':
+      return showRequest(route, isCurrent);
+    case 'account':
+      return showAccount();
+    case 'notFound':
+      return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
+    default:
+      return navigate('/requests', { replace: true, force: true });
+  }
+}
+
+function showRequestsError(err) {
+  showConsoleError(err, () => render(currentRoute()));
+  if (err.status === 0) {
+    tableContainer.querySelector('.error-state p').textContent =
+      'Your requests need a connection to the server.';
+  }
+}
+
+/**
+ * Open requests (home page) or all of them. `quiet`: a refresh when the window gets the focus
+ * back, which leaves the focus where it is.
+ */
+async function showRequests(route, isCurrent, { quiet = false } = {}) {
+  const all = route.scope === 'all';
+  leaveRecordViews(all ? 'requests_all' : 'requests', all ? 'All my requests' : 'My open requests');
+  if (!tableContainer.querySelector('.requests-page')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your requests…'));
+  }
+  let data;
+  try {
+    data = await apiFetch(
+      `/requests?scope=${route.scope}&page=${route.page}&size=${REQUESTS_PAGE_SIZE}`,
+    );
+  } catch (err) {
+    if (isCurrent() && !quiet) showRequestsError(err);
+    return;
+  }
+  if (!isCurrent()) return;
+  renderPage();
+  renderRequestList(tableContainer, {
+    data,
+    scope: route.scope,
+    pagination: renderPagination(data, (page, control) => {
+      pendingFocus = { type: 'pager', control };
+      navigate(requestsUrl(route.scope, page));
+    }),
+  });
+  if (!quiet) restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+}
+
+async function showRequestCreate(isCurrent) {
+  leaveRecordViews('request_new', 'New request');
+  renderPage();
+  const { sites } = await getRefs();
+  if (!isCurrent()) return;
+  renderRequestForm(tableContainer, {
+    sites,
+    defaultSite: currentUser().site,
+    onSubmit: async (body, form) => {
+      try {
+        const { item } = await apiFetch('/requests', { method: 'POST', body });
+        announce(`Request ${item.number} sent to the maintenance team.`);
+        navigate(`/requests/${item.id}`, { force: true });
+        return true;
+      } catch (err) {
+        showRequestErrors(
+          form,
+          apiFieldErrors(err),
+          err.status === 0
+            ? 'You are offline: your request is kept on this page, send it once connected.'
+            : err.message,
+        );
+        return false;
+      }
+    },
+  });
+  tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+async function showRequest(route, isCurrent) {
+  leaveRecordViews(null, 'Request');
+  if (!tableContainer.querySelector('.request-page')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the request…'));
+  }
+  let request;
+  try {
+    request = await apiFetch(`/requests/${route.id}`);
+  } catch (err) {
+    if (!isCurrent()) return;
+    if (err.status === 404) {
+      return showPlaceholder(
+        null,
+        'Request not found',
+        'This request does not exist, or another person sent it.',
+        true,
+      );
+    }
+    return showRequestsError(err);
+  }
+  if (!isCurrent()) return;
+  setActiveNav(['CLOSED', 'CANCELLED'].includes(request.status) ? 'requests_all' : 'requests');
+  setTitle(request.title);
+  renderPage();
+  renderRequestDetail(tableContainer, {
+    request,
+    viewer: currentUser(),
+    sendComment: async (body) =>
+      (await apiFetch(`/requests/${request.id}/comments`, { method: 'POST', body: { body } })).item,
+  });
+  tableContainer.querySelector('.placeholder-title')?.focus();
+}
+
+/** A staff member coming back to the tab sees the latest status of their requests. */
+function refreshRequestList() {
+  const route = currentRoute();
+  if (!isLoggedIn() || !isStaff() || route.name !== 'requests' || !isOnline()) return;
+  if (Date.now() - lastRevalidation < REVALIDATE_THROTTLE_MS) return;
+  lastRevalidation = Date.now();
+  const seq = ++renderSeq;
+  showRequests(route, () => seq === renderSeq, { quiet: true });
 }
 
 // --- Dashboard ------------------------------------------------------------------------------
@@ -1189,6 +1357,7 @@ function init() {
   initLayout({ onLogout });
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
   setRerender(() => render(currentRoute()));
+  setServerRecordListener(updateShownRecord);
   setNavigationGuard(leaveGuard);
   handleQueueResults();
 
@@ -1213,12 +1382,21 @@ function init() {
   window.addEventListener('pagehide', flushDraft);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushDraft();
-    else revalidateCurrent();
+    else {
+      revalidateCurrent();
+      refreshRequestList();
+    }
   });
-  window.addEventListener('focus', () => revalidateCurrent());
+  window.addEventListener('focus', () => {
+    revalidateCurrent();
+    refreshRequestList();
+  });
   onNetworkChange((online) => {
     announce(online ? 'Back online.' : 'You are offline. Local data is shown.');
-    if (online) revalidateCurrent({ force: true });
+    if (online) {
+      revalidateCurrent({ force: true });
+      refreshRequestList();
+    }
   });
 
   if ('serviceWorker' in navigator) {

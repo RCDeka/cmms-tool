@@ -775,3 +775,247 @@ a.button {
 .feedback-status-select {
   min-height: 36px;
 }
+
+/* Staff requests (D46): cards rather than a table, a progress line and the conversation. */
+.requests-page,
+.request-page {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 52rem;
+}
+
+.requests-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.requests-header .table-title {
+  font-size: 1.25rem;
+}
+
+.requests-page .page-intro {
+  margin-bottom: 0;
+}
+
+.request-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.request-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.request-card:has(.badge-tone-warning) {
+  border-left-color: var(--color-warning);
+}
+
+.request-card:has(.badge-tone-primary) {
+  border-left-color: var(--color-brand-red);
+}
+
+.request-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.request-card-title {
+  font-size: 1rem;
+}
+
+.request-card-title a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  color: var(--color-link);
+  overflow-wrap: anywhere;
+}
+
+.request-card-title a:hover {
+  color: var(--color-link-hover);
+}
+
+.request-meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  overflow-wrap: anywhere;
+}
+
+.request-status,
+.request-section {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.request-section h3 {
+  font-size: var(--font-size-base);
+}
+
+.request-report {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Progress: each step says in text whether it is done, current or to come. */
+.request-steps {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  counter-reset: step;
+}
+
+.request-step {
+  padding: var(--space-2) var(--space-1) 0;
+  border-top: 4px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.request-step.is-done {
+  border-top-color: var(--color-text);
+  color: var(--color-text);
+}
+
+.request-step.is-current {
+  border-top-color: var(--color-brand-red);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.request-step.is-done::before {
+  content: '✓ ';
+}
+
+.request-form-page {
+  max-width: 48rem;
+}
+
+/* Comments: the requester's messages are marked by a side line, not by color alone. */
+.comments {
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.request-section.comments {
+  margin-top: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.comments summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.comment-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.comment {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-left: 3px solid var(--color-text-muted);
+  border-radius: var(--radius);
+}
+
+.comment-requester {
+  border-left-color: var(--color-brand-red);
+}
+
+.comment-head {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.comment-head strong {
+  color: var(--color-text);
+}
+
+.comment-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-form {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.comment-form .field-label {
+  font-weight: 600;
+}
+
+.comment-form textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  resize: vertical;
+}
+
+.comment-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .request-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Review of a staff request (D47), at the top of the work order panel. */
+.review-box {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.review-box h3 {
+  font-size: var(--font-size-base);
+}
+
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.review-separator {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}

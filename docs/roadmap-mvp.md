@@ -10,7 +10,7 @@ Tasks:
 - `backend/package.json` (ES modules, Node 24), ESLint + Prettier, Vitest + Supertest; scripts `dev`, `start`, `test`, `lint`, `db:migrate`, `db:seed`, `db:reset`.
 - Config module: load `.env`, validate with zod, fail fast on missing values.
 - SQLite connection with pragmas; migration runner; `001_init.sql` with every table, `CHECK`, index and foreign key from `docs/data-model.md`.
-- Deterministic seed (5 users, 500 assets, 200 work orders, optional conflicts).
+- Deterministic seed (5 users, 500 assets, 200 work orders, optional conflicts; 6 users and 207 work orders since Phases 15–16).
 - Express app: `helmet`, JSON limit, error handler, `GET /api/health`, static serving of `frontend/` with SPA fallback.
 - `frontend/package.json` (dev tools only: ESLint, Prettier, Vitest, jsdom, fake-indexeddb) and a placeholder `index.html`.
 
@@ -113,6 +113,10 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 - **Phase 13: first round of suggestions (#1, #4, #5, #6)** — done (D42, D43). Acceptance: clicking a column title of the asset or work order table sorts it, a second click reverses it, the arrow shows the order, and the sort is kept with the filters when a record is opened and closed; the page buttons also appear above long tables; supervisors and admins see the status pie with every value listed; technicians see no chart and switch "My work" between Today (default) and the next 7 days.
 - **Phase 14: technicians' default list (#3)** — done (D44). Acceptance: a technician opening the work order list sees their own work with "Assigned to me" checked; unchecking shows every work order and survives reload and back; "Clear filters" returns to their own work; a dashboard tile opens the full matching list; their own work is available offline.
 
+- **Phase 15: staff requests (product owner, 2026-10-08)** — done (D46, BR-R1 to BR-R5). Acceptance: a staff member (`user1`) logs in on their open requests, each with its status and next step; "All my requests" shows finished ones too; the request form accepts "I don't know" for the kind of problem and the urgency and requires a typed location; the request appears to the maintenance team as an unassigned corrective work order with its location (searchable); the requester and the team exchange comments, shown on both sides; staff get 403 on every maintenance endpoint and only see their own requests (404 otherwise); the migration keeps existing data and foreign keys.
+
+- **Phase 16: review of staff requests (product owner, 2026-10-08)** — done (D47, BR-R6 to BR-R9). Acceptance: a new request is "Waiting for review" for the requester and counted on the supervisors' and admins' dashboard tile "Staff requests to review" (technicians have no tile); the tile opens the matching list; a request waiting for review can be neither assigned, started nor cancelled by a normal edit; a supervisor approves it only with a technician or supervisor assigned, or rejects it with a reason; the requester then sees "Approved" with the assignee, or "Rejected" with the reason; the count goes down; requests sent before the change are classified by the migration.
+
 ## Post-MVP backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.
@@ -120,4 +124,5 @@ Acceptance: HTTPS deployment reachable on the VPS; all tests and lint pass; init
 3. ~~Work order status history and audit log~~ → Phase 9.
 4. ~~Filters and search on lists; full-text search~~ → Phase 10.
 5. AI assistant endpoints (`format-report`, `find-work-order`) and the detail panel "AI assistant" area.
-6. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).
+6. Staff requests, next steps: notify the maintenance team of new comments (new requests now have their dashboard tile, D47), let a requester cancel their own request, room list instead of the free-text location, photos.
+7. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).

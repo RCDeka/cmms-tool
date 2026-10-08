@@ -4,7 +4,7 @@ import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 import { REPO_ROOT } from './config/index.js';
-import { authenticate } from './middleware/auth.js';
+import { authenticate, requireRole } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
 import { adminUsersRouter } from './routes/admin-users.js';
 import { assetsRouter } from './routes/assets.js';
@@ -15,16 +15,20 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { healthRouter } from './routes/health.js';
 import { referenceRouter } from './routes/reference.js';
+import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
 import { createAuditService } from './services/audit.js';
 import { createAuthService } from './services/auth.js';
+import { createCommentService } from './services/comments.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
 import { createFeedbackService } from './services/feedback.js';
 import { createReferenceDataService } from './services/reference-data.js';
+import { createRequestService } from './services/requests.js';
 import { createUserService } from './services/users.js';
 import { createWorkOrderService } from './services/work-orders.js';
+import { MAINTENANCE_ROLES } from './rules/enums.js';
 
 export const FRONTEND_DIR = path.join(REPO_ROOT, 'frontend');
 
@@ -65,6 +69,8 @@ export function createApp({
   const dashboard = createDashboardService(db, { workOrders });
   const audit = createAuditService(db);
   const feedback = createFeedbackService(db);
+  const comments = createCommentService(db);
+  const requests = createRequestService(db, { workOrders, comments });
   const requireAuth = authenticate(config, users);
 
   app.use(
@@ -103,6 +109,14 @@ export function createApp({
   app.use('/api/health', healthRouter(db));
   app.use('/api/auth', authRouter({ auth, authenticate: requireAuth, loginRateLimit, now }));
   app.use('/api', requireAuth);
+  // Staff members only submit and follow their own requests (D46): the maintenance data is
+  // closed to them. 403 rather than 404, like any other role restriction.
+  app.use(
+    ['/api/assets', '/api/work-orders', '/api/conflicts', '/api/dashboard', '/api/audit-log'],
+    requireRole(...MAINTENANCE_ROLES),
+  );
+  app.use('/api/requests', requestsRouter({ requests, comments, timeZone: config.timeZone, now }));
+  app.use('/api/work-orders/:id/comments', workOrderCommentsRouter(comments, workOrders, now));
   // History routes first: /:id/history must not be read as an id.
   app.get('/api/assets/:id/history', ...historyHandler(audit, 'assets', assets.getById));
   app.get(

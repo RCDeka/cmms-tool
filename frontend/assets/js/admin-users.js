@@ -261,7 +261,7 @@ function userFields(user, refs) {
   let powerTouched = Boolean(user);
   power.addEventListener('change', () => (powerTouched = true));
   role.addEventListener('change', () => {
-    if (!powerTouched) power.checked = role.value !== '' && role.value !== 'TECHNICIAN';
+    if (!powerTouched) power.checked = ['SUPERVISOR', 'ADMIN'].includes(role.value);
   });
   const active = user
     ? h('input', { name: 'is_active', type: 'checkbox', class: 'checkbox' })

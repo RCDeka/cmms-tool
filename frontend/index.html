@@ -16,6 +16,7 @@
     <link rel="modulepreload" href="/assets/js/admin-users.js" />
     <link rel="modulepreload" href="/assets/js/api.js" />
     <link rel="modulepreload" href="/assets/js/auth.js" />
+    <link rel="modulepreload" href="/assets/js/comments.js" />
     <link rel="modulepreload" href="/assets/js/config.js" />
     <link rel="modulepreload" href="/assets/js/conflicts.js" />
     <link rel="modulepreload" href="/assets/js/dashboard.js" />
@@ -38,6 +39,8 @@
     <link rel="modulepreload" href="/assets/js/queue.js" />
     <link rel="modulepreload" href="/assets/js/refs.js" />
     <link rel="modulepreload" href="/assets/js/router.js" />
+    <link rel="modulepreload" href="/assets/js/requests.js" />
+    <link rel="modulepreload" href="/assets/js/review.js" />
     <link rel="modulepreload" href="/assets/js/rules.js" />
     <link rel="modulepreload" href="/assets/js/save-modes.js" />
     <link rel="modulepreload" href="/assets/js/session.js" />
@@ -54,9 +57,24 @@
         <span class="brand-name" data-app-name>Fast-CMMS</span>
       </div>
       <ul class="nav-list">
-        <li><a href="/dashboard" data-link data-nav="dashboard">Dashboard</a></li>
-        <li><a href="/assets" data-link data-nav="assets">Assets</a></li>
-        <li><a href="/work-orders" data-link data-nav="work_orders">Work orders</a></li>
+        <li data-roles="STAFF" hidden>
+          <a href="/requests" data-link data-nav="requests">My open requests</a>
+        </li>
+        <li data-roles="STAFF" hidden>
+          <a href="/requests/all" data-link data-nav="requests_all">All my requests</a>
+        </li>
+        <li data-roles="STAFF" hidden>
+          <a href="/requests/new" data-link data-nav="request_new">New request</a>
+        </li>
+        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+          <a href="/dashboard" data-link data-nav="dashboard">Dashboard</a>
+        </li>
+        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+          <a href="/assets" data-link data-nav="assets">Assets</a>
+        </li>
+        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+          <a href="/work-orders" data-link data-nav="work_orders">Work orders</a>
+        </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
           <a href="/conflicts" data-link data-nav="conflicts">Conflicts</a>
         </li>

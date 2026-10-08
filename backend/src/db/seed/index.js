@@ -15,6 +15,9 @@ import {
 } from './catalog.js';
 
 const RANDOM_SEED = 20261004;
+// Staff requests use their own random stream, so adding them left the rest of the dataset
+// unchanged (D46).
+const REQUESTS_RANDOM_SEED = 20261008;
 const ASSET_COUNT = 500;
 const WORK_ORDER_COUNT = 200;
 // Exact counts so the dataset is predictable (about 4 % broken down, docs/data-model.md).
@@ -63,6 +66,142 @@ const USERS = [
   },
 ];
 
+/** Staff members: they only submit requests (D46). */
+const STAFF_USERS = [
+  {
+    username: 'user1',
+    first_name: 'Emma',
+    last_name: 'Rousseau',
+    role: 'STAFF',
+    site: 'Paris La Défense Headquarters',
+    specialty: null,
+  },
+];
+
+/**
+ * Requests of the staff member `user1`, one per stage of the workflow, with the conversation
+ * that goes with them. Days are relative to today (negative: in the past); people are
+ * usernames. Comments are written at fixed hours on days before today. A request with an
+ * assignee was approved by supervisor1 (D47); `rejected` ones were refused for `reason`;
+ * the others wait for the review.
+ */
+const STAFF_REQUESTS = [
+  {
+    created: -1,
+    status: 'OPEN',
+    priority: 'NORMAL',
+    category: 'HVAC',
+    title: 'Office too cold since this morning',
+    description:
+      'It is very cold in the open space: several colleagues are working in their coats.',
+    location: 'Tower A, floor 12, open space by the windows (desks 12-40 to 12-48)',
+    comments: [],
+  },
+  {
+    created: -3,
+    status: 'OPEN',
+    priority: 'NORMAL',
+    category: 'ELECTRICAL',
+    title: 'Light flickering in meeting room 8.03',
+    description: 'The ceiling light above the table flickers all the time; it gives headaches.',
+    location: 'Tower B, floor 8, meeting room 8.03',
+    assignee: 'technician1',
+    due: 2,
+    comments: [
+      {
+        by: 'supervisor1',
+        day: -2,
+        hour: 9,
+        body: 'Karim will replace the light tube. The room can still be booked meanwhile.',
+      },
+    ],
+  },
+  {
+    created: -5,
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    category: null,
+    title: 'Strange noise in the ceiling',
+    description: 'A loud rattling noise comes from the ceiling, mostly in the afternoon.',
+    location: 'Tower A, floor 12, above desk 12-15',
+    assignee: 'technician1',
+    started: -4,
+    comments: [
+      { by: 'user1', day: -4, hour: 16, body: 'The noise is getting louder this afternoon.' },
+      {
+        by: 'technician1',
+        day: -2,
+        hour: 10,
+        body: 'A ventilation duct is loose. I am fixing its supports; the noise may last until tomorrow.',
+      },
+    ],
+  },
+  {
+    created: -9,
+    status: 'ON_HOLD',
+    priority: 'HIGH',
+    category: 'SECURITY',
+    title: 'Badge reader at the garage door does not work',
+    description:
+      'My badge is refused at the pedestrian door of the garage; colleagues have the same problem.',
+    location: 'Tower A, level -1, garage pedestrian door',
+    assignee: 'technician1',
+    started: -8,
+    comments: [
+      {
+        by: 'supervisor1',
+        day: -7,
+        hour: 14,
+        body: 'The reader is faulty. A new one is ordered from the supplier and expected next week. Please use the main entrance meanwhile.',
+      },
+      { by: 'user1', day: -6, hour: 9, body: 'Thank you. Could you tell me when it is fixed?' },
+    ],
+  },
+  {
+    created: -6,
+    status: 'CANCELLED',
+    priority: 'LOW',
+    category: null,
+    title: 'Repaint my office in blue',
+    description: 'The walls of my office are beige; a light blue would be nicer.',
+    location: 'Tower A, floor 12, office 12.07',
+    rejected: { day: -5, hour: 9 },
+    reason:
+      'Decoration is not maintenance work: please ask your manager to contact the workplace team.',
+    comments: [],
+  },
+  {
+    created: -14,
+    status: 'CLOSED',
+    priority: 'HIGH',
+    category: 'PLUMBING',
+    title: 'Water leak under the kitchen sink',
+    description: 'There is water on the floor under the sink every morning.',
+    location: 'Tower A, floor 12, kitchen',
+    assignee: 'technician1',
+    started: -13,
+    closed: -13,
+    hours: 1,
+    report: 'Siphon seal replaced and connections tightened. No more leak after a one-hour test.',
+    comments: [{ by: 'user1', day: -12, hour: 9, body: 'All good now, thank you!' }],
+  },
+  {
+    created: -24,
+    status: 'CLOSED',
+    priority: 'NORMAL',
+    category: 'NETWORK_CABLING',
+    title: 'Network socket not working at my desk',
+    description: 'My computer has no network when plugged into the wall socket.',
+    location: 'Tower A, floor 12, desk 12-21',
+    assignee: 'technician1',
+    started: -23,
+    closed: -22,
+    hours: 0.5,
+    report: 'Socket 12-21-B re-patched in the floor 12 network room; link tested at 1 Gbit/s.',
+    comments: [],
+  },
+];
+
 /**
  * Fills an empty, migrated database with the mock dataset.
  * Dates are relative to `today`; with the same `today` the output is identical on every run.
@@ -89,15 +228,26 @@ export async function seedDatabase(
   const rng = createRandom(RANDOM_SEED);
   // Hash outside the transaction: argon2 is asynchronous, better-sqlite3 transactions are not.
   const hashes = await Promise.all(USERS.map(() => argon2.hash(password)));
+  const staffHashes = await Promise.all(STAFF_USERS.map(() => argon2.hash(password)));
 
   const timestamp = makeTimestamp(rng, now);
+  const requestTimestamp = makeTimestamp(createRandom(REQUESTS_RANDOM_SEED), now);
   const counts = db.transaction(() => {
-    const users = insertUsers(db, hashes, timestamp, today);
+    const users = insertUsers(db, USERS, hashes, timestamp, today);
+    const staff = insertUsers(db, STAFF_USERS, staffHashes, requestTimestamp, today);
     const assets = insertAssets(db, rng, timestamp, today);
-    const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets);
+    const requests = requestDrafts([...users, ...staff], requestTimestamp, today);
+    const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests);
+    insertRequestComments(db, [...users, ...staff], today, now);
     insertHistory(db);
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
-    return { users: users.length, assets: assets.length, workOrders, conflicts };
+    return {
+      users: users.length + staff.length,
+      assets: assets.length,
+      workOrders,
+      requests: requests.length,
+      conflicts,
+    };
   })();
   return counts;
 }
@@ -114,16 +264,16 @@ function makeTimestamp(rng, now) {
   };
 }
 
-function insertUsers(db, hashes, timestamp, today) {
+function insertUsers(db, list, hashes, timestamp, today) {
   const stmt = db.prepare(`INSERT INTO users
     (username, password_hash, first_name, last_name, role, site, specialty, power_user, created_at, updated_at)
     VALUES (@username, @password_hash, @first_name, @last_name, @role, @site, @specialty, @power_user, @created_at, @created_at)`);
-  return USERS.map((u, i) => {
+  return list.map((u, i) => {
     const row = {
       ...u,
       password_hash: hashes[i],
       // D21: auto-save mode for supervisors and admins.
-      power_user: u.role === 'TECHNICIAN' ? 0 : 1,
+      power_user: ['SUPERVISOR', 'ADMIN'].includes(u.role) ? 1 : 0,
       created_at: timestamp(addDays(today, -400)),
     };
     const id = Number(stmt.run(row).lastInsertRowid);
@@ -213,7 +363,81 @@ function insertAssets(db, rng, timestamp, today) {
   return assets;
 }
 
-function insertWorkOrders(db, rng, timestamp, today, users, assets) {
+/** Work order rows of STAFF_REQUESTS, in the shape insertWorkOrders inserts. */
+function requestDrafts(users, timestamp, today) {
+  const id = (username) => users.find((u) => u.username === username).id;
+  const requester = id('user1');
+  return STAFF_REQUESTS.map((r) => {
+    const createdOn = addDays(today, r.created);
+    const startedOn = r.started === undefined ? null : addDays(today, r.started);
+    const closedOn = r.closed === undefined ? null : addDays(today, r.closed);
+    const assignee = r.assignee ? id(r.assignee) : null;
+    const createdAt = timestamp(createdOn);
+    const rejectedAt = r.rejected
+      ? `${addDays(today, r.rejected.day)}T${String(r.rejected.hour).padStart(2, '0')}:00:00.000Z`
+      : null;
+    // Assigned but not started: approved the day after it was sent.
+    const reviewedOn = assignee && !startedOn ? addDays(createdOn, 1) : null;
+    const changedAt = rejectedAt ?? timestamp(closedOn ?? startedOn ?? reviewedOn ?? createdOn);
+    const updatedAt = changedAt > createdAt ? changedAt : createdAt;
+    return {
+      type: 'CORRECTIVE',
+      status: r.status,
+      priority: r.priority,
+      title: r.title,
+      description: r.description,
+      asset_id: null,
+      site: 'Paris La Défense Headquarters',
+      location: r.location,
+      category: r.category,
+      assignee_id: assignee,
+      supervisor_id: assignee ? id('supervisor1') : null,
+      created_on: createdOn,
+      due_on: r.due === undefined ? null : addDays(today, r.due),
+      started_on: startedOn,
+      closed_on: closedOn,
+      estimated_hours: null,
+      actual_hours: r.hours ?? null,
+      work_report: r.report ?? null,
+      created_by: requester,
+      updated_by: startedOn ? assignee : assignee || r.rejected ? id('supervisor1') : requester,
+      review_status: assignee ? 'APPROVED' : r.rejected ? 'REJECTED' : 'PENDING',
+      reviewed_by: assignee || r.rejected ? id('supervisor1') : null,
+      reviewed_at: rejectedAt ?? (assignee ? between(createdAt, updatedAt, 0.2) : null),
+      review_note: r.reason ?? null,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    };
+  });
+}
+
+/** The conversations of STAFF_REQUESTS (docs/data-model.md → work_order_comments). */
+function insertRequestComments(db, users, today, now) {
+  const byName = new Map(users.map((u) => [u.username, u]));
+  const requester = byName.get('user1');
+  const workOrderId = db
+    .prepare('SELECT id FROM work_orders WHERE created_by = ? AND title = ?')
+    .pluck();
+  const stmt = db.prepare(`INSERT INTO work_order_comments
+    (work_order_id, user_id, user_role, body, created_at)
+    VALUES (@work_order_id, @user_id, @user_role, @body, @created_at)`);
+  const latest = new Date(now.getTime() - 60_000).toISOString();
+  for (const r of STAFF_REQUESTS) {
+    for (const c of r.comments) {
+      const author = byName.get(c.by);
+      const at = `${addDays(today, c.day)}T${String(c.hour).padStart(2, '0')}:00:00.000Z`;
+      stmt.run({
+        work_order_id: workOrderId.get(requester.id, r.title),
+        user_id: author.id,
+        user_role: author.role,
+        body: c.body,
+        created_at: at < latest ? at : latest,
+      });
+    }
+  }
+}
+
+function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
   const technicians = users.filter((u) => u.role === 'TECHNICIAN');
   const supervisors = users.filter((u) => u.role === 'SUPERVISOR');
   const creators = users.filter((u) => u.role !== 'TECHNICIAN');
@@ -301,7 +525,12 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets) {
       description,
       asset_id: asset?.id ?? null,
       site,
+      location: null,
       category,
+      review_status: null,
+      reviewed_by: null,
+      reviewed_at: null,
+      review_note: null,
       assignee_id: assignee?.id ?? null,
       supervisor_id: rng.chance(0.9) ? rng.pick(supervisors).id : null,
       created_on: createdOn,
@@ -319,15 +548,19 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets) {
   }
 
   // Numbers follow creation order, with a sequence per year (BR-W10).
+  drafts.push(...requests);
   drafts.sort((a, b) => a.created_at.localeCompare(b.created_at));
   const sequence = new Map();
   const stmt = db.prepare(`INSERT INTO work_orders
-    (number, type, status, priority, title, description, asset_id, site, category, assignee_id,
-     supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours, actual_hours,
-     work_report, created_by, updated_by, created_at, updated_at)
-    VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site, @category,
+    (number, type, status, priority, title, description, asset_id, site, location, category,
+     assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
+     actual_hours, work_report, created_by, updated_by, review_status, reviewed_by, reviewed_at,
+     review_note, created_at, updated_at)
+    VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site, @location,
+     @category,
      @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on, @estimated_hours,
-     @actual_hours, @work_report, @created_by, @updated_by, @created_at, @updated_at)`);
+     @actual_hours, @work_report, @created_by, @updated_by, @review_status, @reviewed_by,
+     @reviewed_at, @review_note, @created_at, @updated_at)`);
   for (const wo of drafts) {
     const year = wo.created_on.slice(0, 4);
     const n = (sequence.get(year) ?? 0) + 1;
@@ -376,15 +609,20 @@ function insertHistory(db) {
     });
   }
 
+  const staff = new Set(db.prepare("SELECT id FROM users WHERE role = 'STAFF'").pluck().all());
   for (const wo of db.prepare('SELECT * FROM work_orders ORDER BY id').all()) {
     const label = auditLabel('work_orders', wo);
+    // Staff requests are created unassigned and wait for a review: a supervisor approves and
+    // assigns them, or rejects them (D46, D47).
+    const isRequest = staff.has(wo.created_by);
     const worker = wo.assignee_id ?? wo.created_by;
-    const entry = (action, changes, userId, at) =>
+    const entry = (action, changes, userId, at, note) =>
       recordAudit(db, {
         entityType: 'work_orders',
         entityId: wo.id,
         action,
         changes,
+        note,
         label,
         userId,
         version: 1,
@@ -402,16 +640,47 @@ function insertHistory(db) {
         description: wo.description,
         asset_id: wo.asset_id,
         site: wo.site,
+        location: wo.location,
         category: wo.category,
-        assignee_id: wo.assignee_id,
-        supervisor_id: wo.supervisor_id,
+        assignee_id: isRequest ? null : wo.assignee_id,
+        supervisor_id: isRequest ? null : wo.supervisor_id,
         created_on: wo.created_on,
-        due_on: wo.due_on,
+        due_on: isRequest ? null : wo.due_on,
         estimated_hours: wo.estimated_hours,
+        review_status: isRequest ? 'PENDING' : null,
       }),
       wo.created_by,
       wo.created_at,
     );
+    if (wo.review_status === 'APPROVED') {
+      entry(
+        'UPDATE',
+        {
+          ...creationChanges({
+            assignee_id: wo.assignee_id,
+            supervisor_id: wo.supervisor_id,
+            due_on: wo.due_on,
+          }),
+          review_status: { from: 'PENDING', to: 'APPROVED' },
+        },
+        wo.reviewed_by,
+        wo.reviewed_at,
+        { review: 'APPROVED' },
+      );
+    } else if (wo.review_status === 'REJECTED') {
+      entry(
+        'UPDATE',
+        {
+          status: { from: 'OPEN', to: 'CANCELLED' },
+          review_status: { from: 'PENDING', to: 'REJECTED' },
+          review_note: { from: null, to: wo.review_note },
+        },
+        wo.reviewed_by,
+        wo.reviewed_at,
+        { review: 'REJECTED' },
+      );
+      continue;
+    }
     if (wo.started_on) {
       entry(
         'UPDATE',

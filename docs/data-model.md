@@ -18,6 +18,8 @@ users 1───* work_orders (assignee_id)
 users 1───* work_orders (supervisor_id)
 users 1───* work_orders (created_by)
 users 1───* assets / work_orders (updated_by)
+work_orders 1───* work_order_comments (work_order_id)
+users 1───* work_order_comments (user_id)
 assets 1───* work_orders (asset_id, optional)
 assets / work_orders 1───* conflicts (entity_type + entity_id)
 ```
@@ -26,7 +28,7 @@ assets / work_orders 1───* conflicts (entity_type + entity_id)
 
 | Enum | Codes (UI label) |
 |---|---|
-| Role | `TECHNICIAN` (Technician), `SUPERVISOR` (Supervisor), `ADMIN` (Administrator) |
+| Role | `STAFF` (Staff), `TECHNICIAN` (Technician), `SUPERVISOR` (Supervisor), `ADMIN` (Administrator) |
 | Category | `HVAC` (HVAC), `ELECTRICAL` (Electrical), `FIRE_SAFETY` (Fire safety), `PLUMBING` (Plumbing), `NETWORK_CABLING` (Network cabling), `SECURITY` (Security) |
 | Criticality | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
 | Asset status | `IN_SERVICE` (In service), `BROKEN_DOWN` (Broken down), `UNDER_MAINTENANCE` (Under maintenance), `OUT_OF_SERVICE` (Out of service) |
@@ -34,6 +36,7 @@ assets / work_orders 1───* conflicts (entity_type + entity_id)
 | Work order status | `OPEN` (Open), `IN_PROGRESS` (In progress), `ON_HOLD` (On hold), `CLOSED` (Closed), `CANCELLED` (Cancelled) |
 | Work order priority | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | Conflict status | `OPEN`, `RESOLVED` |
+| Review status (D47) | `PENDING` (To review), `APPROVED` (Approved), `REJECTED` (Rejected) |
 | Conflict resolution | `A`, `B`, `MERGE` |
 
 - Terminal work order statuses: `CLOSED`, `CANCELLED`. Non-terminal: `OPEN`, `IN_PROGRESS`, `ON_HOLD`.
@@ -102,6 +105,7 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | description | TEXT | yes | | |
 | asset_id | INTEGER | yes | FK → assets.id | optional (brief) |
 | site | TEXT | no | | equals the asset's site when `asset_id` is set |
+| location | TEXT | yes | | where exactly, free text ("Tower A, floor 12, desk 12-21"); given by staff requests **(added, D46)** |
 | category | TEXT | yes | CHECK Category | technical trade |
 | assignee_id | INTEGER | yes | FK → users.id | (D5) |
 | supervisor_id | INTEGER | yes | FK → users.id | (D5) |
@@ -113,12 +117,16 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | actual_hours | REAL | yes | CHECK ≥ 0 | |
 | work_report | TEXT | yes | | |
 | created_by | INTEGER | no | FK → users.id | author **(added, D25)** |
+| review_status | TEXT | yes | CHECK Review status; `PENDING` only while `OPEN` and unassigned; `REJECTED` only when `CANCELLED` | NULL except for staff requests **(added, D47)** |
+| reviewed_by | INTEGER | yes | FK → users.id | supervisor or admin who reviewed **(added, D47)** |
+| reviewed_at | TEXT | yes | | datetime of the review **(added, D47)** |
+| review_note | TEXT | yes | | reason of a rejection, shown to the requester **(added, D47)** |
 | version | INTEGER | no | default 1 | |
 | has_conflict | INTEGER | no | default 0 | |
 | updated_by | INTEGER | yes | FK → users.id | **(added, D2)** |
 | created_at / updated_at | TEXT | no | default now | |
 
-Indexes: `number` (unique), `client_id` (unique), `status`, `asset_id`, `assignee_id`, `created_on`, `updated_at`.
+Indexes: `number` (unique), `client_id` (unique), `status`, `asset_id`, `assignee_id`, `created_on`, `updated_at`, (`created_by`, `created_at`) for "my requests", partial index on `review_status` `WHERE review_status = 'PENDING'` (dashboard tile).
 
 ### conflicts (added, D3)
 | Column | Type | Null | Constraints / default | Notes |
@@ -165,7 +173,7 @@ Rules:
 - BR-L4: The mock data comes with a matching history: creation of every asset and work order, and the status changes of each work order.
 
 ### Full-text indexes (added, D38)
-`assets_fts` and `work_orders_fts` (migration `003_search.sql`): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
+`assets_fts` and `work_orders_fts` (migration `003_search.sql`; `location` added to `work_orders_fts` by `006`): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
 
 ### feedback (added, D40)
 Improvement ideas sent from the pages of the tool (migration `005_feedback.sql`).
@@ -178,12 +186,28 @@ Improvement ideas sent from the pages of the tool (migration `005_feedback.sql`)
 | page_title | TEXT | no | ≤ 200 | page title, and the record open in the side panel |
 | viewport_width | INTEGER | yes | 1 to 20000 | screen width in CSS pixels |
 | user_id | INTEGER | no | FK → users.id | author |
-| user_role | TEXT | no | CHECK Role | role when sent |
+| user_role | TEXT | no | CHECK Role | role when sent (`STAFF` allowed since `006`) |
 | status | TEXT | no | CHECK FeedbackStatus, default `NEW` | `NEW`, `PLANNED`, `DONE`, `DECLINED` |
 | created_at / updated_at | TEXT | no | | |
 | updated_by | INTEGER | yes | FK → users.id | last status change |
 
 Indexes: `created_at`, (`status`, `created_at`).
+
+### work_order_comments (added, D46)
+The conversation of a work order between the requester and the maintenance team (migration `006_staff_requests.sql`). Append-only: comments are never edited or deleted.
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| work_order_id | INTEGER | no | FK → work_orders.id | |
+| user_id | INTEGER | no | FK → users.id | author |
+| user_role | TEXT | no | CHECK Role | role when written |
+| body | TEXT | no | 1 to 2000 characters (trimmed) | |
+| created_at | TEXT | no | | |
+
+Index: (`work_order_id`, `created_at`).
+
+Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role `CHECK` (SQLite cannot alter a constraint), and added `location` to the work order search index. The migration runner turns foreign keys off while migrations run and runs `PRAGMA foreign_key_check` before each commit.
 
 ### schema_migrations
 | Column | Type | Notes |
@@ -243,6 +267,17 @@ Indexes: `created_at`, (`status`, `created_at`).
 - BR-W12: A `TECHNICIAN` creating a work order: `assignee_id` is set to themselves, and sending another `assignee_id` or a `supervisor_id` is rejected (403). `SUPERVISOR` and `ADMIN` may set both or leave them empty.
 - BR-W13: BR-W2, BR-W3 and BR-W8 apply at creation (so `due_on` can't be earlier than `created_on`).
 
+### Staff requests (D46)
+- BR-R1: A request is a work order created by a `STAFF` user through `POST /api/requests`. Required: `client_id`, `title`, `site`, `location`. Optional: `description`, `category`, `priority` ("I don't know" in the form = left out: no category, priority `NORMAL`). The server sets `type = CORRECTIVE`, no assignee, no supervisor, no asset; BR-W9 to BR-W11 apply (number, creation date, idempotent `client_id`).
+- BR-R2: Staff see only the work orders they created (`created_by`); another work order answers 404, so its existence is not revealed. They cannot read or write any other business data (403), except the reference data (site list), their account and suggestions.
+- BR-R3: Staff are never assignees or supervisors (BR-W3 already limits these to maintenance roles).
+- BR-R4: Comments: the requester comments on their own requests; maintenance roles comment on any work order. 1 to 2000 characters. A comment does not change the work order (`version`, `updated_at`), so it never causes a conflict.
+- BR-R5: The status steps shown to the requester come from the audit log: the creation, the review (`APPROVED` or `REJECTED`, from the entry's `note.review`) and each applied status change (`CONFLICT` entries changed nothing and are skipped).
+- BR-R6 (D47): A new request has `review_status = PENDING`. Only a `PENDING` request can be reviewed, once (409 otherwise; 422 for a work order that is not a staff request), by a `SUPERVISOR` or `ADMIN`, at the version they saw (409 `BR-V1`) and without an open conflict (409 `BR-V4`).
+- BR-R7: While `PENDING`, a regular update (or a conflict resolution) cannot change `status` or `assignee_id` (422): the request is assigned by approving it and cancelled by rejecting it.
+- BR-R8: Rejecting sets `status = CANCELLED`, `review_status = REJECTED` and `review_note` (the reason, 1 to 2000 characters, required).
+- BR-R9: Approving requires an `assignee_id` (BR-W3: an active technician or supervisor) and sets `review_status = APPROVED`; `supervisor_id` defaults to the reviewer. `type`, `priority`, `category` and `due_on` (BR-W8) may be set in the same request. Both decisions increment `version`, set `reviewed_by`, `reviewed_at`, `updated_by`, `updated_at`, and write one `UPDATE` audit entry with `note: { review: "APPROVED" | "REJECTED" }`, in one transaction.
+
 ### KPI definitions (dashboard)
 "Today" and "this month" use `APP_TIMEZONE` (D13).
 - Open work orders: `status = 'OPEN'`. In progress: `status = 'IN_PROGRESS'`.
@@ -250,6 +285,7 @@ Indexes: `created_at`, (`status`, `created_at`).
 - Assets broken down: `assets.status = 'BROKEN_DOWN'`.
 - Overdue work orders: non-terminal and `due_on < today`.
 - Pending conflicts: `conflicts.status = 'OPEN'` (only for supervisors and admins).
+- Staff requests to review: `review_status = 'PENDING'` (only for supervisors and admins, D47).
 - Work orders by category / status / type (`stats?period=N`): work orders with `created_on` within the last N days. Work orders without `category` are counted under `UNSPECIFIED`.
 - Recent activity: the 5 work orders with the most recent `updated_at`.
 - My work today: non-terminal work orders with `assignee_id` = current user and (`due_on` ≤ today or empty), sorted by priority (`URGENT` first) then `due_on`.
@@ -260,7 +296,9 @@ Indexes: `created_at`, (`status`, `created_at`).
 Generated by `backend/src/db/seed/` with a fixed random seed (the output is the same on every run). All names are fictional (Q5).
 
 - **5 sites**: Paris La Défense Headquarters, Saclay Data Center, Lyon Part-Dieu Branch, Marseille Prado Branch, Lille Grand Place Branch. Each has buildings, floors and exact locations.
-- **5 users**: 1 `ADMIN`, 2 `SUPERVISOR`, 2 `TECHNICIAN`. Usernames: `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`. The password is `SEED_PASSWORD` for all of them. `power_user = 1` for the admin and supervisors.
+- **6 users**: 1 `ADMIN`, 2 `SUPERVISOR`, 2 `TECHNICIAN`, 1 `STAFF`. Usernames: `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`, `user1` (staff member Emma Rousseau, Paris headquarters). The password is `SEED_PASSWORD` for all of them. `power_user = 1` for the admin and supervisors.
 - **500 assets**, spread across all sites and categories, with realistic subcategories, brands and models per category (e.g. HVAC → air handling unit, fan coil unit, chiller). About 3–5 % are `BROKEN_DOWN`.
-- **200 work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
+- **207 work orders**: 200 generated ones and 7 requests of `user1` (D46), numbered together in creation order.
+- The **200 generated work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
+- The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), with a location, some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
 - **0 conflicts** by default. A dev-only option (`npm run db:seed -- --with-conflicts`) creates 3 open conflicts to demonstrate the arbitration console.

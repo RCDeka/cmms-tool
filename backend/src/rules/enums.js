@@ -1,7 +1,10 @@
 // Enumerated values, defined once for the backend. Must match docs/data-model.md and the
-// CHECK constraints in db/migrations/001_init.sql (verified by test/unit/schema.test.js).
+// CHECK constraints in db/migrations/ (001_init.sql, 006 for roles) (verified by test/unit/schema.test.js).
 
-export const ROLES = ['TECHNICIAN', 'SUPERVISOR', 'ADMIN'];
+export const ROLES = ['STAFF', 'TECHNICIAN', 'SUPERVISOR', 'ADMIN'];
+
+/** Roles of the maintenance team: everyone except STAFF, who only submit requests (D46). */
+export const MAINTENANCE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'ADMIN'];
 
 export const CATEGORIES = [
   'HVAC',
@@ -29,5 +32,10 @@ export const CONFLICT_STATUSES = ['OPEN', 'RESOLVED'];
 export const CONFLICT_RESOLUTIONS = ['A', 'B', 'MERGE'];
 
 export const CONFLICT_ENTITY_TYPES = ['assets', 'work_orders'];
+
+/** Review of a staff request by a supervisor (D47); NULL for other work orders. */
+export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+
+export const REVIEW_DECISIONS = ['APPROVE', 'REJECT'];
 
 export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];
