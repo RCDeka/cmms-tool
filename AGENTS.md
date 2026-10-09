@@ -67,6 +67,10 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 - Every bug fix includes a regression test.
 - Definition of done: code, migration (if any), tests passing, lint passing, docs updated if behavior or contract changed, phase acceptance criteria checked.
 
+## License
+
+The project is licensed under the GNU AGPL v3 or later (`LICENSE`, D57). Keep the `license` field of both `package.json` files and the license notice in the status bar (`frontend/index.html`). Vendored or new dependencies must be compatible with the AGPL (MIT, BSD, Apache-2.0, LGPL, GPL-3.0 are; check before adding anything else).
+
 ## Security baseline
 
 - argon2 password hashes; minimum length 10. JWT secret and expiry from env.

@@ -216,6 +216,7 @@ sudo systemctl start fast-cmms
 ```
 .
 ├── README.md
+├── LICENSE                   GNU AGPL v3
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
 ├── docs/
 │   ├── SPEC_MVP_CMMS.md      product brief (English translation of the French original)
@@ -250,6 +251,14 @@ sudo systemctl start fast-cmms
     ├── nginx/                site config + security headers snippet
     └── systemd/              API service, backup and preventive release services with their timers
 ```
+
+## License
+
+Copyright (C) 2026 Alexandre Carpentier (RCDeka).
+
+Fast-CMMS is free software: you can redistribute it and/or modify it under the terms of the **GNU Affero General Public License** as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`AGPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [`LICENSE`](LICENSE) for the full text.
+
+If you run a modified version on a server, the AGPL requires you to offer its source code to the users of that server: the status bar at the bottom of the app links to the license and to the source code; point that link to your own repository. The vendored libraries keep their own licenses (ISC for `idb`, MIT for Chart.js, both compatible; see `frontend/assets/vendor/`).
 
 ## Documentation
 
