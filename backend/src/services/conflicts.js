@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Conflict console data (docs/api-design.md → Conflicts).
 import { divergentFields, snapshotToApi } from '../rules/conflict-diff.js';
 import { EDITABLE_FIELDS } from '../rules/fields.js';

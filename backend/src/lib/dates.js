@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Date helpers. Datetimes are ISO 8601 UTC strings; dates are 'YYYY-MM-DD' (D13).
 
 /** Current datetime as ISO 8601 UTC with milliseconds. */

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Balancing assistant (Phase 20): route, request body, figures for the moves ticked, the panel
 // and the ghost chips of the proposal.
 import { describe, expect, it, vi } from 'vitest';

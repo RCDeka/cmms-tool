@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Moving visits on the year planner (Phase 18, spec §7): pointer drag (mouse, pen, touch) and
 // keyboard moves, with the allowed weeks highlighted, ghost chips where the visits would go
 // and the figures recomputed live. The first planned visit of a row moves the whole series

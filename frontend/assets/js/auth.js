@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Login, logout and the current user.
 import { apiFetch } from './api.js';
 import { clearSession, getToken, getUser, saveSession, saveUser } from './session.js';

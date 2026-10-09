@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Record history and the global audit log (docs/data-model.md → audit_log). Both read from
 // the server, so they need a connection.
 import { apiFetch } from './api.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays } from '../../src/lib/dates.js';
 import {

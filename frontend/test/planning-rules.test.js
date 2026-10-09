@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // The planner's copy of the planning rules must answer like the server (live impact, refusals).
 import { describe, expect, it } from 'vitest';
 import * as server from '../../backend/src/rules/planning.js';

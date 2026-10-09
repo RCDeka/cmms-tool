@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Work order creation rules that need no database (docs/data-model.md → BR-W9, BR-W10).
 import { dateInZone } from '../lib/dates.js';
 

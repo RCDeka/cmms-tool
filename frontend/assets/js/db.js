@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // IndexedDB access (brief → IndexedDB module; docs/architecture.md → IndexedDB).
 // All IndexedDB access goes through this module.
 import { openDB } from '../vendor/idb-8.0.3/index.js';

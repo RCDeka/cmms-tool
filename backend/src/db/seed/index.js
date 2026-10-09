@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import argon2 from 'argon2';
 import { addDays } from '../../lib/dates.js';
 import { addWeeks, formatWeek, weekOfDate, weekParts } from '../../lib/iso-week.js';

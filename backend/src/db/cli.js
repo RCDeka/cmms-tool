@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Database commands: `node src/db/cli.js <migrate|seed|reset|backup|feedback|release> [--with-conflicts] [--force]`
 // Used by the npm scripts db:migrate, db:seed, db:reset, db:backup, feedback:export and pm:release.
 import fs from 'node:fs';

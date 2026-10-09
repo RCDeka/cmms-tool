@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Save modes and drafts (docs/architecture.md → Save modes; D29).
 // Standard mode: explicit Save, unsaved-changes dialog, draft restore offer.
 // Power-user mode: changes are queued automatically when the user leaves the record.

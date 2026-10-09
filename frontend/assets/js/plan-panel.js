@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Side panel of the year planner: a plan with the visit clicked on the grid, and the plan form
 // (create, edit). Online only, like the planner (P18).
 import { formRow, panelHeader } from './admin-users.js';

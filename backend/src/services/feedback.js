@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Improvement ideas sent from the pages of the tool (docs/data-model.md → feedback, D40).
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';

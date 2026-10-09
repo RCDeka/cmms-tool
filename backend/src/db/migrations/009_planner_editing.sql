@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 009_planner_editing: year planner editing (D48, Phase 18).
 -- 1. Blocked weeks: weeks where visits should not take place (a data center change freeze,
 --    the summer holidays), for one site or every site. The planner warns, it never refuses

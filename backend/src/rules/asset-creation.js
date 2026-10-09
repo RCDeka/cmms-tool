@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Asset creation and deletion rules (docs/data-model.md → BR-A1, BR-A3, BR-A4).
 
 /** Codes are tags such as AST-0042 or CTA-PARIS-03: capitals, digits and hyphens. */

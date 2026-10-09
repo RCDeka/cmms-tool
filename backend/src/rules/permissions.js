@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Who may write what (docs/api-design.md → Permission matrix, D23, D27).
 import { ASSET_FIELDS, WORK_ORDER_FIELDS } from './fields.js';
 

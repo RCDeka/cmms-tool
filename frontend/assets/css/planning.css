@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka) */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
 /* Year planner (D48): filters, tiles, the 52-week grid with its load strip, the plan panel and
    the planning settings. Every state carries text or a symbol besides its color. */
 

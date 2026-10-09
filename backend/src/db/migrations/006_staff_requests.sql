@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 006_staff_requests: staff members submit requests (D46).
 -- 1. New role STAFF: SQLite cannot change a CHECK constraint, so `users` and `feedback` are
 --    rebuilt (create the new table, copy, drop, rename). The runner turns foreign keys off

@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 003_search: full-text search indexes (FTS5) for assets and work orders.
 -- External-content tables: the text lives in the main tables; triggers keep the indexes in
 -- sync. unicode61 with remove_diacritics: "e" also finds "é", case is ignored.

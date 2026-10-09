@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // GET /api/dashboard (docs/data-model.md → KPI definitions).
 import { dateInZone } from '../lib/dates.js';
 import { compareMyWork, isMyWorkDueBy, monthRange, weekEnd } from '../rules/kpi.js';

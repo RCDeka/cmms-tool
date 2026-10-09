@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Client router: URL ↔ route, history.pushState / popstate (docs/architecture.md → Client routes).
 import { parseUserFilters } from './admin-users.js';
 import { ENTITIES, entityForSegment } from './entities.js';

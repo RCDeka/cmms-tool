@@ -69,7 +69,7 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 
 ## License
 
-The project is licensed under the GNU AGPL v3 or later (`LICENSE`, D57). Keep the `license` field of both `package.json` files and the license notice in the status bar (`frontend/index.html`). Vendored or new dependencies must be compatible with the AGPL (MIT, BSD, Apache-2.0, LGPL, GPL-3.0 are; check before adding anything else).
+The project is licensed under the GNU AGPL v3 or later (`LICENSE`, D57). Every source file starts with the two SPDX lines `SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)` and `SPDX-License-Identifier: AGPL-3.0-or-later` in the comment syntax of its language (after a shebang or `<!doctype html>`); add them to every new file. Keep the `license` field of both `package.json` files and the license notice in the status bar (`frontend/index.html`). Vendored or new dependencies must be compatible with the AGPL (MIT, BSD, Apache-2.0, LGPL, GPL-3.0 are; check before adding anything else).
 
 ## Security baseline
 

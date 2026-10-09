@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Home dashboard (brief → Home page / Dashboard; docs/data-model.md → KPI definitions).
 // Chart rules from the data-viz method: one series → one color for every bar, value at the
 // bar tip, no legend (the title names the series), tooltip, and a table as the accessible

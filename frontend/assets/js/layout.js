@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // App shell: sidebar, menu button, page title, status bar, live announcements,
 // split view.
 import { APP_NAME } from './config.js';

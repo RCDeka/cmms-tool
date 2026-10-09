@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Sync queue: every write goes through it, online or offline (D11; docs/architecture.md →
 // Sync queue). Entries live in IndexedDB (`sync_queue`) so they survive reloads.
 import { ApiError, apiFetch } from './api.js';

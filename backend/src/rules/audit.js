@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Audit log rules (docs/data-model.md → audit_log): what counts as a change.
 import { sameValue } from './conflict-diff.js';
 

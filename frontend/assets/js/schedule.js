@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler (D48, Phase 19, docs/ui-guidelines.md → Week scheduler): the week switcher and
 // open weekends, the tiles, the "to schedule" tray, and the grid of people × days with their
 // blocks of hours. Needs a connection (P18). Drag and keyboard moves are in

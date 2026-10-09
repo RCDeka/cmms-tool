@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Maintenance plans (D48, docs/data-model.md → maintenance_plans): list, read, create, edit.
 // Plans are never deleted: an inactive plan keeps its history and creates nothing.
 import { z } from 'zod';

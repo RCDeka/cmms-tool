@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Comments on work orders, shared by the requester and the maintenance team
 // (docs/data-model.md → work_order_comments, D46). Append-only.
 import { z } from 'zod';

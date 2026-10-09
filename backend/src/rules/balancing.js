@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Balancing assistant of the year planner (D48, Phase 20; docs/data-model.md → BR-B1 to BR-B4):
 // proposes single-visit moves, each within its plan's rules, that lower the peak load and the
 // trade imbalance. Pure: it reads a timeline (the API shape) and saves nothing.

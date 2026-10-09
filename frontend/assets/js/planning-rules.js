@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Copies of the backend planning rules (backend/src/rules/planning.js, lib/iso-week.js) used
 // by the year planner while a visit is dragged: which weeks are allowed (BR-P3) and the
 // figures as if it were dropped (BR-Y1 to BR-Y4, live impact). The server still decides;

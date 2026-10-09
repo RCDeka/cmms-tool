@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Review of a staff request by a supervisor or an admin (D47): approve it and allocate it to a
 // technician or a supervisor, or reject it with a reason the requester sees. Online only.
 import { h } from './dom.js';

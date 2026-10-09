@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Reference lists for forms (sites, assignable users) and asset lookups, cached in IndexedDB
 // so forms also work offline.
 import { apiFetch } from './api.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // DOM helpers. Data is always inserted as text (D12): use h() or textContent, and
 // escapeHtml() if a template string is ever unavoidable.
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Prefetch of adjacent pages and eviction (brief → Preloading; docs/architecture.md →
 // Preload and eviction).
 import * as DB from './db.js';

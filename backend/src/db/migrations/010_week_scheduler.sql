@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 010_week_scheduler: the week scheduler and My week (D48, Phase 19).
 -- 1. Allocations: blocks of hours of one person on one day, on a work order (WORK) or for
 --    travel, preparation or other time. No clock time, except a locked appointment.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Daily database backup (install as /etc/systemd/system/tacto-backup.service).
 # Started by tacto-backup.timer; run it by hand with: systemctl start tacto-backup
 [Unit]

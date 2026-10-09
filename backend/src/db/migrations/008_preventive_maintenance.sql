@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 008_preventive_maintenance: maintenance plans and the year planner (D48, Phase 17).
 -- 1. Maintenance plans and their occurrences (one visit of a plan in an ISO week).
 -- 2. Work orders released from a plan keep the link and the week they are planned in.

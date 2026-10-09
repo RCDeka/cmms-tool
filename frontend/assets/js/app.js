@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Entry point: wires the shell, the router and the views (docs/architecture.md).
 // Data flow: IndexedDB first, then quiet revalidation from the server (stale-while-revalidate).
 // Writes go through the sync queue (queue.js); editing and creation live in editor.js.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Year planner (D48, Phase 17): URL filters, chips, tiles, load strip, plan form, settings.
 import { describe, expect, it, vi } from 'vitest';
 import { AUDIT_TYPES } from '../assets/js/history.js';

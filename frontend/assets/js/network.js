@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Online/offline state (docs/architecture.md → Network state).
 // Offline when the browser says so, or when an API call fails with a network error or a
 // timeout. While offline, /api/health is pinged until the server answers again.

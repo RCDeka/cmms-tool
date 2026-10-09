@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Year planner (D48): planning settings, the 52-week timeline with its figures, and the
 // release of each visit's work order (docs/data-model.md → BR-P6, BR-Y1 to BR-Y4).
 import { z } from 'zod';

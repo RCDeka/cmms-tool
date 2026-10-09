@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // UI labels for enum codes and fields (docs/data-model.md → Enumerated values).
 
 export const VALUE_LABELS = {

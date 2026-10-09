@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Preventive maintenance rules that need no database: occurrence series, warnings and the
 // year planner figures (docs/data-model.md → Preventive maintenance, BR-P1 to BR-Y4).
 import { addWeeks, weekParts, weeksBetween } from '../lib/iso-week.js';

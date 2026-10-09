@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Dragging on the week scheduler (Phase 19, spec §8): a tray card onto a person's day creates
 // its blocks, a block onto another day or person moves it; + and − change a focused block's
 // length by half an hour. Pointer events, so mouse, pen and touch all work. A locked

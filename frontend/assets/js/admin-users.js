@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // User administration screens (administrators only, online only, D39).
 import { badgeClass, h, replaceChildren } from './dom.js';
 import { CATEGORIES, ROLES } from './enums.js';

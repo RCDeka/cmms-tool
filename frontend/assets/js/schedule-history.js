@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Undo / Redo of the week scheduler (D54): every change made on the scheduler is sent through
 // here, kept with what undoes it, and replayed as ordinary API calls. Each undo is checked by
 // the server against the version the change left (409 when someone changed the block since).

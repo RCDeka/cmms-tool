@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // My week (D48, Phase 19, spec §9): a technician's (or supervisor's) own days, appointments
 // first, then their blocks in their own order. They reorder their day and lock or unlock a
 // time on their own blocks (BR-S7). The week is saved on the device and readable offline

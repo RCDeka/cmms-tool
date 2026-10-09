@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Moving visits on the year planner (Phase 18): drag, keyboard, refusals, live impact.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {

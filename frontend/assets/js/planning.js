@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Year planner (D48, docs/ui-guidelines.md → Year planner): 52 weeks × maintenance plans, the
 // load strip (planned hours vs capacity, stacked by trade), the tiles, and the filters kept in
 // the URL. Read-only in Phase 17: plans are created and edited in the side panel

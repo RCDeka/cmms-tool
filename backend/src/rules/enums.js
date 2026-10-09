@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Enumerated values, defined once for the backend. Must match docs/data-model.md and the
 // CHECK constraints in db/migrations/ (001_init.sql, 006 for roles) (verified by test/unit/schema.test.js).
 

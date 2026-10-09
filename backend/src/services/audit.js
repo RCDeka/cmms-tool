@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Writing and reading the audit log. Writes happen inside the caller's transaction, so a
 // change and its log entry are saved together or not at all.
 import { orderByClause, pageOffset, pageResponse } from '../lib/pagination.js';

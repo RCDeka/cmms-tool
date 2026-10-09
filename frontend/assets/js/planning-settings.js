@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Planning settings (P16, `/admin/planning`, administrators, online only): corrective reserve,
 // daily capacity, release horizon and longest block. The form shows the effect on the
 // capacity before saving.

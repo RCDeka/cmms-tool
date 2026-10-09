@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 001_init: full MVP schema (docs/data-model.md).
 -- STRICT tables enforce column types. Enumerated columns use CHECK constraints whose values
 -- must match src/rules/enums.js. A NULL passes an `IN (...)` check, so nullable enums need no

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Fictional reference data for the mock dataset (docs/data-model.md → Seed data).
 
 const floors = (from, to) => {

@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 002_audit_log: who changed what and when (docs/data-model.md → audit_log).
 -- Rows are append-only: the application never updates or deletes them.
 

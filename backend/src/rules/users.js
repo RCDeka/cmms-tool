@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // User administration rules (docs/data-model.md → BR-U2 to BR-U8). Pure.
 
 export const PASSWORD_MIN_LENGTH = 10;

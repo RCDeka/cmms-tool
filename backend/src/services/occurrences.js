@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Occurrences of maintenance plans (docs/data-model.md → plan_occurrences): generated from the
 // series, recomputed when the series changes, and kept in step with their work orders. These
 // functions write inside the caller's transaction.

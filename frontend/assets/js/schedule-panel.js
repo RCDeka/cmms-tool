@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Side panels of the week scheduler (Phase 19, spec §8): schedule a work order of the tray
 // (with the split proposal), a block (move, resize, note, appointment, remove), travel,
 // preparation or other time, and a person's hours on a day. They are also the keyboard and

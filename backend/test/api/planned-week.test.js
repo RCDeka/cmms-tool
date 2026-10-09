@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Rescheduling a work order through its planned week (D55): supervisors and admins; a plan's
 // visit follows its work order (BR-P4).
 import request from 'supertest';

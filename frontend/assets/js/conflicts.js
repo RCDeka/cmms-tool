@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Supervisor conflict console (brief → Conflict management; docs/architecture.md → Conflicts).
 // Conflict cues always combine color, an icon and text (brief → Accessibility).
 import { h, replaceChildren } from './dom.js';

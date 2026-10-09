@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler and My week pages (D48, Phase 19, D52, D54): fetching the week, every
 // change sent through the Undo / Redo history, the side panels, and My week with its copy on
 // the device. The rendering is in schedule.js, schedule-panel.js, schedule-editing.js and

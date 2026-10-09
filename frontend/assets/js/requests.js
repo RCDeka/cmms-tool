@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Staff requests (D46): a staff member's open requests (home page), all their requests, the
 // request form and the request page with its progress and comments. Online only.
 import { commentForm, renderConversation } from './comments.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // ISO weeks (Monday to Sunday), written 'YYYY-Www' (docs/spec-preventive-maintenance.md §2).
 // Weeks are computed on UTC midnight times, never on date strings (D56).
 

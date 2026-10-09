@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Service worker: keeps the app shell available offline (D9, D28).
 // Strategy: network first with a short timeout, cache as fallback. Online users always get
 // the current files (no version number to bump); offline, the last copy seen is used.

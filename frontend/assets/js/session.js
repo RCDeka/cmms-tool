@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Session storage: JWT and the logged-in user, kept in localStorage (docs/architecture.md →
 // Security). Kept apart from auth.js so api.js can read the token without a circular import.
 

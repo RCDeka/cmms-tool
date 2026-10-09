@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Full-text search (docs/api-design.md → Search and filters).
 
 const MAX_TOKENS = 8;

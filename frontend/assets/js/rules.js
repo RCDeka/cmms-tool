@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Business rules the interface needs to offer only valid actions. Copies of the backend rules
 // (backend/src/rules/work-order-status.js and permissions.js), checked equal by
 // test/rules.test.js. The server stays the authority: it checks everything again.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Year planner pages (D48, Phases 17 to 20): the planner with its panels (plan, plan form,
 // blocked weeks, balancing proposal), its moves with Undo / Redo, and the planning settings.
 // Online only (P18). The planner's rendering is in planning.js, plan-panel.js and

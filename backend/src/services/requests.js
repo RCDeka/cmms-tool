@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Staff requests (D46): the work orders a STAFF user created, in a shape without the
 // maintenance-only fields (hours, supervisor, versioning).
 import { z } from 'zod';

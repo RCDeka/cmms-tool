@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler rules (BR-S1 to BR-S10), without a database.
 import { describe, expect, it } from 'vitest';
 import {

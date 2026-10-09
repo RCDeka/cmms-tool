@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Detail panel (brief → Detail panel rendering): fields generated from the entity
 // definition, empty fields skipped, values inserted as text (D12).
 import { h, replaceChildren } from './dom.js';

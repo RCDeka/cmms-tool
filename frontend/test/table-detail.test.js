@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderDetail } from '../assets/js/detail.js';
 import { focusRow, focusSortButton, renderTable, selectRow } from '../assets/js/table.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Comments on a work order (D46): the conversation between the requester and the maintenance
 // team. Shown on the staff request page and in the work order panel; needs a connection.
 import { apiFetch } from './api.js';

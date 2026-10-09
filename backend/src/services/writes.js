@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Shared write logic for PUT on assets and work orders: body checks, permissions, and the
 // versioned update with conflict detection (docs/data-model.md → BR-V1 to BR-V4).
 import { z } from 'zod';

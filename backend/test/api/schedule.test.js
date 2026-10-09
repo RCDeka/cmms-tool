@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler and My week (D48, Phase 19): blocks, capacity, open weekends, appointments,
 // the tray and carry-over (BR-S1 to BR-S10).
 import request from 'supertest';

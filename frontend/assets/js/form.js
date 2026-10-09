@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Editable detail panel and work order creation form. Controls are generated from the field
 // definitions (entities.js); values are read back in API form (null for empty).
 import { h } from './dom.js';

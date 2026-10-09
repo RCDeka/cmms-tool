@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 007_request_review: a supervisor reviews every staff request before work starts (D47).
 -- review_status is NULL for work orders created by the maintenance team. A staff request is
 -- PENDING until a supervisor or admin approves it (and assigns it) or rejects it (CANCELLED).

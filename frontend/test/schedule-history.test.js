@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Undo / Redo of the week scheduler (D54): every kind of change, blocks that come back under a
 // new id, and refusals when a block changed since.
 import { beforeEach, describe, expect, it, vi } from 'vitest';

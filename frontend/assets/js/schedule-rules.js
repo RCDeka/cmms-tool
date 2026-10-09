@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler rules the interface needs before asking the server (D48, Phase 19): the split
 // proposal of a long job (BR-S1), hours left (BR-S2), durations and warnings as text. The
 // server stays the authority: it checks every block again.

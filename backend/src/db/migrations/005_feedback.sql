@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- 005_feedback: improvement ideas sent from any page of the tool (D40).
 
 CREATE TABLE feedback (

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Editing and creation in the detail panel (docs/architecture.md → Save modes, Work order
 // creation). Every save goes through the sync queue (D11); drafts are kept in IndexedDB (D29).
 import { currentUser } from './auth.js';

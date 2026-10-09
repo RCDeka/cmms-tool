@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler rules that need no database (docs/data-model.md → BR-S1 to BR-S10): days of
 // a week, daily capacity, hours left on a work order, warnings, appointments and the tray.
 import { addDays } from '../lib/dates.js';

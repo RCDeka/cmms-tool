@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Server → IndexedDB synchronization: read local data first, then revalidate quietly
 // (stale-while-revalidate; docs/architecture.md → Revalidation).
 import { apiFetch } from './api.js';

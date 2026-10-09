@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Work order workflow (docs/data-model.md → BR-W4 to BR-W8).
 import { TERMINAL_WORK_ORDER_STATUSES } from './enums.js';
 

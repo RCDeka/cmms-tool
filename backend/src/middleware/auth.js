@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import jwt from 'jsonwebtoken';
 import { HttpError } from '../lib/http-error.js';
 import { isTokenCurrent } from '../rules/users.js';

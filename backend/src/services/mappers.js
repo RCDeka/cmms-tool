@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Row → API shape conversions (docs/api-design.md → Shared shapes).
 // Queries alias joined columns as `<prefix>__<column>` and these helpers rebuild the objects.
 

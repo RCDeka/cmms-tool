@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler and My week (D48, Phase 19; docs/data-model.md → BR-S1 to BR-S10): blocks of
 // hours per person and day, capacity overrides, open weekends, and the week's tray.
 import { z } from 'zod';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CATEGORIES, WORK_ORDER_STATUSES } from '../../src/rules/enums.js';
 import { createSeededApp, expectNoSecrets } from '../helpers/app.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { loadConfig } from '../../src/config/index.js';

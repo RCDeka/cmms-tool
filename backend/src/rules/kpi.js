@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Dashboard KPI rules (docs/data-model.md → KPI definitions). Pure: "today" is given,
 // computed by the caller in APP_TIMEZONE (D13).
 import { addDays } from '../lib/dates.js';

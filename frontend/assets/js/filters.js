@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Search and filters above the tables (docs/api-design.md → Search and filters). Filters live
 // in the URL query, so they survive reloads, the back button, and opening a record.
 import { h } from './dom.js';

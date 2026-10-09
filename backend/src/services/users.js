@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Users: sessions, assignment lists and administration (docs/data-model.md → users,
 // BR-U1 to BR-U8). password_hash is read by the login lookup only and never returned.
 import argon2 from 'argon2';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Asset picker: a dialog to find an asset without knowing its code, with search, filters,
 // sortable columns and pages (GET /api/assets). Used by the plan form and the work order
 // form. Needs a connection: the button that opens it is `.online-only`.

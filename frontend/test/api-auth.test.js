@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch, onUnauthorized } from '../assets/js/api.js';
 import { currentUser, isLoggedIn, login, logout } from '../assets/js/auth.js';

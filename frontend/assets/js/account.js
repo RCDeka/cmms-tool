@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // "Change my password", for every user (BR-U8): other sessions end, this one gets a new token.
 import { PASSWORD_MIN_LENGTH, showErrors } from './admin-users.js';
 import { h, replaceChildren } from './dom.js';

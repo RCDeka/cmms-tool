@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Frontend settings, defined in one place.
 
 /** Application name shown in titles and the sidebar (Q6). */

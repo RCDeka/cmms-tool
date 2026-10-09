@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Field value schemas for writes (docs/data-model.md → Tables; docs/api-design.md → PUT).
 import { z } from 'zod';
 import { isWeek } from '../lib/iso-week.js';

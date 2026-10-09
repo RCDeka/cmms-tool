@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Display formatting of field values (labels in English, docs/ui-guidelines.md).
 import { badgeClass, h } from './dom.js';
 import { valueLabel, valueTone } from './labels.js';

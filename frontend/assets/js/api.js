@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // All HTTP calls go through apiFetch (AGENTS.md → Frontend).
 import { API_BASE, REQUEST_TIMEOUT_MS } from './config.js';
 import { reportOffline, reportOnline } from './network.js';

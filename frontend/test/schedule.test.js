@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Week scheduler and My week (Phase 19): routes, split proposal, the grid, drag and keyboard,
 // the panels, and the week saved on the device for offline reading.
 import 'fake-indexeddb/auto';

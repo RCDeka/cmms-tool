@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Entity definitions: API and UI paths (D18), table columns and detail fields.
 // Field types drive formatting: text (default), enum, date, datetime, boolean, hours, user,
 // asset (work order → asset link).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // "Suggest an improvement" from any page, and the feedback log for administrators (D40).
 import { badgeClass, h, replaceChildren } from './dom.js';
 import { formatDateTime, personName } from './format.js';

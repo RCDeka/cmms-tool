@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Tacto API server (install as /etc/systemd/system/tacto.service).
 [Unit]
 Description=Tacto API server
