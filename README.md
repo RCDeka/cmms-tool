@@ -1,4 +1,4 @@
-# Fast-CMMS
+# Tacto
 
 Computerized Maintenance Management System (CMMS) MVP for a bank's real estate: head offices, branches and data centers. It focuses on user experience: very fast browsing of assets and work orders from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
 
@@ -83,7 +83,7 @@ cd frontend && npm install && npm test               # frontend logic tests
 
 ## Deployment (Linux VPS)
 
-Production layout: **Nginx** serves the shell (`frontend/index.html`, `sw.js`, `assets/`) over HTTPS and proxies `/api` to **Node.js** on `127.0.0.1:3000`, run by **systemd** as an unprivileged user. Certificates come from **Let's Encrypt**. The SQLite database lives in `/var/lib/fast-cmms`, nightly backups in `/var/backups/fast-cmms`. All configuration files are in `deploy/`.
+Production layout: **Nginx** serves the shell (`frontend/index.html`, `sw.js`, `assets/`) over HTTPS and proxies `/api` to **Node.js** on `127.0.0.1:3000`, run by **systemd** as an unprivileged user. Certificates come from **Let's Encrypt**. The SQLite database lives in `/var/lib/tacto`, nightly backups in `/var/backups/tacto`. All configuration files are in `deploy/`.
 
 Replace `cmms.example.com` with your domain everywhere below.
 
@@ -108,13 +108,13 @@ sudo ufw enable
 ### 2. Service user, folders and code
 
 ```bash
-sudo useradd --system --home-dir /var/lib/fast-cmms --shell /usr/sbin/nologin fast-cmms
-sudo install -d -m 750 -o fast-cmms -g fast-cmms /var/backups/fast-cmms
-sudo install -d -m 750 -o root -g fast-cmms /etc/fast-cmms
+sudo useradd --system --home-dir /var/lib/tacto --shell /usr/sbin/nologin tacto
+sudo install -d -m 750 -o tacto -g tacto /var/backups/tacto
+sudo install -d -m 750 -o root -g tacto /etc/tacto
 
 # The repository is private: use a deploy key or a personal access token.
-sudo git clone https://github.com/RCDeka/cmms-tool.git /opt/fast-cmms
-cd /opt/fast-cmms/backend
+sudo git clone https://github.com/RCDeka/cmms-tool.git /opt/tacto
+cd /opt/tacto/backend
 sudo npm ci --omit=dev                           # production dependencies only
 node -e "require('better-sqlite3'); require('argon2'); console.log('native modules OK')"
 # If that check fails: sudo npm rebuild better-sqlite3 argon2
@@ -125,8 +125,8 @@ The code stays owned by `root`: the service can read it but not change it.
 ### 3. Settings
 
 ```bash
-sudo install -m 640 -o root -g fast-cmms /opt/fast-cmms/deploy/fast-cmms.env.example /etc/fast-cmms/fast-cmms.env
-sudo nano /etc/fast-cmms/fast-cmms.env
+sudo install -m 640 -o root -g tacto /opt/tacto/deploy/tacto.env.example /etc/tacto/tacto.env
+sudo nano /etc/tacto/tacto.env
 ```
 
 - `JWT_SECRET`: paste the output of `openssl rand -base64 48`. The server refuses to start in production with a secret shorter than 32 characters or the example value.
@@ -136,15 +136,15 @@ sudo nano /etc/fast-cmms/fast-cmms.env
 ### 4. Start the service, the backups and the daily release
 
 ```bash
-sudo cp /opt/fast-cmms/deploy/systemd/fast-cmms.service \
-        /opt/fast-cmms/deploy/systemd/fast-cmms-backup.service \
-        /opt/fast-cmms/deploy/systemd/fast-cmms-backup.timer \
-        /opt/fast-cmms/deploy/systemd/fast-cmms-pm-release.service \
-        /opt/fast-cmms/deploy/systemd/fast-cmms-pm-release.timer /etc/systemd/system/
+sudo cp /opt/tacto/deploy/systemd/tacto.service \
+        /opt/tacto/deploy/systemd/tacto-backup.service \
+        /opt/tacto/deploy/systemd/tacto-backup.timer \
+        /opt/tacto/deploy/systemd/tacto-pm-release.service \
+        /opt/tacto/deploy/systemd/tacto-pm-release.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now fast-cmms fast-cmms-backup.timer fast-cmms-pm-release.timer
+sudo systemctl enable --now tacto tacto-backup.timer tacto-pm-release.timer
 
-systemctl status fast-cmms --no-pager            # active (running)
+systemctl status tacto --no-pager            # active (running)
 curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
 ```
 
@@ -155,7 +155,7 @@ The database is created and migrated when the service starts.
 Loads the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests) into the empty database. The users' password is `SEED_PASSWORD`.
 
 ```bash
-sudo -u fast-cmms bash -c 'set -a; . /etc/fast-cmms/fast-cmms.env; cd /opt/fast-cmms/backend && npm run db:seed'
+sudo -u tacto bash -c 'set -a; . /etc/tacto/tacto.env; cd /opt/tacto/backend && npm run db:seed'
 ```
 
 ### 6. HTTPS and Nginx
@@ -166,9 +166,9 @@ sudo systemctl stop nginx
 sudo certbot certonly --standalone -d cmms.example.com --agree-tos -m you@example.com --no-eff-email
 
 # Site and security headers
-sudo cp /opt/fast-cmms/deploy/nginx/fast-cmms-headers.conf /etc/nginx/snippets/
-sudo sed 's/cmms.example.com/YOUR_DOMAIN/g' /opt/fast-cmms/deploy/nginx/fast-cmms.conf | sudo tee /etc/nginx/sites-available/fast-cmms >/dev/null
-sudo ln -s /etc/nginx/sites-available/fast-cmms /etc/nginx/sites-enabled/fast-cmms
+sudo cp /opt/tacto/deploy/nginx/tacto-headers.conf /etc/nginx/snippets/
+sudo sed 's/cmms.example.com/YOUR_DOMAIN/g' /opt/tacto/deploy/nginx/tacto.conf | sudo tee /etc/nginx/sites-available/tacto >/dev/null
+sudo ln -s /etc/nginx/sites-available/tacto /etc/nginx/sites-enabled/tacto
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo install -d /var/www/certbot
 sudo nginx -t && sudo systemctl start nginx
@@ -193,11 +193,11 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 
 | Task | Command |
 |---|---|
-| Logs | `journalctl -u fast-cmms -f` |
-| Update to the latest version | `cd /opt/fast-cmms && sudo git pull && cd backend && sudo npm ci --omit=dev && sudo systemctl restart fast-cmms` (new migrations run at start) |
-| Backup now | `sudo systemctl start fast-cmms-backup && ls /var/backups/fast-cmms` |
-| Next scheduled backups | `systemctl list-timers fast-cmms-backup` |
-| Release preventive work orders now | `sudo systemctl start fast-cmms-pm-release && journalctl -u fast-cmms-pm-release -n 3` |
+| Logs | `journalctl -u tacto -f` |
+| Update to the latest version | `cd /opt/tacto && sudo git pull && cd backend && sudo npm ci --omit=dev && sudo systemctl restart tacto` (new migrations run at start) |
+| Backup now | `sudo systemctl start tacto-backup && ls /var/backups/tacto` |
+| Next scheduled backups | `systemctl list-timers tacto-backup` |
+| Release preventive work orders now | `sudo systemctl start tacto-pm-release && journalctl -u tacto-pm-release -n 3` |
 | Restore a backup | see below |
 
 Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`). Copy them off the server too (e.g. `rsync` to another machine): a backup on the same disk does not survive the loss of the VPS.
@@ -205,10 +205,10 @@ Backups use SQLite's online backup API (consistent while the app runs), are chec
 **Restore:**
 
 ```bash
-sudo systemctl stop fast-cmms
-sudo -u fast-cmms cp /var/backups/fast-cmms/cmms-2026-10-04T02-30-00Z.sqlite /var/lib/fast-cmms/cmms.sqlite
-sudo rm -f /var/lib/fast-cmms/cmms.sqlite-wal /var/lib/fast-cmms/cmms.sqlite-shm
-sudo systemctl start fast-cmms
+sudo systemctl stop tacto
+sudo -u tacto cp /var/backups/tacto/cmms-2026-10-04T02-30-00Z.sqlite /var/lib/tacto/cmms.sqlite
+sudo rm -f /var/lib/tacto/cmms.sqlite-wal /var/lib/tacto/cmms.sqlite-shm
+sudo systemctl start tacto
 ```
 
 ## Repository structure
@@ -247,7 +247,7 @@ sudo systemctl start fast-cmms
 │   │   └── img/              logo, icons
 │   └── test/
 └── deploy/
-    ├── fast-cmms.env.example production settings template
+    ├── tacto.env.example production settings template
     ├── nginx/                site config + security headers snippet
     └── systemd/              API service, backup and preventive release services with their timers
 ```
@@ -256,7 +256,7 @@ sudo systemctl start fast-cmms
 
 Copyright (C) 2026 Alexandre Carpentier (RCDeka).
 
-Fast-CMMS is free software: you can redistribute it and/or modify it under the terms of the **GNU Affero General Public License** as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`AGPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [`LICENSE`](LICENSE) for the full text.
+Tacto is free software: you can redistribute it and/or modify it under the terms of the **GNU Affero General Public License** as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`AGPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [`LICENSE`](LICENSE) for the full text.
 
 If you run a modified version on a server, the AGPL requires you to offer its source code to the users of that server: the status bar at the bottom of the app links to the license and to the source code; point that link to your own repository. The vendored libraries keep their own licenses (ISC for `idb`, MIT for Chart.js, both compatible; see `frontend/assets/vendor/`).
 

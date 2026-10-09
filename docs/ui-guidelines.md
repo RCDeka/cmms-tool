@@ -4,7 +4,7 @@ Black, red and white brand after Société Générale (D41), on an accessible ba
 
 ## Language
 
-The interface is in English (D16). Field and value labels come from `assets/js/labels.js`. The app name comes from `APP_NAME`: "Fast-CMMS" (Q6).
+The interface is in English (D16). Field and value labels come from `assets/js/labels.js`. The app name comes from `APP_NAME`: "Tacto" (Q6).
 
 ## Layout (brief)
 

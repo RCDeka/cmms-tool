@@ -1,9 +1,9 @@
 {
-  "name": "fast-cmms-frontend",
+  "name": "tacto-frontend",
   "version": "0.1.0",
   "license": "AGPL-3.0-or-later",
   "private": true,
-  "description": "Fast-CMMS web client (vanilla JS, no build step). Dependencies here are dev tools only.",
+  "description": "Tacto web client (vanilla JS, no build step). Dependencies here are dev tools only.",
   "type": "module",
   "engines": {
     "node": ">=24"

@@ -14,7 +14,7 @@ let frontendDir;
 beforeAll(() => {
   ctx = createTestDb();
   // A tiny frontend that reproduces the real layout: a static folder named assets/.
-  frontendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-frontend-'));
+  frontendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-frontend-'));
   fs.mkdirSync(path.join(frontendDir, 'assets', 'css'), { recursive: true });
   fs.writeFileSync(path.join(frontendDir, 'index.html'), '<!doctype html><title>shell</title>');
   fs.writeFileSync(path.join(frontendDir, 'assets', 'css', 'base.css'), 'body{}');

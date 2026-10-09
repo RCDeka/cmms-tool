@@ -1,8 +1,8 @@
 // Session storage: JWT and the logged-in user, kept in localStorage (docs/architecture.md →
 // Security). Kept apart from auth.js so api.js can read the token without a circular import.
 
-const TOKEN_KEY = 'fast-cmms.token';
-const USER_KEY = 'fast-cmms.user';
+const TOKEN_KEY = 'tacto.token';
+const USER_KEY = 'tacto.user';
 
 /** Decodes the payload of a JWT without verifying it (the server verifies). */
 export function decodeTokenPayload(token) {

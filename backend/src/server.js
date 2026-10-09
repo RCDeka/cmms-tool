@@ -18,7 +18,7 @@ const applied = runMigrations(db);
 if (applied.length) console.log(`Applied migrations: ${applied.join(', ')}`);
 
 const server = createApp({ db, config }).listen(config.port, config.host, () => {
-  console.log(`Fast-CMMS listening on http://${config.host}:${config.port} (${config.nodeEnv})`);
+  console.log(`Tacto listening on http://${config.host}:${config.port} (${config.nodeEnv})`);
 });
 
 function shutdown(signal) {

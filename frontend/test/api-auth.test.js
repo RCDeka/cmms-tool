@@ -28,7 +28,7 @@ afterEach(() => {
 
 describe('apiFetch', () => {
   it('sends the token and parses JSON', async () => {
-    localStorage.setItem('fast-cmms.token', token());
+    localStorage.setItem('tacto.token', token());
     fetchMock.mockResolvedValue(json(200, { ok: 1 }));
     expect(await apiFetch('/assets?page=2')).toEqual({ ok: 1 });
     const [url, options] = fetchMock.mock.calls[0];
@@ -84,7 +84,7 @@ describe('apiFetch', () => {
     );
     await apiFetch('/auth/login', { method: 'POST', body: {} }).catch(() => {});
     expect(handler).not.toHaveBeenCalled();
-    localStorage.setItem('fast-cmms.token', token());
+    localStorage.setItem('tacto.token', token());
     await apiFetch('/assets').catch(() => {});
     expect(handler).toHaveBeenCalledOnce();
   });
@@ -105,18 +105,18 @@ describe('auth', () => {
   });
 
   it('treats an expired token as logged out', () => {
-    localStorage.setItem('fast-cmms.token', token(Math.floor(Date.now() / 1000) - 10));
-    localStorage.setItem('fast-cmms.user', '{"id":2}');
+    localStorage.setItem('tacto.token', token(Math.floor(Date.now() / 1000) - 10));
+    localStorage.setItem('tacto.user', '{"id":2}');
     expect(isLoggedIn()).toBe(false);
     expect(currentUser()).toBeNull();
   });
 
   it('logs out locally even when the server cannot be reached', async () => {
-    localStorage.setItem('fast-cmms.token', token());
-    localStorage.setItem('fast-cmms.user', '{"id":2}');
+    localStorage.setItem('tacto.token', token());
+    localStorage.setItem('tacto.user', '{"id":2}');
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     await logout();
-    expect(localStorage.getItem('fast-cmms.token')).toBeNull();
+    expect(localStorage.getItem('tacto.token')).toBeNull();
     expect(isLoggedIn()).toBe(false);
   });
 });

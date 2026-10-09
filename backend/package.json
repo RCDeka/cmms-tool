@@ -1,9 +1,9 @@
 {
-  "name": "fast-cmms-backend",
+  "name": "tacto-backend",
   "version": "0.1.0",
   "license": "AGPL-3.0-or-later",
   "private": true,
-  "description": "Fast-CMMS API server (Express + SQLite)",
+  "description": "Tacto API server (Express + SQLite)",
   "type": "module",
   "engines": {
     "node": ">=24"

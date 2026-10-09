@@ -20,38 +20,38 @@ describe('deploy/nginx', () => {
   it('sends the same Content-Security-Policy as Express', async () => {
     const res = await request(createApp({ db: ctx.db, config: TEST_CONFIG })).get('/api/health');
     const nginxCsp = /Content-Security-Policy "([^"]+)"/.exec(
-      read('deploy/nginx/fast-cmms-headers.conf'),
+      read('deploy/nginx/tacto-headers.conf'),
     )[1];
     expect(nginxCsp).toBe(res.headers['content-security-policy']);
   });
 
   it('proxies the API to the default port on the loopback interface', () => {
     const config = loadConfig({ JWT_SECRET: 'x'.repeat(32) });
-    expect(read('deploy/nginx/fast-cmms.conf')).toContain(`server ${config.host}:${config.port};`);
+    expect(read('deploy/nginx/tacto.conf')).toContain(`server ${config.host}:${config.port};`);
   });
 
   it('never falls back to directories ($uri/), which would break the /assets route', () => {
-    expect(read('deploy/nginx/fast-cmms.conf')).not.toMatch(/try_files[^;]*\$uri\//);
+    expect(read('deploy/nginx/tacto.conf')).not.toMatch(/try_files[^;]*\$uri\//);
   });
 });
 
 describe('deploy/systemd', () => {
   it.each([
-    ['deploy/systemd/fast-cmms.service', 'src/server.js'],
-    ['deploy/systemd/fast-cmms-backup.service', 'src/db/cli.js backup'],
-    ['deploy/systemd/fast-cmms-pm-release.service', 'src/db/cli.js release'],
+    ['deploy/systemd/tacto.service', 'src/server.js'],
+    ['deploy/systemd/tacto-backup.service', 'src/db/cli.js backup'],
+    ['deploy/systemd/tacto-pm-release.service', 'src/db/cli.js release'],
   ])('%s starts a script that exists', (unit, command) => {
     const content = read(unit);
     expect(content).toContain(`ExecStart=/usr/bin/node ${command}`);
     expect(fs.existsSync(path.join(REPO_ROOT, 'backend', command.split(' ')[0]))).toBe(true);
-    expect(content).toContain('WorkingDirectory=/opt/fast-cmms/backend');
+    expect(content).toContain('WorkingDirectory=/opt/tacto/backend');
   });
 });
 
-describe('deploy/fast-cmms.env.example', () => {
+describe('deploy/tacto.env.example', () => {
   it('only uses settings the application reads', () => {
     const source = read('backend/src/config/index.js');
-    const keys = read('deploy/fast-cmms.env.example')
+    const keys = read('deploy/tacto.env.example')
       .split('\n')
       .filter((line) => /^[A-Z_]+=/.test(line))
       .map((line) => line.split('=')[0]);
@@ -61,7 +61,7 @@ describe('deploy/fast-cmms.env.example', () => {
 
   it('describes a configuration that passes the production checks once the secret is set', () => {
     const env = Object.fromEntries(
-      read('deploy/fast-cmms.env.example')
+      read('deploy/tacto.env.example')
         .split('\n')
         .filter((line) => /^[A-Z_]+=/.test(line))
         .map((line) => line.split(/=(.*)/s).slice(0, 2)),
@@ -71,7 +71,7 @@ describe('deploy/fast-cmms.env.example', () => {
     expect(cfg).toMatchObject({
       nodeEnv: 'production',
       host: '127.0.0.1',
-      databasePath: '/var/lib/fast-cmms/cmms.sqlite',
+      databasePath: '/var/lib/tacto/cmms.sqlite',
     });
   });
 });

@@ -1,21 +1,21 @@
-# Fast-CMMS API server (install as /etc/systemd/system/fast-cmms.service).
+# Tacto API server (install as /etc/systemd/system/tacto.service).
 [Unit]
-Description=Fast-CMMS API server
+Description=Tacto API server
 Documentation=https://github.com/RCDeka/cmms-tool
 After=network.target
 
 [Service]
 Type=simple
-User=fast-cmms
-Group=fast-cmms
-WorkingDirectory=/opt/fast-cmms/backend
+User=tacto
+Group=tacto
+WorkingDirectory=/opt/tacto/backend
 # Secrets and settings (JWT_SECRET, DATABASE_PATH, …): root-owned, readable by the group.
-EnvironmentFile=/etc/fast-cmms/fast-cmms.env
+EnvironmentFile=/etc/tacto/tacto.env
 ExecStart=/usr/bin/node src/server.js
 Restart=on-failure
 RestartSec=5
-# Creates /var/lib/fast-cmms (database) owned by the service user.
-StateDirectory=fast-cmms
+# Creates /var/lib/tacto (database) owned by the service user.
+StateDirectory=tacto
 StateDirectoryMode=0750
 UMask=0077
 

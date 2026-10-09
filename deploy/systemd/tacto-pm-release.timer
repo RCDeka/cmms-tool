@@ -1,8 +1,8 @@
 # Releases the preventive work orders every morning (install as
-# /etc/systemd/system/fast-cmms-pm-release.timer and enable with:
-# systemctl enable --now fast-cmms-pm-release.timer).
+# /etc/systemd/system/tacto-pm-release.timer and enable with:
+# systemctl enable --now tacto-pm-release.timer).
 [Unit]
-Description=Daily release of Fast-CMMS preventive work orders
+Description=Daily release of Tacto preventive work orders
 
 [Timer]
 # After the nightly backup (02:30), before the teams start.

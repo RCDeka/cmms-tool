@@ -10,7 +10,7 @@ let ctx;
 let dir;
 beforeEach(() => {
   ctx = createTestDb();
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-backups-'));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-backups-'));
 });
 afterEach(() => {
   ctx.cleanup();

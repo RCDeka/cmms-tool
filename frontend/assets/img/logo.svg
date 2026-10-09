@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Fast-CMMS">
-  <!-- Fast-CMMS: gear and wrench on black (D41). Not the Société Générale logo. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Tacto">
+  <!-- Tacto: gear and wrench on black (D41). Not the Société Générale logo. -->
   <defs>
     <mask id="wrench-cut">
       <rect width="32" height="32" fill="#fff"/>

@@ -132,7 +132,7 @@ describe('migrations', () => {
   });
 
   it('reviews staff requests sent before 007 according to their state', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-006-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-006-'));
     try {
       // A database as it was after 006, then 007 applied to it.
       for (const name of listMigrations().filter((n) => n < '007')) {
@@ -195,7 +195,7 @@ describe('migrations', () => {
   });
 
   it('rolls back a migration that breaks a foreign key', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-migration-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-migration-'));
     try {
       fs.writeFileSync(
         path.join(dir, '900_orphan.sql'),

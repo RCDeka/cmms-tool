@@ -9,7 +9,7 @@ import { runMigrations } from '../../src/db/migrate.js';
  * Call `cleanup()` when done (typically in afterEach/afterAll).
  */
 export function createTestDb() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-cmms-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-test-'));
   const db = openDb(path.join(dir, 'test.sqlite'));
   runMigrations(db);
   return {

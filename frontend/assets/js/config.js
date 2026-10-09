@@ -1,7 +1,7 @@
 // Frontend settings, defined in one place.
 
 /** Application name shown in titles and the sidebar (Q6). */
-export const APP_NAME = 'Fast-CMMS';
+export const APP_NAME = 'Tacto';
 
 export const API_BASE = '/api';
 

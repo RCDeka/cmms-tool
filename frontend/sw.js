@@ -3,7 +3,7 @@
 // the current files (no version number to bump); offline, the last copy seen is used.
 // API calls are never cached here: API data lives in IndexedDB.
 
-const CACHE = 'fast-cmms-shell';
+const CACHE = 'tacto-shell';
 const NETWORK_TIMEOUT_MS = 4000;
 
 // Every file of the shell. test/sw.test.js fails if a file under assets/ is missing here.
