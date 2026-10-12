@@ -152,7 +152,7 @@ The database is created and migrated when the service starts.
 
 ### 5. Demo data (optional)
 
-Loads the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests) into the empty database. The users' password is `SEED_PASSWORD`.
+Loads the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests, 62 maintenance plans, and a history of about 135 past plan visits and 6 past scheduled weeks, so the dashboards show past figures) into the empty database. The users' password is `SEED_PASSWORD`.
 
 ```bash
 sudo -u tacto bash -c 'set -a; . /etc/tacto/tacto.env; cd /opt/tacto/backend && npm run db:seed'

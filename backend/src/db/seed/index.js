@@ -9,6 +9,7 @@ import { snapshotToApi } from '../../rules/conflict-diff.js';
 import { recordAudit } from '../../services/audit.js';
 import { generateOccurrences } from '../../services/occurrences.js';
 import { defaultTolerance, nextPlanCode } from '../../rules/planning.js';
+import { historyAnchor, insertPastWork } from './history.js';
 import { createRandom } from './random.js';
 import {
   ASSET_COMMENTS,
@@ -263,14 +264,18 @@ export async function seedDatabase(
       makeTimestamp(createRandom(PLANS_RANDOM_SEED), now),
     );
     const allocations = insertSchedule(db, today, now);
+    const past = insertPastWork(db, { today, now });
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return {
       users: users.length + staff.length,
       assets: assets.length,
-      workOrders,
+      workOrders: workOrders + past.workOrders,
+      pastVisits: past.visits,
+      pastWorkOrders: past.workOrders,
+      pastBlocks: past.blocks,
       requests: requests.length,
       plans,
-      allocations,
+      allocations: allocations + past.blocks,
       conflicts,
     };
   })();
@@ -662,6 +667,8 @@ function insertPlans(db, today, users, timestamp) {
         created_by: rng.pick(authors).id,
         created_at: timestamp(addDays(today, -rng.int(20, 120))),
       };
+      // Plans with demo history start some periods earlier: same future visits (D64).
+      plan.anchor_week = historyAnchor(plan, currentWeek);
       const id = Number(insert.run(plan).lastInsertRowid);
       const { created_by: author, created_at: at, code: _code, ...fields } = plan;
       recordAudit(db, {

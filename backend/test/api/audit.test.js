@@ -38,7 +38,7 @@ describe('history of the mock data', () => {
       count(
         "SELECT count(DISTINCT entity_id) FROM audit_log WHERE entity_type = 'work_orders' AND action = 'CREATE'",
       ),
-    ).toBe(207);
+    ).toBe(count('SELECT count(*) FROM work_orders'));
   });
 
   it('tells the status story of a closed work order, newest first', async () => {

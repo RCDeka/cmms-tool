@@ -267,7 +267,8 @@ describe('POST /api/work-orders', () => {
     const res = await create('supervisor1', { title: 'Water leak', asset_id: 42 }).expect(201);
     expect(res.body.created).toBe(true);
     expect(res.body.item).toMatchObject({
-      number: 'WO-2026-00208',
+      // 320 seeded work orders (D64).
+      number: 'WO-2026-00321',
       status: 'OPEN',
       priority: 'NORMAL',
       title: 'Water leak',

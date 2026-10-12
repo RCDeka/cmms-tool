@@ -171,11 +171,14 @@ describe('GET /api/schedule: the seeded week', () => {
   });
 
   it('releases the visits due first, so the preventive work of the week is in the tray (BR-P6)', () => {
-    const released = data.tray.filter((t) => t.plan_id !== null);
+    const visits = data.tray.filter((t) => t.plan_id !== null);
+    const released = visits.filter((t) => t.planned_week === '2026-W40');
     expect(released.length).toBeGreaterThan(0);
-    expect(released.every((t) => t.group === 'PLANNED' && t.planned_week === '2026-W40')).toBe(
-      true,
-    );
+    expect(released.every((t) => t.group === 'PLANNED')).toBe(true);
+    // A late visit of an earlier week, still going on, is carried over (BR-S9, demo history D64).
+    const late = visits.filter((t) => t.planned_week < '2026-W40');
+    expect(late.length).toBeGreaterThan(0);
+    expect(late.every((t) => t.group === 'CARRIED_OVER')).toBe(true);
   });
 });
 const tiles = (data) => data.tiles;

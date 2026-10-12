@@ -39,14 +39,17 @@ describe('seedDatabase', () => {
   });
   afterAll(() => ctx.cleanup());
 
-  it('creates 6 users, 500 assets, 207 work orders (7 staff requests), 62 plans and no conflict', () => {
+  it('creates 6 users, 500 assets, 207 work orders (7 staff requests) and 113 of past visits, 62 plans and no conflict', () => {
     expect(ctx.counts).toEqual({
       users: 6,
       assets: 500,
-      workOrders: 207,
+      workOrders: 320,
+      pastVisits: 122,
+      pastWorkOrders: 113,
+      pastBlocks: 59,
       requests: 7,
       plans: 62,
-      allocations: 9,
+      allocations: 68,
       conflicts: 0,
     });
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
@@ -98,13 +101,18 @@ describe('seedDatabase', () => {
     expect(distinct('status')).toEqual([...WORK_ORDER_STATUSES].sort());
     expect(distinct('type')).toEqual([...WORK_ORDER_TYPES].sort());
     expect(distinct('priority')).toEqual([...WORK_ORDER_PRIORITIES].sort());
-    // Last 30 days, today included: 2026-09-05 to 2026-10-04.
-    expect(count('SELECT min(created_on) FROM work_orders') >= '2026-09-05').toBe(true);
+    // Last 30 days, today included: 2026-09-05 to 2026-10-04 (the past visits are older, D64).
+    expect(
+      count('SELECT min(created_on) FROM work_orders WHERE plan_id IS NULL') >= '2026-09-05',
+    ).toBe(true);
     expect(count('SELECT max(created_on) FROM work_orders') <= TODAY).toBe(true);
   });
 
   it('links about 90 % of work orders to an asset, with the asset site (BR-W2)', () => {
-    const linked = count('SELECT count(*) FROM work_orders WHERE asset_id IS NOT NULL');
+    // Generated work orders; every plan visit has its asset.
+    const linked = count(
+      'SELECT count(*) FROM work_orders WHERE asset_id IS NOT NULL AND plan_id IS NULL',
+    );
     expect(linked).toBeGreaterThanOrEqual(170);
     expect(linked).toBeLessThanOrEqual(195);
     expect(
@@ -168,7 +176,8 @@ describe('seedDatabase', () => {
   it('numbers work orders in creation order (BR-W10)', () => {
     const rows = all('SELECT number, created_at FROM work_orders ORDER BY number');
     expect(rows[0].number).toBe('WO-2026-00001');
-    expect(rows.at(-1).number).toBe('WO-2026-00207');
+    // The past visits are numbered among them, by creation (D64).
+    expect(rows.at(-1).number).toBe('WO-2026-00320');
     const createdAt = rows.map((r) => r.created_at);
     expect(createdAt).toEqual([...createdAt].sort());
   });
@@ -210,12 +219,84 @@ describe('seedDatabase', () => {
     );
   });
 
-  it('stores two years of occurrences and releases nothing (the daily job does)', () => {
-    expect(count('SELECT min(week) FROM plan_occurrences')).toBe('2026-W40');
+  it('stores two years of occurrences and releases nothing ahead (the daily job does)', () => {
+    expect(count("SELECT min(week) FROM plan_occurrences WHERE status = 'PLANNED'")).toBe(
+      '2026-W40',
+    );
     // Horizon: 104 weeks after the current week.
     expect(count('SELECT max(week) FROM plan_occurrences') <= '2028-W39').toBe(true);
-    expect(count("SELECT count(*) FROM plan_occurrences WHERE status <> 'PLANNED'")).toBe(0);
-    expect(count('SELECT count(*) FROM work_orders WHERE plan_id IS NOT NULL')).toBe(0);
+    // From the current week on, nothing is released or skipped; before, only history (D64).
+    expect(
+      count(
+        "SELECT count(*) FROM plan_occurrences WHERE status <> 'PLANNED' AND week >= '2026-W40'",
+      ),
+    ).toBe(0);
+    expect(
+      count("SELECT count(*) FROM plan_occurrences WHERE status = 'PLANNED' AND week < '2026-W40'"),
+    ).toBe(0);
+    expect(
+      count(
+        "SELECT count(*) FROM work_orders WHERE plan_id IS NOT NULL AND planned_week >= '2026-W40'",
+      ),
+    ).toBe(0);
+  });
+
+  it('adds a history of past visits and scheduled weeks (D64)', () => {
+    const visits = all(
+      `SELECT o.*, p.anchor_week, p.frequency_weeks, p.schedule_mode, p.season_from_week,
+         w.plan_id AS wo_plan, w.planned_week AS wo_week, w.status AS wo_status
+       FROM plan_occurrences o JOIN maintenance_plans p ON p.id = o.plan_id
+       LEFT JOIN work_orders w ON w.id = o.work_order_id WHERE o.week < '2026-W40'`,
+    );
+    expect(visits).toHaveLength(122);
+    // Only fixed, non-seasonal plans, on their series (the anchor is the first visit, BR-P1).
+    for (const v of visits) {
+      expect(v.schedule_mode).toBe('FIXED');
+      expect(v.season_from_week).toBeNull();
+      expect(v.week >= v.anchor_week).toBe(true);
+      expect(v.week).toBe(v.due_week);
+    }
+    // Released visits have their work order, in their week; skipped ones a reason.
+    for (const v of visits.filter((x) => x.status === 'RELEASED')) {
+      expect([v.wo_plan, v.wo_week]).toEqual([v.plan_id, v.week]);
+    }
+    for (const v of visits.filter((x) => x.status === 'SKIPPED')) {
+      expect(v.work_order_id).toBeNull();
+      expect(v.skip_reason).toBeTruthy();
+    }
+    // Most are closed; a few late ones are still going on (one regulatory, for the dashboards).
+    const open = visits.filter((v) => v.status === 'RELEASED' && v.wo_status !== 'CLOSED');
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.length).toBeLessThan(5);
+    // Past weeks of the week scheduler: blocks on weekdays of the visit's planned week.
+    const blocks = all(
+      `SELECT a.day, a.created_at, w.planned_week FROM allocations a
+       JOIN work_orders w ON w.id = a.work_order_id WHERE a.day < '2026-09-28'`,
+    );
+    expect(blocks).toHaveLength(59);
+    for (const b of blocks) {
+      const day = new Date(`${b.day}T00:00:00Z`).getUTCDay();
+      expect(day >= 1 && day <= 5).toBe(true);
+    }
+    expect(new Set(blocks.map((b) => b.planned_week)).size).toBeGreaterThanOrEqual(5);
+    // Each history work order and visit change has its audit entry (BR-L4).
+    expect(
+      count(
+        `SELECT count(*) FROM work_orders w WHERE w.plan_id IS NOT NULL AND NOT EXISTS (
+           SELECT 1 FROM audit_log l WHERE l.entity_type = 'work_orders' AND l.entity_id = w.id
+             AND l.action = 'CREATE')`,
+      ),
+    ).toBe(0);
+    expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'plan_occurrences'")).toBe(
+      122,
+    );
+    // Past breakdowns of critical assets, repaired since.
+    expect(
+      count(
+        `SELECT count(*) FROM audit_log WHERE entity_type = 'assets' AND action = 'UPDATE'
+           AND json_extract(changes, '$.status.to') = 'BROKEN_DOWN'`,
+      ),
+    ).toBe(10);
   });
 
   it('piles visits up in some weeks, so the planner has peaks to balance', () => {
@@ -231,7 +312,7 @@ describe('seedDatabase', () => {
   });
 
   it('schedules the current week: a split job, an appointment, travel time, an absence (Phase 19)', () => {
-    const blocks = all('SELECT * FROM allocations ORDER BY id');
+    const blocks = all("SELECT * FROM allocations WHERE day >= '2026-09-28' ORDER BY id");
     expect(blocks).toHaveLength(9);
     // Week 2026-W40: Monday 28 September to Friday 2 October.
     expect(blocks.every((b) => b.day >= '2026-09-28' && b.day <= '2026-10-02')).toBe(true);
@@ -242,14 +323,15 @@ describe('seedDatabase', () => {
     // Work orders of the blocks are assigned to the person and planned in the week.
     const work = all(
       `SELECT w.assignee_id, w.planned_week, a.technician_id FROM allocations a
-       JOIN work_orders w ON w.id = a.work_order_id`,
+       JOIN work_orders w ON w.id = a.work_order_id WHERE a.day >= '2026-09-28'`,
     );
     expect(work.every((w) => w.assignee_id === w.technician_id)).toBe(true);
     expect(new Set(work.map((w) => w.planned_week))).toEqual(new Set(['2026-W40']));
     expect(all('SELECT hours, reason FROM capacity_overrides')).toEqual([
       { hours: 0, reason: 'LEAVE' },
     ]);
-    expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'allocations'")).toBe(9);
+    // 9 this week, 59 in the past weeks (D64).
+    expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'allocations'")).toBe(68);
   });
 
   it('refuses to seed a database that already has data', async () => {

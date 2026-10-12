@@ -28,7 +28,7 @@ export const USERNAMES = [
 ];
 
 /**
- * App on a freshly seeded database (6 users, 500 assets, 206 work orders). Every seeded user
+ * App on a freshly seeded database (6 users, 500 assets, 320 work orders with the history, D64). Every seeded user
  * is logged in once up front, so `getAs` can return a Supertest request synchronously.
  * @param {object} [options] extra createApp options, e.g. a lower loginRateLimit
  * @param {boolean} [options.preLogin] set false when the test counts login attempts

@@ -94,7 +94,8 @@ async function main() {
       console.log(
         `Seeded ${counts.users} users, ${counts.assets} assets, ${counts.workOrders} work orders ` +
           `(${counts.requests} staff requests), ${counts.plans} maintenance plans, ` +
-          `${counts.allocations} scheduled blocks, ` +
+          `${counts.allocations} scheduled blocks (${counts.pastBlocks} in past weeks), ` +
+          `${counts.pastVisits} past plan visits, ` +
           `${counts.conflicts} conflicts.`,
       );
     }

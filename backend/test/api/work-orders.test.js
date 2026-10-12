@@ -65,9 +65,10 @@ const WORK_ORDER_KEYS = [
 ].sort();
 
 describe('GET /api/work-orders', () => {
-  it('returns 5 pages, newest first, with the documented shape', async () => {
+  it('returns 7 pages, newest first, with the documented shape', async () => {
     const res = await get('/api/work-orders').expect(200);
-    expect(res.body).toMatchObject({ total: 207, page: 1, pages: 5 });
+    // 207 generated work orders and 113 of the past plan visits (D64).
+    expect(res.body).toMatchObject({ total: 320, page: 1, pages: 7 });
     expect(res.body.items).toHaveLength(50);
     const dates = res.body.items.map((w) => w.created_on);
     expect(dates).toEqual([...dates].sort().reverse());
@@ -158,9 +159,14 @@ describe('GET /api/work-orders/stats', () => {
     expect(res.body.by_category.slice(0, CATEGORIES.length).map((c) => c.category)).toEqual(
       CATEGORIES,
     );
-    // The seed creates every work order in the last 30 days.
+    // Every generated work order and the visits released in the last 30 days.
+    const created = count(
+      'SELECT count(*) FROM work_orders WHERE created_on >= ?',
+      addDays(TODAY, -29),
+    );
+    expect(created).toBe(213);
     for (const list of [res.body.by_category, res.body.by_status, res.body.by_type]) {
-      expect(sum(list)).toBe(207);
+      expect(sum(list)).toBe(created);
     }
   });
 
@@ -178,7 +184,7 @@ describe('GET /api/work-orders/stats', () => {
       addDays(TODAY, -6),
     );
     expect(sum(res.body.by_status)).toBe(expected);
-    expect(expected).toBeLessThan(207);
+    expect(expected).toBeLessThan(213);
   });
 
   it.each(['?period=0', '?period=366', '?period=abc', '?days=7'])(
