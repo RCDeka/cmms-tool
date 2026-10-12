@@ -128,6 +128,15 @@ Specified in `docs/spec-preventive-maintenance.md` (section 11 holds the full ac
 - **Week scheduler Undo / Redo** (product owner, 2026-10-08) — done (D54). Acceptance: every change of the scheduler (drop, move, resize, note, remove, lock, hours of a day, open weekend) is undone and redone with the buttons or `Ctrl+Z` / `Ctrl+Y`, a block created again keeps answering the later steps, and an undo refused because the block changed since says so and changes nothing.
 - **Phase 20: balancing assistant** — done (D53, BR-B1 to BR-B4). Acceptance: on the demo dataset, accepting the proposal lowers the peak week load (107 % → 69 % when all moves are accepted) and keeps every move within its plan's rules (each one is accepted by the ordinary visit move, outside blocked weeks and the season, and outside the release horizon). Also: the proposal is shown before acceptance as ghost chips with the figures before → after; moves can be accepted all, some, or discarded; one Undo step puts them back.
 
+## Custom dashboards and supervisor KPIs (D59)
+
+Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance criteria).
+
+- **Phase 21: custom dashboards** — personal named dashboards for supervisors and admins, listed in the sidebar with a checkbox per widget, drag and drop (keyboard too), dashboard filters (period, sites, trades), the 11 existing widgets ported, Figures (CSV), Work orders (CSV) and Image (JPG) exports, templates, offline reading. Acceptance: see the spec, section 11.
+- **Phase 22: flow and backlog** — opened vs closed, backlog by age and priority, backlog in weeks per trade, planned vs reactive, and the `drill` list filter. Acceptance: figures equal hand-computed values; each segment's list and CSV hold exactly the counted records.
+- **Phase 23: compliance** — preventive maintenance compliance, regulatory visits late, week schedule kept, contractor scorecard. Acceptance: on-time limits at the Sunday of the deadline week; regulatory visits use their due week; skipped visits counted apart.
+- **Phase 24: responsiveness, assets and people** — time to start and close (median, 90th percentile), staff request service, bad actors, repeat failures, critical assets out of service, workload, estimate accuracy. Acceptance: percentiles, ongoing breakdowns and the 30-day repeat limit match hand-computed values; the "Assets and people" template loads within budget.
+
 ## Post-MVP backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.
