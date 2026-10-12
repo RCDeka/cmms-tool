@@ -14,6 +14,7 @@ import { getRefs } from './editor.js';
 import { CATEGORIES } from './enums.js';
 import { downloadCsv, downloadFile, exportFileName, toCsv, widgetImage } from './export.js';
 import { multiSelect } from './filters.js';
+import { percentFormat } from './dashboard.js';
 import { formatDateTime } from './format.js';
 import { valueLabel } from './labels.js';
 import { announce, confirmDialog, renderPage, setActiveNav, setTitle } from './layout.js';
@@ -606,7 +607,7 @@ function widgetMenu(key, def, hasData) {
       menuButton('Figures (CSV)', () => exportFigures(key), { disabled: !hasData }),
       def.rows
         ? menuButton(
-            def.rows === 'assets' ? 'Assets (CSV)' : 'Work orders (CSV)',
+            { assets: 'Assets (CSV)', visits: 'Visits (CSV)' }[def.rows] ?? 'Work orders (CSV)',
             () => exportRecords(key),
             { online: true },
           )
@@ -831,6 +832,7 @@ function newDashboard() {
     { value: 'EMPTY', label: 'An empty dashboard' },
     { value: 'OVERVIEW', label: 'The overview (every key figure and chart)' },
     { value: 'BACKLOG', label: 'The backlog (flow, age, weeks of work, planned vs reactive)' },
+    { value: 'COMPLIANCE', label: 'Compliance (preventive, regulatory, schedule, contractors)' },
   ];
   if (view) starts.push({ value: 'COPY', label: `A copy of “${view.dashboard.name}”` });
   nameDialog({ title: 'New dashboard', submit: 'Create', starts }, async ({ name, start }) => {
@@ -957,7 +959,7 @@ async function exportRecords(key) {
     const table = recordsTable(result.kind, result.items);
     downloadCsv(
       toCsv(table.columns, table.rows),
-      fileName(key, 'csv', def.rows === 'assets' ? 'assets' : 'work orders'),
+      fileName(key, 'csv', { assets: 'assets', visits: 'visits' }[def.rows] ?? 'work orders'),
     );
     const text = result.truncated
       ? `The file holds the first ${numberFormat.format(result.items.length)} of ${numberFormat.format(result.total)} records.`
@@ -968,6 +970,13 @@ async function exportRecords(key) {
     showMessage(err.message, 'error');
   }
 }
+
+/** Headline share of the rate widgets, written big in their image ("75% on time"). */
+const HEADLINES = {
+  pm_compliance: 'on time',
+  schedule_compliance: 'kept',
+  contractor_scorecard: 'on time',
+};
 
 /** Options of a widget on the dashboard on screen, defaults filled in. */
 const optionsOf = (key) =>
@@ -991,13 +1000,16 @@ async function exportImage(key) {
       footer: `Tacto · ${view.dashboard.name} · figures of ${formatDateTime(view.fetchedAt)}`,
       font: css.getPropertyValue('--font-sans').trim(),
       charts,
-      legend: view.legends
-        .get(key)
-        ?.map(([label, slot]) => [
-          label,
-          css.getPropertyValue(`--color-chart-series-${slot}`).trim(),
-        ]),
-      value: tile ? numberFormat.format(data.value) : undefined,
+      legend: view.legends.get(key)?.map(([label, slot]) => [
+        label,
+        // Slot 0: the gray of a single series.
+        css.getPropertyValue(slot ? `--color-chart-series-${slot}` : '--color-chart-bar').trim(),
+      ]),
+      value: tile
+        ? numberFormat.format(data.value)
+        : HEADLINES[key] && data.rate !== null && data.rate !== undefined
+          ? `${percentFormat.format(data.rate)} ${HEADLINES[key]}`
+          : undefined,
       note: card?.classList.contains('is-flagged') ? '⚠ Needs attention' : undefined,
       // Without the chart library, a chart's image falls back to its table.
       table:

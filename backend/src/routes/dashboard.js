@@ -29,7 +29,7 @@ const widgetsQuery = z.strictObject({
     .pipe(z.array(z.enum(WIDGET_KEYS)).min(1)),
   ...filterFields,
 });
-const rowsQuery = z.strictObject({ segment: z.string().max(40).optional(), ...filterFields });
+const rowsQuery = z.strictObject({ segment: z.string().max(200).optional(), ...filterFields });
 const keyParams = z.strictObject({ key: z.enum(WIDGET_KEYS) });
 
 const filtersOf = (query) => ({

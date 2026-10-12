@@ -75,7 +75,8 @@ function parseValue(def, raw) {
       // `false` only matters to turn off a default filter (technicians' "Assigned to me").
       return raw === 'true' ? true : raw === 'false' ? false : undefined;
     case 'drill':
-      return /^[a-z_]{1,40}(:[A-Za-z0-9_:+-]{0,40})?$/.test(raw) ? raw : undefined;
+      // A segment may hold a contractor's name: any text without control characters.
+      return raw.length <= 200 && /^[a-z_]{1,40}(:[^\p{Cc}]*)?$/u.test(raw) ? raw : undefined;
     case 'period':
       return ['30', '90', '365'].includes(raw) ? Number(raw) : undefined;
     default:

@@ -247,3 +247,129 @@ export async function drawShareColumns(canvas, { labels, titles, series, format,
     options,
   });
 }
+
+/**
+ * Horizontal bars of a share (0 to 100 %) per row, the value written at the bar tip: visits
+ * on time per trade. One series, one gray.
+ * @param {HTMLCanvasElement} canvas
+ * @param {{ labels: string[], values: (number | null)[], tips: string[], tooltips: string[][],
+ *   onPick?: (series: number, index: number) => void }} spec
+ */
+export async function drawRateBars(canvas, { labels, values, tips, tooltips, onPick }) {
+  const Chart = await loadChartJs();
+  const t = theme();
+  const tipPlugin = {
+    id: 'rateTips',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.fillStyle = t.token('--color-text');
+      ctx.font = `600 13px ${t.font}`;
+      ctx.textBaseline = 'middle';
+      chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(tips[i], bar.x + 6, bar.y));
+      ctx.restore();
+    },
+  };
+  const options = baseOptions(t, onPick);
+  options.indexAxis = 'y';
+  options.layout = { padding: { right: 88 } };
+  options.interaction = { mode: 'nearest', axis: 'y', intersect: false };
+  options.plugins.tooltip.displayColors = false;
+  options.plugins.tooltip.callbacks = { label: (item) => tooltips[item.dataIndex] };
+  options.scales = {
+    x: t.axis({
+      rest: { min: 0, max: 1 },
+      ticks: { callback: (v) => percentFormat.format(v), stepSize: 0.25 },
+    }),
+    y: t.axis({
+      grid: { display: false },
+      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+    }),
+  };
+  return new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'On time',
+          data: values.map((v) => v ?? 0),
+          backgroundColor: t.token('--color-chart-bar'),
+          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          borderRadius: { topRight: 4, bottomRight: 4 },
+          borderSkipped: 'start',
+          maxBarThickness: 24,
+        },
+      ],
+    },
+    options,
+    plugins: [tipPlugin],
+  });
+}
+
+/**
+ * Columns of a share per bucket (work orders finished in their scheduled week) with a second
+ * share as a line (hours booked once the week had started). Both are percentages of their
+ * bucket, so they share one 0–100 % axis.
+ * @param {HTMLCanvasElement} canvas
+ * @param {{ labels: string[], titles: string[], columns: { label: string, values: (number | null)[] },
+ *   line: { label: string, values: (number | null)[], slot: number },
+ *   details: string[][], onPick?: (series: number, index: number) => void }} spec
+ */
+export async function drawShareWithLine(
+  canvas,
+  { labels, titles, columns, line, details, onPick },
+) {
+  const Chart = await loadChartJs();
+  const t = theme();
+  const options = baseOptions(t, onPick);
+  options.interaction = { mode: 'index', intersect: false };
+  options.plugins.tooltip.callbacks = {
+    title: (items) => titles[items[0].dataIndex],
+    label: (item) => {
+      const value = [columns, line][item.datasetIndex].values[item.dataIndex];
+      return `${item.dataset.label}: ${value === null ? 'no work scheduled' : percentFormat.format(value)}`;
+    },
+    afterBody: (items) => details[items[0].dataIndex],
+  };
+  options.scales = {
+    x: t.axis({ grid: { display: false } }),
+    y: t.axis({
+      rest: { min: 0, max: 1 },
+      ticks: { callback: (v) => percentFormat.format(v), stepSize: 0.25 },
+    }),
+  };
+  return new Chart(canvas, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: columns.label,
+          data: columns.values,
+          backgroundColor: t.token('--color-chart-bar'),
+          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          borderRadius: { topLeft: 4, topRight: 4 },
+          borderSkipped: 'start',
+          maxBarThickness: 32,
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: line.label,
+          data: line.values,
+          borderColor: t.token(`--color-chart-series-${line.slot}`),
+          backgroundColor: t.token(`--color-chart-series-${line.slot}`),
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBorderColor: t.token('--color-surface'),
+          pointBorderWidth: 2,
+          spanGaps: false,
+          order: 1,
+        },
+      ],
+    },
+    options,
+  });
+}

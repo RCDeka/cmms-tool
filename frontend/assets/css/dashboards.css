@@ -529,3 +529,23 @@
   padding: var(--space-1) var(--space-2);
   overflow-wrap: anywhere;
 }
+
+/* --- Compliance widgets (Phase 23) -------------------------------------------------------- */
+
+/* The headline share of a widget, in the stat tile type. */
+.widget-figure {
+  margin: 0;
+}
+
+.widget-figure .muted {
+  font-weight: 600;
+}
+
+/* Legend swatch of a single-series mark (gray). */
+.chart-bar-swatch {
+  background: var(--color-chart-bar);
+}
+
+.scorecard .sort-button {
+  min-height: var(--touch-target);
+}

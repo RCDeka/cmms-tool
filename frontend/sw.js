@@ -74,6 +74,7 @@ const SHELL_FILES = [
   '/assets/js/table.js',
   '/assets/js/widget-charts.js',
   '/assets/js/widget-order.js',
+  '/assets/js/widgets-compliance.js',
   '/assets/js/widgets-flow.js',
   '/assets/js/widgets.js',
   '/assets/vendor/chart.js-4.5.1/chart.umd.min.js',

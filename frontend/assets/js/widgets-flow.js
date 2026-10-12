@@ -59,7 +59,7 @@ export function bucketTitle(bucket, unit) {
 }
 
 /** "Week 40, 2026" or "September 2026" from a bucket key alone (drill labels). Pure. */
-function bucketKeyText(key) {
+export function bucketKeyText(key) {
   return key.includes('-W') ? formatWeek(key) : monthLong.format(asDate(`${key}-01`));
 }
 
@@ -84,8 +84,11 @@ const WORK_GROUP_SLOTS = { PLANNED: 1, REACTIVE: 2, REQUESTS: 3, IMPROVEMENT: 4 
 /** Rule of thumb for the backlog (§2): neither starving nor drowning. */
 export const BACKLOG_BAND = [2, 4];
 
-/** Legend in HTML: a swatch per series, in text color (identity never by color alone). */
-function legend(items) {
+/**
+ * Legend in HTML: a swatch per series, in text color (identity never by color alone). Slot 0
+ * is the gray of a single series (--color-chart-bar).
+ */
+export function legend(items) {
   return h(
     'ul',
     { class: 'chart-legend' },
@@ -93,7 +96,10 @@ function legend(items) {
       h(
         'li',
         {},
-        h('span', { class: `pie-swatch chart-series-${slot}`, 'aria-hidden': 'true' }),
+        h('span', {
+          class: `pie-swatch ${slot ? `chart-series-${slot}` : 'chart-bar-swatch'}`,
+          'aria-hidden': 'true',
+        }),
         label,
       ),
     ),

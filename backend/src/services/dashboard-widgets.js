@@ -8,6 +8,7 @@
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
 import { addInFilter } from '../lib/list-filter.js';
+import { UNFINISHED, badSegment, combine, idsIn, scopeClause, splitSegment } from './widget-sql.js';
 import { ROWS_LIMIT, filtersFor, widgetDef, withFilterDefaults } from '../rules/dashboards.js';
 import { CATEGORIES, WORK_ORDER_PRIORITIES, WORK_ORDER_STATUSES } from '../rules/enums.js';
 import { compareMyWork, monthRange, weekEnd } from '../rules/kpi.js';
@@ -25,51 +26,11 @@ import {
   workGroup,
 } from '../rules/kpi-flow.js';
 import { weeklyCapacity } from '../rules/planning.js';
+import { complianceWidgets, toVisit } from './dashboard-compliance.js';
 
-const UNFINISHED = "w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')";
 const RECENT_ACTIVITY_SIZE = 5;
 /** Priorities from the most urgent, as rows of the backlog matrix. */
 const PRIORITIES_DOWN = [...WORK_ORDER_PRIORITIES].reverse();
-
-const badSegment = () =>
-  new HttpError(400, 'Invalid query', { fields: { segment: 'Unknown segment' } });
-
-/** Site and trade filters of a widget on a table alias (`w` work orders, `a` assets). */
-function scopeClause(alias, { sites, categories }) {
-  const where = [];
-  const params = {};
-  addInFilter(where, params, `${alias}.site`, 'scope_site', sites);
-  addInFilter(where, params, `${alias}.category`, 'scope_category', categories);
-  return { where, params };
-}
-
-/** Joins clause parts ({ sql } or { where: [] }, with params) into one WHERE clause. */
-function combine(...parts) {
-  const where = parts.flatMap((p) => p.where ?? (p.sql ? [p.sql] : []));
-  const params = Object.assign({}, ...parts.map((p) => p.params ?? {}));
-  return {
-    sql: where.map((w) => `(${w})`).join(' AND ') || '1',
-    clause: `WHERE ${where.map((w) => `(${w})`).join(' AND ') || '1'}`,
-    params,
-  };
-}
-
-/** Rows whose id is in a list computed in JavaScript (bound as one JSON parameter). */
-const idsIn = (ids, name = 'ids') => ({
-  sql: `w.id IN (SELECT value FROM json_each(@${name}))`,
-  params: { [name]: JSON.stringify([...ids]) },
-});
-
-/** "PRIORITY:bucket" or "kind:bucket" → [first, second], each checked against its list. */
-function splitSegment(segment, firsts, seconds) {
-  const at = segment.indexOf(':');
-  const first = at < 0 ? segment : segment.slice(0, at);
-  const second = at < 0 ? null : segment.slice(at + 1);
-  if (!firsts.includes(first) || (second !== null && !seconds.includes(second))) {
-    throw badSegment();
-  }
-  return [first, second];
-}
 
 /**
  * @param {import('better-sqlite3').Database} db
@@ -454,6 +415,9 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
         };
       },
     },
+
+    // --- Compliance (§6.3, Phase 23) ---------------------------------------------------------
+    ...complianceWidgets(db),
   };
 
   /** WHERE clause of a work order widget with its site and trade filters (and a segment). */
@@ -476,6 +440,16 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
 
   /** Records behind a widget (or one segment of it), at most ROWS_LIMIT. */
   function rows(key, ctx, segment) {
+    if (widgetDef(key).rows === 'visits') {
+      const visits = WIDGETS[key].visits(ctx, segment);
+      const items = visits.slice(0, ROWS_LIMIT).map(toVisit);
+      return {
+        kind: 'visits',
+        items,
+        total: visits.length,
+        truncated: visits.length > items.length,
+      };
+    }
     if (widgetDef(key).rows === 'assets') {
       const where = assetsWhere(ctx);
       const total = count('assets', 'a', where);
@@ -536,7 +510,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
       const key = at < 0 ? drill : drill.slice(0, at);
       const segment = at < 0 ? undefined : drill.slice(at + 1);
       const def = widgetDef(key);
-      if (!def || def.rows !== 'work_orders' || def.key === 'recent_activity') {
+      if (!def || !['work_orders', 'visits'].includes(def.rows) || def.key === 'recent_activity') {
         throw new HttpError(400, 'Invalid query', { fields: { drill: 'Unknown widget' } });
       }
       const ctx = contextFor(key, withFilterDefaults({ period }), context);

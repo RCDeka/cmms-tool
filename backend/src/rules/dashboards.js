@@ -17,7 +17,7 @@ export const ROWS_LIMIT = 5000;
 /**
  * The catalogue, in sidebar order. `filters`: dashboard filters the widget uses (`period`,
  * `sites`, `categories`). `rows`: records behind it for the CSV export and the drill-down
- * (`null`: none). `options`: settings saved with the widget, each with its allowed values
+ * (`null`: none; `visits`: plan visits, whose drill-down lists their work orders). `options`: settings saved with the widget, each with its allowed values
  * (the first is the default).
  */
 export const WIDGETS = [
@@ -38,6 +38,11 @@ export const WIDGETS = [
     rows: 'work_orders',
     options: { basis: ['count', 'hours'] },
   },
+  // Compliance (Phase 23).
+  { key: 'pm_compliance', filters: ['period', 'sites', 'categories'], rows: 'visits' },
+  { key: 'regulatory_late', filters: ['sites', 'categories'], rows: 'work_orders' },
+  { key: 'schedule_compliance', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
+  { key: 'contractor_scorecard', filters: ['period', 'sites', 'categories'], rows: 'visits' },
   { key: 'by_category', filters: ['period', 'sites'], rows: 'work_orders' },
   { key: 'by_status', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
   { key: 'my_work', filters: [], rows: 'work_orders' },
@@ -74,6 +79,13 @@ export const TEMPLATES = {
     'backlog_age',
     'backlog_weeks',
     'planned_vs_reactive',
+  ],
+  COMPLIANCE: [
+    'regulatory_late',
+    'pm_compliance',
+    'schedule_compliance',
+    'planned_vs_reactive',
+    'contractor_scorecard',
   ],
   EMPTY: [],
 };

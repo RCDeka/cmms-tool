@@ -80,8 +80,10 @@ frontend/
                               source of "Show as a table", Figures CSV and table images), CSV record columns
     widgets-flow.js           flow and backlog widgets (Phase 22): bodies, table views with drill links,
                               bucket and segment labels
+    widgets-compliance.js     compliance widgets (Phase 23): preventive compliance, schedule kept, the sortable
+                              contractor scorecard, Visits CSV columns
     widget-charts.js          Chart.js drawings of those widgets (paired columns, line, week bars with the
-                              rule-of-thumb band, 100 % stacked columns), clicks open the records
+                              rule-of-thumb band, 100 % stacked columns, rate bars, columns with a line), clicks open the records
     widget-order.js           drag (pointer) and keyboard moves of the widget cards, with auto-scroll
     export.js                 CSV text (BOM, RFC 4180, formula guard), file names, download, JPG painter
     requests.js               staff pages: open / all requests, request form, request page (D46)

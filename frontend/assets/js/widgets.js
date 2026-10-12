@@ -23,13 +23,23 @@ import {
 import { h } from './dom.js';
 import { formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { COMPLIANCE_WIDGETS, VISIT_COLUMNS } from './widgets-compliance.js';
 import { FLOW_WIDGETS, tableElement } from './widgets-flow.js';
+
+/** Widgets defined in their own modules (Phases 22 and 23). */
+const MODULE_WIDGETS = { ...FLOW_WIDGETS, ...COMPLIANCE_WIDGETS };
 
 export const PERIODS = [30, 90, 365];
 export const DEFAULT_FILTERS = { period: 30, sites: [], categories: [] };
 
 /** Sidebar groups, in order. */
-export const WIDGET_GROUPS = ['Key figures', 'Flow and backlog', 'Work orders', 'Lists'];
+export const WIDGET_GROUPS = [
+  'Key figures',
+  'Flow and backlog',
+  'Compliance',
+  'Work orders',
+  'Lists',
+];
 
 /**
  * The catalogue, in sidebar order. `size`: S (tile, 1 column), M (2), L (4).
@@ -136,6 +146,39 @@ export const WIDGETS = [
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
     options: { basis: ['count', 'hours'] },
+  },
+  {
+    key: 'pm_compliance',
+    label: 'Preventive maintenance compliance',
+    group: 'Compliance',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'visits',
+  },
+  {
+    key: 'regulatory_late',
+    label: 'Regulatory visits late',
+    group: 'Compliance',
+    size: 'S',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+    attention: true,
+  },
+  {
+    key: 'schedule_compliance',
+    label: 'Week schedule kept',
+    group: 'Compliance',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'contractor_scorecard',
+    label: 'Contractors',
+    group: 'Compliance',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'visits',
   },
   {
     key: 'by_category',
@@ -251,7 +294,7 @@ export function drillHref(def, segment, filters) {
 
 /** Name of a segment for the drill-down list: "Urgent, 91+ days old". Pure. */
 function segmentLabel(key, segment) {
-  if (FLOW_WIDGETS[key]) return FLOW_WIDGETS[key].segment(segment);
+  if (MODULE_WIDGETS[key]) return MODULE_WIDGETS[key].segment(segment);
   if (key === 'by_category') return valueLabel('category', segment);
   if (key === 'by_status') return valueLabel('work_order_status', segment);
   if (key === 'my_work') return segment === 'today' ? 'today' : 'next 7 days';
@@ -289,7 +332,7 @@ const workOrderTitle = (wo) => `${wo.number} — ${wo.title}`;
  */
 export function widgetTable(key, data, { myWorkRange = 'today', options, drill } = {}) {
   const def = widgetDef(key);
-  if (FLOW_WIDGETS[key]) return FLOW_WIDGETS[key].table(data, { options, drill });
+  if (MODULE_WIDGETS[key]) return MODULE_WIDGETS[key].table(data, { options, drill });
   if (isTile(def)) {
     return {
       columns: [{ label: 'Figure' }, { label: 'Value', numeric: true }],
@@ -387,7 +430,7 @@ const RECORD_COLUMNS = {
  * @param {object[]} items
  */
 export function recordsTable(kind, items) {
-  const columns = RECORD_COLUMNS[kind];
+  const columns = kind === 'visits' ? VISIT_COLUMNS : RECORD_COLUMNS[kind];
   return {
     columns: columns.map(([label]) => label),
     rows: items.map((item) => columns.map(([, value]) => value(item) ?? '')),
@@ -419,11 +462,12 @@ function tableDetails(table, caption) {
 export function widgetBody(key, data, context) {
   const def = widgetDef(key);
   // The records behind a segment: a link (tables, legends) and a click (chart marks).
-  const drill =
-    def.rows === 'work_orders' ? (segment) => drillHref(def, segment, context.filters) : null;
+  const drill = ['work_orders', 'visits'].includes(def.rows)
+    ? (segment) => drillHref(def, segment, context.filters)
+    : null;
   const open = drill && context.navigate ? (segment) => context.navigate(drill(segment)) : null;
-  if (FLOW_WIDGETS[key]) {
-    return FLOW_WIDGETS[key].body(data, { ...context, drill, open });
+  if (MODULE_WIDGETS[key]) {
+    return MODULE_WIDGETS[key].body(data, { ...context, drill, open });
   }
   if (isTile(def)) {
     const flagged = Boolean(def.attention && data.value > 0);
@@ -436,7 +480,7 @@ export function widgetBody(key, data, context) {
           'a',
           {
             class: 'kpi-value widget-value',
-            href: tileHref(def, context.filters),
+            href: tileHref(def, context.filters) ?? drillHref(def, null, context.filters),
             'data-link': true,
             'aria-label': `${numberFormat.format(data.value)}: open the list`,
           },
@@ -506,7 +550,14 @@ export function widgetBody(key, data, context) {
  * in its table (the status pie). Pure.
  */
 export function imageShowsTable(key) {
-  return ['by_status', 'my_work', 'recent_activity', 'backlog_age'].includes(key);
+  return [
+    'by_status',
+    'my_work',
+    'recent_activity',
+    'backlog_age',
+    'pm_compliance',
+    'contractor_scorecard',
+  ].includes(key);
 }
 
 /** Widget options with their defaults filled in (the first allowed value). Pure. */
