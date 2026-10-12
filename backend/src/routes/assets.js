@@ -10,6 +10,8 @@ import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { ASSET_STATUSES, CATEGORIES, CRITICALITIES } from '../rules/enums.js';
 import { ASSET_SORTS } from '../services/assets.js';
+import { DASHBOARD_PERIODS, DEFAULT_PERIOD } from '../rules/dashboards.js';
+import { dateInZone } from '../lib/dates.js';
 import { sendUpdateResult } from './write-response.js';
 
 /** Filters shared by the list and /search (docs/api-design.md → Search and filters). */
@@ -26,6 +28,13 @@ const listQuery = z.strictObject({
   ...pageQueryFields,
   ...sortQueryFields(ASSET_SORTS, 'code', 'asc'),
   ...filterFields,
+  // A segment of a dashboard asset widget (D59, K9), with its period.
+  drill: z.string().max(200).optional(),
+  period: z.coerce
+    .number()
+    .int()
+    .refine((p) => DASHBOARD_PERIODS.includes(p), `One of ${DASHBOARD_PERIODS.join(', ')} days`)
+    .optional(),
 });
 
 const searchQuery = z.strictObject({
@@ -39,13 +48,28 @@ const deleteQuery = z.strictObject({ version: z.coerce.number().int().min(1) });
 /**
  * @param {object} deps
  * @param {ReturnType<import('../services/assets.js').createAssetService>} deps.assets
+ * @param {ReturnType<import('../services/dashboard-widgets.js').createDashboardWidgetService>} deps.widgets
+ * @param {string} deps.timeZone
  * @param {() => Date} deps.now
  */
-export function assetsRouter({ assets, now }) {
+export function assetsRouter({ assets, widgets, timeZone, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
-    res.json(assets.list(req.valid.query));
+    const { drill, period, ...query } = req.valid.query;
+    if (period !== undefined && drill === undefined) {
+      throw new HttpError(400, 'Invalid query', { fields: { period: 'Only with drill' } });
+    }
+    const extra =
+      drill === undefined
+        ? undefined
+        : widgets.drillWhere(
+            drill,
+            period ?? DEFAULT_PERIOD,
+            { today: dateInZone(timeZone, now()), userId: req.user.id, timeZone },
+            'assets',
+          );
+    res.json(assets.list(query, extra));
   });
 
   router.post('/', requireRole('SUPERVISOR', 'ADMIN'), (req, res) => {

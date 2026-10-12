@@ -14,13 +14,25 @@ export function nowIso(now = new Date()) {
  * @param {Date} [instant]
  */
 export function dateInZone(timeZone, instant = new Date()) {
-  // en-CA formats as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(instant);
+  return formatterFor(timeZone).format(instant);
+}
+
+/** One formatter per time zone: building one costs far more than using it (dashboards). */
+const formatters = new Map();
+function formatterFor(timeZone) {
+  if (!formatters.has(timeZone)) {
+    // en-CA formats as YYYY-MM-DD.
+    formatters.set(
+      timeZone,
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }),
+    );
+  }
+  return formatters.get(timeZone);
 }
 
 /**

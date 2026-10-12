@@ -27,6 +27,7 @@ import {
 } from '../rules/kpi-flow.js';
 import { weeklyCapacity } from '../rules/planning.js';
 import { complianceWidgets, toVisit } from './dashboard-compliance.js';
+import { peopleWidgets } from './dashboard-people.js';
 
 const RECENT_ACTIVITY_SIZE = 5;
 /** Priorities from the most urgent, as rows of the backlog matrix. */
@@ -418,6 +419,12 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
 
     // --- Compliance (§6.3, Phase 23) ---------------------------------------------------------
     ...complianceWidgets(db),
+
+    // --- Responsiveness, assets and people (§6.4, Phase 24) --------------------------------
+    ...peopleWidgets(db),
+
+    // Asset widgets: `assetWhere` on the alias `a`.
+    assets_broken_down: { assetWhere: () => ({ sql: "a.status = 'BROKEN_DOWN'" }) },
   };
 
   /** WHERE clause of a work order widget with its site and trade filters (and a segment). */
@@ -426,12 +433,36 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
     if (segment !== undefined && WIDGETS[key].where.length < 2) throw badSegment();
     return combine(WIDGETS[key].where(ctx, segment), scopeClause('w', ctx));
   }
-  const assetsWhere = (ctx) => combine({ sql: "a.status = 'BROKEN_DOWN'" }, scopeClause('a', ctx));
+  /** WHERE clause of an asset widget with its site and trade filters (and a segment). */
+  function assetWhere(key, ctx, segment) {
+    if (segment !== undefined && WIDGETS[key].assetWhere.length < 2) throw badSegment();
+    return combine(WIDGETS[key].assetWhere(ctx, segment), scopeClause('a', ctx));
+  }
+
+  /**
+   * Columns a widget adds to its exported rows (`dashboard`), and their order: `_sort`, the
+   * largest first (the slowest, the longest down…), when the widget gives one.
+   */
+  function withExtra(key, ctx, segment, items) {
+    const extra = WIDGETS[key].extra?.(ctx, segment, items);
+    if (!extra) return items;
+    const out = items.map((item) => {
+      const { _sort, ...columns } = extra.get(item.id) ?? {};
+      return { ...item, dashboard: columns, _sort };
+    });
+    if (out.some((i) => i._sort !== undefined))
+      out.sort((a, b) => (b._sort ?? -Infinity) - (a._sort ?? -Infinity));
+    return out.map(({ _sort, ...item }) => item);
+  }
 
   /** Figures of one widget. */
   function compute(key, ctx) {
-    if (key === 'assets_broken_down') return { value: count('assets', 'a', assetsWhere(ctx)) };
     if (key === 'pending_conflicts') return { value: pendingConflicts.get() };
+    if (WIDGETS[key].assetWhere) {
+      const where = () => assetWhere(key, ctx);
+      const figures = WIDGETS[key].figures;
+      return figures ? figures(ctx, where) : { value: count('assets', 'a', where()) };
+    }
     // Built only when the widget needs it (opened vs closed computes its own rows).
     const where = () => workOrderWhere(key, ctx);
     const figures = WIDGETS[key].figures;
@@ -451,10 +482,15 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
       };
     }
     if (widgetDef(key).rows === 'assets') {
-      const where = assetsWhere(ctx);
+      const where = assetWhere(key, ctx, segment);
       const total = count('assets', 'a', where);
       const items = assets.selectWhere(where.clause, where.params, ROWS_LIMIT);
-      return { kind: 'assets', items, total, truncated: total > items.length };
+      return {
+        kind: 'assets',
+        items: withExtra(key, ctx, segment, items),
+        total,
+        truncated: total > items.length,
+      };
     }
     const def = WIDGETS[key];
     const where = workOrderWhere(key, ctx, segment);
@@ -465,7 +501,12 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
       limit,
     });
     if (key === 'my_work') items.sort(compareMyWork);
-    return { kind: 'work_orders', items, total, truncated: total > items.length };
+    return {
+      kind: 'work_orders',
+      items: withExtra(key, ctx, segment, items),
+      total,
+      truncated: total > items.length,
+    };
   }
 
   /** Context of a widget: today, the user, the time zone, and only the filters it uses. */
@@ -498,25 +539,29 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
     },
 
     /**
-     * `drill=<widget>[:<segment>]` of the work order list (K9): the condition selecting the
-     * records of a widget segment, without the site and trade filters, which the list applies
-     * with its own `site` and `category` filters.
+     * `drill=<widget>[:<segment>]` of the work order list, or of the asset list for the asset
+     * widgets (K9): the condition selecting the records of a widget segment, without the site
+     * and trade filters, which the list applies with its own `site` and `category` filters.
      * @param {string} drill
      * @param {number} period days
+     * @param {object} context
+     * @param {'work_orders' | 'assets'} [entity]
      * @returns {{ sql: string, params: object }}
      */
-    drillWhere(drill, period, context) {
+    drillWhere(drill, period, context, entity = 'work_orders') {
       const at = drill.indexOf(':');
       const key = at < 0 ? drill : drill.slice(0, at);
       const segment = at < 0 ? undefined : drill.slice(at + 1);
       const def = widgetDef(key);
-      if (!def || !['work_orders', 'visits'].includes(def.rows) || def.key === 'recent_activity') {
+      const kinds = entity === 'assets' ? ['assets'] : ['work_orders', 'visits'];
+      if (!def || !kinds.includes(def.rows) || def.key === 'recent_activity') {
         throw new HttpError(400, 'Invalid query', { fields: { drill: 'Unknown widget' } });
       }
       const ctx = contextFor(key, withFilterDefaults({ period }), context);
+      const build = entity === 'assets' ? WIDGETS[key].assetWhere : WIDGETS[key].where;
       try {
-        if (segment !== undefined && WIDGETS[key].where.length < 2) throw badSegment();
-        return combine(WIDGETS[key].where(ctx, segment));
+        if (segment !== undefined && build.length < 2) throw badSegment();
+        return combine(build(ctx, segment));
       } catch (err) {
         if (err instanceof HttpError) {
           throw new HttpError(400, 'Invalid query', { fields: { drill: 'Unknown segment' } });

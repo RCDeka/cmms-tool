@@ -25,9 +25,10 @@ import { formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { COMPLIANCE_WIDGETS, VISIT_COLUMNS } from './widgets-compliance.js';
 import { FLOW_WIDGETS, tableElement } from './widgets-flow.js';
+import { EXTRA_COLUMNS, PEOPLE_WIDGETS } from './widgets-people.js';
 
-/** Widgets defined in their own modules (Phases 22 and 23). */
-const MODULE_WIDGETS = { ...FLOW_WIDGETS, ...COMPLIANCE_WIDGETS };
+/** Widgets defined in their own modules (Phases 22 to 24). */
+const MODULE_WIDGETS = { ...FLOW_WIDGETS, ...COMPLIANCE_WIDGETS, ...PEOPLE_WIDGETS };
 
 export const PERIODS = [30, 90, 365];
 export const DEFAULT_FILTERS = { period: 30, sites: [], categories: [] };
@@ -37,6 +38,9 @@ export const WIDGET_GROUPS = [
   'Key figures',
   'Flow and backlog',
   'Compliance',
+  'Responsiveness',
+  'Assets',
+  'People',
   'Work orders',
   'Lists',
 ];
@@ -181,6 +185,64 @@ export const WIDGETS = [
     rows: 'visits',
   },
   {
+    key: 'response_times',
+    label: 'Time to start and to close',
+    group: 'Responsiveness',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'request_service',
+    label: 'Staff requests',
+    group: 'Responsiveness',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'bad_actors',
+    label: 'Assets with the most breakdowns',
+    group: 'Assets',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+    options: { critical_only: ['no', 'yes'] },
+  },
+  {
+    key: 'repeat_failures',
+    label: 'Repeat failures',
+    group: 'Assets',
+    size: 'S',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+    attention: true,
+  },
+  {
+    key: 'critical_downtime',
+    label: 'Critical assets out of service',
+    group: 'Assets',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'assets',
+  },
+  {
+    key: 'workload',
+    label: 'Workload per person',
+    group: 'People',
+    size: 'L',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'estimate_accuracy',
+    label: 'Estimates vs actual hours',
+    group: 'People',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
     key: 'by_category',
     label: 'Work orders by category',
     group: 'Work orders',
@@ -289,7 +351,8 @@ export function drillHref(def, segment, filters) {
   if (def.filters.includes('categories') && filters.categories.length) {
     query.set('category', filters.categories.join(','));
   }
-  return `/work-orders?${query}`;
+  // The asset widgets open the asset list, the others the work order list.
+  return `${def.rows === 'assets' ? '/assets' : '/work-orders'}?${query}`;
 }
 
 /** Name of a segment for the drill-down list: "Urgent, 91+ days old". Pure. */
@@ -429,8 +492,11 @@ const RECORD_COLUMNS = {
  * @param {'work_orders' | 'assets'} kind
  * @param {object[]} items
  */
-export function recordsTable(kind, items) {
-  const columns = kind === 'visits' ? VISIT_COLUMNS : RECORD_COLUMNS[kind];
+export function recordsTable(kind, items, key) {
+  const columns = [
+    ...(kind === 'visits' ? VISIT_COLUMNS : RECORD_COLUMNS[kind]),
+    ...(EXTRA_COLUMNS[key] ?? []),
+  ];
   return {
     columns: columns.map(([label]) => label),
     rows: items.map((item) => columns.map(([, value]) => value(item) ?? '')),
@@ -462,7 +528,7 @@ function tableDetails(table, caption) {
 export function widgetBody(key, data, context) {
   const def = widgetDef(key);
   // The records behind a segment: a link (tables, legends) and a click (chart marks).
-  const drill = ['work_orders', 'visits'].includes(def.rows)
+  const drill = ['work_orders', 'visits', 'assets'].includes(def.rows)
     ? (segment) => drillHref(def, segment, context.filters)
     : null;
   const open = drill && context.navigate ? (segment) => context.navigate(drill(segment)) : null;
@@ -486,6 +552,13 @@ export function widgetBody(key, data, context) {
           },
           numberFormat.format(data.value),
         ),
+        data.share !== undefined && data.share !== null
+          ? h(
+              'span',
+              { class: 'widget-tile-note' },
+              `${percentFormat.format(data.share)} of the corrective work`,
+            )
+          : null,
         flagged
           ? h(
               'span',
@@ -557,6 +630,7 @@ export function imageShowsTable(key) {
     'backlog_age',
     'pm_compliance',
     'contractor_scorecard',
+    'request_service',
   ].includes(key);
 }
 

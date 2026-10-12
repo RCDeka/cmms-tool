@@ -833,6 +833,7 @@ function newDashboard() {
     { value: 'OVERVIEW', label: 'The overview (every key figure and chart)' },
     { value: 'BACKLOG', label: 'The backlog (flow, age, weeks of work, planned vs reactive)' },
     { value: 'COMPLIANCE', label: 'Compliance (preventive, regulatory, schedule, contractors)' },
+    { value: 'ASSETS_PEOPLE', label: 'Assets and people (breakdowns, response times, estimates)' },
   ];
   if (view) starts.push({ value: 'COPY', label: `A copy of “${view.dashboard.name}”` });
   nameDialog({ title: 'New dashboard', submit: 'Create', starts }, async ({ name, start }) => {
@@ -950,13 +951,19 @@ function exportFigures(key) {
 
 async function exportRecords(key) {
   const def = widgetDef(key);
-  const segment = key === 'my_work' ? `&segment=${myWorkRange}` : '';
+  // The records of what the widget shows: My work's period, the critical assets only…
+  const segment =
+    key === 'my_work'
+      ? `&segment=${myWorkRange}`
+      : key === 'bad_actors' && optionsOf(key).critical_only === 'yes'
+        ? '&segment=critical'
+        : '';
   showMessage('Preparing the file…');
   try {
     const result = await apiFetch(
       `/dashboard/widgets/${key}/rows?${filterQuery(view.dashboard.filters)}${segment}`,
     );
-    const table = recordsTable(result.kind, result.items);
+    const table = recordsTable(result.kind, result.items, key);
     downloadCsv(
       toCsv(table.columns, table.rows),
       fileName(key, 'csv', { assets: 'assets', visits: 'visits' }[def.rows] ?? 'work orders'),
@@ -1003,7 +1010,15 @@ async function exportImage(key) {
       legend: view.legends.get(key)?.map(([label, slot]) => [
         label,
         // Slot 0: the gray of a single series.
-        css.getPropertyValue(slot ? `--color-chart-series-${slot}` : '--color-chart-bar').trim(),
+        css
+          .getPropertyValue(
+            typeof slot === 'string'
+              ? slot
+              : slot
+                ? `--color-chart-series-${slot}`
+                : '--color-chart-bar',
+          )
+          .trim(),
       ]),
       value: tile
         ? numberFormat.format(data.value)

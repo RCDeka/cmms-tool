@@ -22,6 +22,9 @@ export const FILTERS = {
     category: { kind: 'enum', enum: 'category', label: 'Category' },
     status: { kind: 'enum', enum: 'asset_status', label: 'Status' },
     criticality: { kind: 'enum', enum: 'criticality', label: 'Criticality' },
+    // The assets behind a dashboard widget segment (D59, K9), and its period in days.
+    drill: { kind: 'drill' },
+    period: { kind: 'period' },
   },
   work_orders: {
     q: { kind: 'search' },

@@ -38,6 +38,12 @@
   --color-chart-series-4: #eda100;
   --color-chart-series-5: #e87ba4;
   --color-chart-series-6: #008300;
+  /* Ordinal ramp (one blue, lighter to darker): priorities from Low (1) to Urgent (4). The
+     lightest step still clears 2:1 on white (data-viz method). */
+  --color-ordinal-1: #86b6ef;
+  --color-ordinal-2: #3987e5;
+  --color-ordinal-3: #1c5cab;
+  --color-ordinal-4: #0d366b;
   /* Dark sidebar */
   --color-sidebar-bg: #000000;
   --color-sidebar-text: #f2f2f2;

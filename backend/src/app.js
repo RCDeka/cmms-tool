@@ -158,7 +158,7 @@ export function createApp({
   app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
   app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
-  app.use('/api/assets', assetsRouter({ assets, now }));
+  app.use('/api/assets', assetsRouter({ assets, widgets, timeZone: config.timeZone, now }));
   app.use(
     '/api/work-orders',
     workOrdersRouter({ workOrders, widgets, timeZone: config.timeZone, now }),

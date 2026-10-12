@@ -24,9 +24,10 @@ import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writ
 /**
  * WHERE clause of the asset filters: full-text `q` and exact site, category, status and
  * criticality (each one value or a list). Fixed SQL fragments only; values are bound parameters.
+ * `extra`: the condition of a dashboard widget segment (`drill`, built by the widget service).
  * @returns {{ clause: string, params: object }}
  */
-export function assetFilters({ q, site, category, status, criticality }) {
+export function assetFilters({ q, site, category, status, criticality }, extra) {
   const where = [];
   const params = {};
   if (q !== undefined) {
@@ -42,6 +43,10 @@ export function assetFilters({ q, site, category, status, criticality }) {
   addInFilter(where, params, 'a.category', 'category', category);
   addInFilter(where, params, 'a.status', 'status', status);
   addInFilter(where, params, 'a.criticality', 'criticality', criticality);
+  if (extra) {
+    where.push(`(${extra.sql})`);
+    Object.assign(params, extra.params);
+  }
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
@@ -137,8 +142,8 @@ export function createAssetService(db) {
 
   return {
     /** Paginated list, complete records (D7). */
-    list({ page, size, sort, order, ...filters }) {
-      const { clause, params } = assetFilters(filters);
+    list({ page, size, sort, order, ...filters }, extra) {
+      const { clause, params } = assetFilters(filters, extra);
       const total = db.prepare(`SELECT count(*) FROM assets a ${clause}`).pluck().get(params);
       const rows = db
         .prepare(
