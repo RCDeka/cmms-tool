@@ -8,6 +8,7 @@ import { ENTITIES } from './entities.js';
 import { ENUMS } from './enums.js';
 import { valueLabel } from './labels.js';
 import { debounce } from './save-modes.js';
+import { drillLabel } from './widgets.js';
 
 const SEARCH_DELAY_MS = 350;
 /** "Not finished": the non-terminal statuses, sent as one comma-separated value (dashboard links). */
@@ -34,6 +35,9 @@ export const FILTERS = {
     overdue: { kind: 'flag', label: 'Overdue' },
     // Staff requests waiting for a supervisor (D47); shown to supervisors and admins.
     to_review: { kind: 'flag', label: 'Requests to review', supervisors: true },
+    // The records behind a dashboard widget segment (D59, K9), and its period in days.
+    drill: { kind: 'drill' },
+    period: { kind: 'period' },
   },
 };
 
@@ -70,6 +74,10 @@ function parseValue(def, raw) {
     case 'flag':
       // `false` only matters to turn off a default filter (technicians' "Assigned to me").
       return raw === 'true' ? true : raw === 'false' ? false : undefined;
+    case 'drill':
+      return /^[a-z_]{1,40}(:[A-Za-z0-9_:+-]{0,40})?$/.test(raw) ? raw : undefined;
+    case 'period':
+      return ['30', '90', '365'].includes(raw) ? Number(raw) : undefined;
     default:
       return undefined;
   }
@@ -102,6 +110,8 @@ export function parseFilters(entity, query) {
     const value = parseValue(def, query.get(name));
     if (value !== undefined) filters[name] = value;
   }
+  // A period only means something for a dashboard drill-down.
+  if (filters.drill === undefined) delete filters.period;
   return { ...filters, ...parseSort(entity, query) };
 }
 
@@ -283,8 +293,11 @@ export function renderFilterBar({
 }) {
   installDropdownClosing();
   const controls = new Map();
+  // A dashboard drill-down has no control: it is kept as it is until removed.
+  let drill = {};
   const read = () => {
     const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(drill)) query.set(name, String(value));
     for (const [name, el] of controls) {
       const value = el.type === 'checkbox' ? (el.checked ? 'true' : '') : el.value;
       if (value) query.set(name, value);
@@ -385,6 +398,27 @@ export function renderFilterBar({
     'Clear filters',
   );
 
+  const drillText = h('strong', {});
+  const drillChip = h(
+    'div',
+    { class: 'filter-drill', role: 'group', 'aria-label': 'From the dashboard', hidden: true },
+    h('span', {}, 'From the dashboard: '),
+    drillText,
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'filter-drill-remove',
+        'aria-label': 'Remove the dashboard filter',
+        onClick: () => {
+          drill = {};
+          onChange(read(), { typing: false });
+        },
+      },
+      h('span', { 'aria-hidden': 'true' }, '✕'),
+    ),
+  );
+
   const element = h(
     'form',
     {
@@ -398,12 +432,16 @@ export function renderFilterBar({
         changed();
       },
     },
+    drillChip,
     parts,
     clear,
   );
 
   /** Shows filters chosen elsewhere (back button, link) without disturbing typing. */
   const setFilters = (next) => {
+    drill = next.drill ? { drill: next.drill, ...(next.period && { period: next.period }) } : {};
+    drillChip.hidden = !next.drill;
+    drillText.textContent = next.drill ? (drillLabel(next.drill, next.period) ?? next.drill) : '';
     for (const [name, el] of controls) {
       const value = next[name];
       if (el.type === 'checkbox') el.checked = value === true;

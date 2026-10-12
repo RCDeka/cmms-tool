@@ -30,6 +30,7 @@ import {
   widgetBody,
   widgetDef,
   widgetScope,
+  widgetOptions,
   widgetTable,
 } from './widgets.js';
 
@@ -46,7 +47,7 @@ let list = null;
  * Dashboard on screen: the record (its widgets and filters as shown, its version as last
  * saved), its figures, and the charts drawn.
  */
-let view = null; // { dashboard, data, today, fetchedAt, fromCache, charts: Map, detach }
+let view = null; // { dashboard, data, today, fetchedAt, fromCache, charts, legends, detach }
 let myWorkRange = 'today';
 /** Sites offered by the site filter (reference data). */
 let knownSites = [];
@@ -185,7 +186,7 @@ export function leaveDashboards(routeName) {
 
 function releaseView() {
   view?.detach?.();
-  for (const chart of view?.charts.values() ?? []) chart.destroy?.();
+  for (const list of view?.charts.values() ?? []) for (const chart of list) chart.destroy?.();
   view?.charts.clear();
 }
 
@@ -246,7 +247,8 @@ export async function showDashboards(route, isCurrent) {
       today: cached?.today ?? null,
       fetchedAt: cached?.fetched_at ?? null,
       fromCache: Boolean(cached),
-      charts: new Map(),
+      charts: new Map(), // widget key → Chart instances drawn
+      legends: new Map(), // widget key → [label, color slot][] (images)
       detach: null,
     };
   }
@@ -317,9 +319,11 @@ function paint(focus = focusKey()) {
   const charts = [];
   const entries = dashboard.widgets.filter((w) => widgetDef(w.key));
   entries.forEach((entry) => {
-    const { card, chart } = widgetCard(entry.key);
+    const { card, charts: drawn, legend } = widgetCard(entry);
     grid.append(card);
-    if (chart) charts.push({ key: entry.key, ...chart });
+    for (const chart of drawn ?? []) charts.push({ key: entry.key, ...chart });
+    if (legend) view.legends.set(entry.key, legend);
+    else view.legends.delete(entry.key);
   });
 
   renderPage(
@@ -374,9 +378,12 @@ async function drawCharts(charts) {
   for (const chart of charts) {
     if (!chart.canvas.isConnected) continue;
     try {
-      const instance = await chart.draw(chart.canvas, chart.rows);
+      const instance = await chart.draw();
       if (view !== shown || !chart.canvas.isConnected) instance.destroy();
-      else view.charts.set(chart.key, instance);
+      else {
+        instance.caption = chart.caption ?? null; // shown above the chart in the image
+        view.charts.set(chart.key, [...(view.charts.get(chart.key) ?? []), instance]);
+      }
     } catch {
       // No chart library (offline before it was ever cached): the table view opens instead.
       chart.canvas.closest('.widget-card')?.querySelector('.chart-table')?.setAttribute('open', '');
@@ -521,7 +528,7 @@ function dashboardMenu(dashboard) {
 
 // --- Widget cards ---------------------------------------------------------------------------
 
-function widgetCard(key) {
+function widgetCard({ key, options }) {
   const def = widgetDef(key);
   const data = view.data?.[key];
   const titleId = `widget-${key}-title`;
@@ -534,6 +541,9 @@ function widgetCard(key) {
           myWorkRange = range;
           paint(`range-${range}`);
         },
+        options: widgetOptions(key, options),
+        onOption: (name, value) => setOption(key, name, value),
+        navigate,
       })
     : {
         element: h(
@@ -578,7 +588,7 @@ function widgetCard(key) {
   for (const button of card.querySelectorAll('[data-range]')) {
     button.dataset.focus = `range-${button.dataset.range}`;
   }
-  return { card, chart: body.chart };
+  return { card, charts: body.charts, legend: body.legend };
 }
 
 function widgetMenu(key, def, hasData) {
@@ -709,6 +719,18 @@ function moveWidget(key, step) {
   reorderWidgets(keys);
 }
 
+/** A widget setting (planned vs reactive: count or hours), saved with the dashboard. */
+function setOption(key, name, value) {
+  if (!isOnline()) return;
+  setWidgets(
+    view.dashboard.widgets.map((w) =>
+      w.key === key ? { ...w, options: { ...w.options, [name]: value } } : w,
+    ),
+  );
+  paint(`${name}-${value}`);
+  save({ widgets: view.dashboard.widgets });
+}
+
 function changeFilters(filters) {
   view.dashboard = { ...view.dashboard, filters: { ...DEFAULT_FILTERS, ...filters } };
   paint();
@@ -808,6 +830,7 @@ function newDashboard() {
   const starts = [
     { value: 'EMPTY', label: 'An empty dashboard' },
     { value: 'OVERVIEW', label: 'The overview (every key figure and chart)' },
+    { value: 'BACKLOG', label: 'The backlog (flow, age, weeks of work, planned vs reactive)' },
   ];
   if (view) starts.push({ value: 'COPY', label: `A copy of “${view.dashboard.name}”` });
   nameDialog({ title: 'New dashboard', submit: 'Create', starts }, async ({ name, start }) => {
@@ -913,7 +936,7 @@ function fileName(key, ext, suffix) {
 }
 
 function exportFigures(key) {
-  const table = widgetTable(key, view.data[key], { myWorkRange });
+  const table = widgetTable(key, view.data[key], { myWorkRange, options: optionsOf(key) });
   downloadCsv(
     toCsv(
       table.columns.map((c) => c.label),
@@ -946,25 +969,40 @@ async function exportRecords(key) {
   }
 }
 
+/** Options of a widget on the dashboard on screen, defaults filled in. */
+const optionsOf = (key) =>
+  widgetOptions(key, view.dashboard.widgets.find((w) => w.key === key)?.options);
+
 async function exportImage(key) {
   const def = widgetDef(key);
   const data = view.data[key];
   const card = tableContainer.querySelector(`[data-key="${key}"]`);
-  const chart = view.charts.get(key)?.canvas ?? null;
+  const charts = (view.charts.get(key) ?? []).map((c) => ({
+    canvas: c.canvas,
+    caption: c.caption,
+  }));
+  const chart = charts.length ? charts : null;
   const tile = def.size === 'S';
+  const css = getComputedStyle(document.documentElement);
   try {
     const blob = await widgetImage({
       title: def.label,
       subtitle: widgetScope(def, view.dashboard.filters),
       footer: `Tacto · ${view.dashboard.name} · figures of ${formatDateTime(view.fetchedAt)}`,
-      font: getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim(),
-      chart,
+      font: css.getPropertyValue('--font-sans').trim(),
+      charts,
+      legend: view.legends
+        .get(key)
+        ?.map(([label, slot]) => [
+          label,
+          css.getPropertyValue(`--color-chart-series-${slot}`).trim(),
+        ]),
       value: tile ? numberFormat.format(data.value) : undefined,
       note: card?.classList.contains('is-flagged') ? '⚠ Needs attention' : undefined,
       // Without the chart library, a chart's image falls back to its table.
       table:
         imageShowsTable(key) || (!chart && !tile)
-          ? widgetTable(key, data, { myWorkRange })
+          ? widgetTable(key, data, { myWorkRange, options: optionsOf(key) })
           : undefined,
     });
     downloadFile(blob, fileName(key, 'jpg'));

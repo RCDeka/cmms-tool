@@ -159,9 +159,10 @@ function kpiSection(kpis) {
  * Bar chart of work orders by category with its "Show as a table" view.
  * @param {ReturnType<typeof chartRows>} rows
  * @param {string} caption table caption
+ * @param {(row: object) => string | null} [linkOf] the list behind a bar (dashboards, K9)
  * @returns {{ canvas: HTMLCanvasElement, element: HTMLElement[] }}
  */
-export function categoryChartBody(rows, caption) {
+export function categoryChartBody(rows, caption, linkOf) {
   const canvas = h('canvas', { role: 'img', 'aria-label': chartSummary(rows) });
   const frame = h('div', { class: 'chart-frame' }, canvas);
   // Plot + axis band: the frame grows with the number of bars instead of scrolling.
@@ -192,7 +193,13 @@ export function categoryChartBody(rows, caption) {
             'tr',
             {},
             h('th', { scope: 'row' }, r.label),
-            h('td', { class: 'numeric' }, numberFormat.format(r.count)),
+            h(
+              'td',
+              { class: 'numeric' },
+              r.count && linkOf?.(r)
+                ? h('a', { href: linkOf(r), 'data-link': true }, numberFormat.format(r.count))
+                : numberFormat.format(r.count),
+            ),
           ),
         ),
       ),
@@ -230,9 +237,10 @@ function chartSection(stats) {
 /**
  * Status pie with its legend: label, count and share of every status (the table view).
  * @param {ReturnType<typeof statusRows>} rows
+ * @param {(row: object) => string | null} [linkOf] the list behind a slice (dashboards, K9)
  * @returns {{ canvas: HTMLCanvasElement, element: HTMLElement }}
  */
-export function statusChartBody(rows) {
+export function statusChartBody(rows, linkOf) {
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   const canvas = h('canvas', {
     role: 'img',
@@ -256,7 +264,13 @@ export function statusChartBody(rows) {
                   class: `pie-swatch chart-series-${r.slot}`,
                   'aria-hidden': 'true',
                 }),
-                h('span', { class: 'pie-label' }, r.label),
+                h(
+                  'span',
+                  { class: 'pie-label' },
+                  r.count && linkOf?.(r)
+                    ? h('a', { href: linkOf(r), 'data-link': true }, r.label)
+                    : r.label,
+                ),
                 h('span', { class: 'numeric' }, numberFormat.format(r.count)),
                 h('span', { class: 'numeric muted' }, percentFormat.format(r.share)),
               ),
@@ -498,13 +512,26 @@ export function renderDashboard(container, { data, stats, fromCache, fetchedAt, 
   return shown.filter((c) => c.canvas.isConnected);
 }
 
+/** Click and pointer cursor on the marks of a chart, when it opens the records behind them. */
+function pickOptions(onPick, rowOf) {
+  if (!onPick) return {};
+  return {
+    onClick: (_event, elements) => {
+      if (elements[0]) onPick(rowOf(elements[0].index));
+    },
+    onHover: (event, elements) => {
+      event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+    },
+  };
+}
+
 /**
  * Draws the horizontal bar chart. Single series: one color for every bar (dark gray,
  * ≥ 3:1 on the card; brand red on hover), ≤ 24 px bars with a 4 px rounded end, value at the bar tip
  * in text color, hairline solid grid, tooltip on hover.
  * @returns {Promise<object>} the Chart instance
  */
-export async function drawCategoryChart(canvas, rows) {
+export async function drawCategoryChart(canvas, rows, onPick) {
   const Chart = await loadChartJs();
   const css = getComputedStyle(document.documentElement);
   const token = (name) => css.getPropertyValue(name).trim();
@@ -546,6 +573,7 @@ export async function drawCategoryChart(canvas, rows) {
       ],
     },
     options: {
+      ...pickOptions(onPick, (i) => rows[i]),
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
@@ -585,7 +613,7 @@ export async function drawCategoryChart(canvas, rows) {
  * value), tooltip with count and share.
  * @returns {Promise<object>} the Chart instance
  */
-export async function drawStatusChart(canvas, rows) {
+export async function drawStatusChart(canvas, rows, onPick) {
   const Chart = await loadChartJs();
   const css = getComputedStyle(document.documentElement);
   const token = (name) => css.getPropertyValue(name).trim();
@@ -608,6 +636,7 @@ export async function drawStatusChart(canvas, rows) {
       ],
     },
     options: {
+      ...pickOptions(onPick, (i) => rows[i]),
       responsive: true,
       maintainAspectRatio: false,
       animation: reduceMotion ? false : { duration: 300 },

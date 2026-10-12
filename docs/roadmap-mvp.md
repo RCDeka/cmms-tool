@@ -133,7 +133,7 @@ Specified in `docs/spec-preventive-maintenance.md` (section 11 holds the full ac
 Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance criteria).
 
 - **Phase 21: custom dashboards** — done (D60, BR-K1 to BR-K4; migration `011`). Personal named dashboards for supervisors and admins, listed in the sidebar with a checkbox per widget, drag and drop (keyboard too), dashboard filters (period, sites, trades), the 11 existing widgets ported, Figures (CSV), Work orders (CSV) and Image (JPG) exports, templates, offline reading. Acceptance: see the spec, section 11.
-- **Phase 22: flow and backlog** — opened vs closed, backlog by age and priority, backlog in weeks per trade, planned vs reactive, and the `drill` list filter. Acceptance: figures equal hand-computed values; each segment's list and CSV hold exactly the counted records.
+- **Phase 22: flow and backlog** — done (D61). Opened vs closed, backlog by age and priority, backlog in weeks per trade, planned vs reactive, and the `drill` list filter. Acceptance: figures equal hand-computed values; each segment's list and CSV hold exactly the counted records.
 - **Phase 23: compliance** — preventive maintenance compliance, regulatory visits late, week schedule kept, contractor scorecard. Acceptance: on-time limits at the Sunday of the deadline week; regulatory visits use their due week; skipped visits counted apart.
 - **Phase 24: responsiveness, assets and people** — time to start and close (median, 90th percentile), staff request service, bad actors, repeat failures, critical assets out of service, workload, estimate accuracy. Acceptance: percentiles, ongoing breakdowns and the 30-day repeat limit match hand-computed values; the "Assets and people" template loads within budget.
 

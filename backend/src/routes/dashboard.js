@@ -61,7 +61,7 @@ export function dashboardRouter({ dashboard, widgets, timeZone, now }) {
     res.json({
       today,
       generated_at: instant.toISOString(),
-      widgets: widgets.figures(keys, filtersOf(query), { today, userId: req.user.id }),
+      widgets: widgets.figures(keys, filtersOf(query), { today, userId: req.user.id, timeZone }),
     });
   });
 
@@ -75,6 +75,7 @@ export function dashboardRouter({ dashboard, widgets, timeZone, now }) {
         widgets.rows(req.valid.params.key, segment, filtersOf(query), {
           today: dateInZone(timeZone, now()),
           userId: req.user.id,
+          timeZone,
         }),
       );
     },

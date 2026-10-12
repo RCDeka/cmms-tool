@@ -155,7 +155,8 @@ export function toWorkOrder(row) {
 
 /**
  * WHERE clause of the work order filters (docs/api-design.md → GET /api/work-orders).
- * `mine` needs the current user id and `overdue` today's date ('YYYY-MM-DD').
+ * `mine` needs the current user id and `overdue` today's date ('YYYY-MM-DD'); `extra` is the
+ * condition of a dashboard widget segment (`drill`, built by the widget service).
  * @returns {{ clause: string, params: object }}
  */
 export function workOrderFilters(
@@ -171,7 +172,7 @@ export function workOrderFilters(
     overdue,
     to_review: toReview,
   },
-  { userId, today },
+  { userId, today, extra },
 ) {
   const where = [];
   const params = {};
@@ -197,6 +198,10 @@ export function workOrderFilters(
     // Same definition as the dashboard KPI (docs/data-model.md → KPI definitions).
     where.push("w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD') AND w.due_on < @today");
     params.today = today;
+  }
+  if (extra) {
+    where.push(`(${extra.sql})`);
+    Object.assign(params, extra.params);
   }
   if (toReview) where.push("w.review_status = 'PENDING'");
   else if (toReview === false) where.push("w.review_status IS NOT 'PENDING'");

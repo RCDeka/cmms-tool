@@ -78,6 +78,10 @@ frontend/
                               dashboard menu and dialogs, saving, exports, the copy kept on the device
     widgets.js                widget catalogue (labels, sizes, groups), widget bodies, table views (the
                               source of "Show as a table", Figures CSV and table images), CSV record columns
+    widgets-flow.js           flow and backlog widgets (Phase 22): bodies, table views with drill links,
+                              bucket and segment labels
+    widget-charts.js          Chart.js drawings of those widgets (paired columns, line, week bars with the
+                              rule-of-thumb band, 100 % stacked columns), clicks open the records
     widget-order.js           drag (pointer) and keyboard moves of the widget cards, with auto-scroll
     export.js                 CSV text (BOM, RFC 4180, formula guard), file names, download, JPG painter
     requests.js               staff pages: open / all requests, request form, request page (D46)
@@ -189,7 +193,7 @@ Prefetching runs after the visible content is rendered, one request at a time, a
 - Technicians' default work order list is "Assigned to me" (D44): applied when the URL has no filter; `mine=false` turns it off; "Clear filters" returns to it.
 - The table sort lives in the URL too (`/work-orders?sort=due_on&order=asc`, D42); the default order is left out. Filter changes keep the sort, "Clear filters" keeps it, and a new sort goes back to page 1. A sorted list follows the filtered-list rules above: fetched from the server, not cached; offline it offers "Default order".
 - Pending creations are listed on the unfiltered work order list only.
-- Dashboard tiles open the matching filtered list (e.g. "Overdue work orders" → `/work-orders?overdue=true`).
+- Dashboard tiles open the matching filtered list (e.g. "Overdue work orders" → `/work-orders?overdue=true`). A bar, slice, point or table cell of a personal dashboard widget opens `/work-orders?drill=<widget>:<segment>&period=…` (D59, K9): the list shows exactly the counted records, with a "From the dashboard: …" chip in the filter bar; the other filters can be added, and removing the chip drops `drill` and `period`.
 
 ## Revalidation (stale-while-revalidate)
 

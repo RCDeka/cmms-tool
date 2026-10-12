@@ -2,79 +2,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Figures of the dashboard widgets and the records behind them (docs/spec-dashboards.md,
-// BR-K4). Each work order widget is one WHERE clause: its figures count the rows it selects,
-// and the CSV export lists the same rows, so both always agree.
-import { addDays } from '../lib/dates.js';
+// BR-K4). Each work order widget is one WHERE clause (`where`, with an optional segment: a
+// bar, a slice, a cell): its figures count the rows it selects, and the CSV export and the
+// drill-down list (`GET /api/work-orders?drill=`) select the same rows, so all three agree.
+import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
 import { addInFilter } from '../lib/list-filter.js';
-import { ROWS_LIMIT, filtersFor, widgetDef } from '../rules/dashboards.js';
-import { CATEGORIES, WORK_ORDER_STATUSES } from '../rules/enums.js';
+import { ROWS_LIMIT, filtersFor, widgetDef, withFilterDefaults } from '../rules/dashboards.js';
+import { CATEGORIES, WORK_ORDER_PRIORITIES, WORK_ORDER_STATUSES } from '../rules/enums.js';
 import { compareMyWork, monthRange, weekEnd } from '../rules/kpi.js';
+import {
+  AGE_BUCKETS,
+  OLD_AGE_BUCKETS,
+  WORK_GROUPS,
+  WORK_GROUP_SQL,
+  ageDates,
+  bucketOf,
+  flowSeries,
+  periodBuckets,
+  periodStart,
+  weeksOfWork,
+  workGroup,
+} from '../rules/kpi-flow.js';
+import { weeklyCapacity } from '../rules/planning.js';
 
 const UNFINISHED = "w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')";
 const RECENT_ACTIVITY_SIZE = 5;
+/** Priorities from the most urgent, as rows of the backlog matrix. */
+const PRIORITIES_DOWN = [...WORK_ORDER_PRIORITIES].reverse();
 
-/** First day of a period of `days` days ending today (today included). */
-const periodStart = (today, days) => addDays(today, -(days - 1));
-
-/**
- * WHERE clause of each work order widget (before the site and trade filters). Constant SQL;
- * values are bound parameters.
- * @type {Record<string, (ctx: { today: string, period: number | null, userId: number }) =>
- *   { sql: string, params?: object }>}
- */
-const WORK_ORDER_WIDGETS = {
-  open_work_orders: () => ({ sql: "w.status = 'OPEN'" }),
-  in_progress_work_orders: () => ({ sql: "w.status = 'IN_PROGRESS'" }),
-  closed_this_month: ({ today }) => {
-    const { from, to } = monthRange(today);
-    return {
-      sql: "w.status = 'CLOSED' AND w.closed_on BETWEEN @month_from AND @month_to",
-      params: { month_from: from, month_to: to },
-    };
-  },
-  overdue_work_orders: ({ today }) => ({
-    sql: `${UNFINISHED} AND w.due_on < @today`,
-    params: { today },
-  }),
-  requests_to_review: () => ({ sql: "w.review_status = 'PENDING'" }),
-  by_category: ({ today, period }) => ({
-    sql: 'w.created_on BETWEEN @period_from AND @today',
-    params: { period_from: periodStart(today, period), today },
-  }),
-  by_status: ({ today, period }) => ({
-    sql: 'w.created_on BETWEEN @period_from AND @today',
-    params: { period_from: periodStart(today, period), today },
-  }),
-  // My work: the next 7 days, late or without a due date (docs/data-model.md → KPI definitions).
-  my_work: ({ today, userId }) => ({
-    sql: `w.assignee_id = @me AND ${UNFINISHED} AND (w.due_on IS NULL OR w.due_on <= @week_end)`,
-    params: { me: userId, week_end: weekEnd(today) },
-  }),
-  recent_activity: () => ({ sql: '1' }),
-};
-
-/** Segments accepted by the rows endpoint, and their extra condition. */
-const SEGMENTS = {
-  category: {
-    values: [...CATEGORIES, 'UNSPECIFIED'],
-    clause: (segment) =>
-      segment === 'UNSPECIFIED'
-        ? { sql: 'w.category IS NULL' }
-        : { sql: 'w.category = @segment', params: { segment } },
-  },
-  status: {
-    values: WORK_ORDER_STATUSES,
-    clause: (segment) => ({ sql: 'w.status = @segment', params: { segment } }),
-  },
-  my_work: {
-    values: ['today', 'week'],
-    clause: (segment, { today }) =>
-      segment === 'today'
-        ? { sql: '(w.due_on IS NULL OR w.due_on <= @today)', params: { today } }
-        : { sql: '1' },
-  },
-};
+const badSegment = () =>
+  new HttpError(400, 'Invalid query', { fields: { segment: 'Unknown segment' } });
 
 /** Site and trade filters of a widget on a table alias (`w` work orders, `a` assets). */
 function scopeClause(alias, { sites, categories }) {
@@ -85,11 +43,32 @@ function scopeClause(alias, { sites, categories }) {
   return { where, params };
 }
 
-/** Joins clause parts into one WHERE clause. */
+/** Joins clause parts ({ sql } or { where: [] }, with params) into one WHERE clause. */
 function combine(...parts) {
   const where = parts.flatMap((p) => p.where ?? (p.sql ? [p.sql] : []));
   const params = Object.assign({}, ...parts.map((p) => p.params ?? {}));
-  return { clause: `WHERE ${where.map((w) => `(${w})`).join(' AND ')}`, params };
+  return {
+    sql: where.map((w) => `(${w})`).join(' AND ') || '1',
+    clause: `WHERE ${where.map((w) => `(${w})`).join(' AND ') || '1'}`,
+    params,
+  };
+}
+
+/** Rows whose id is in a list computed in JavaScript (bound as one JSON parameter). */
+const idsIn = (ids, name = 'ids') => ({
+  sql: `w.id IN (SELECT value FROM json_each(@${name}))`,
+  params: { [name]: JSON.stringify([...ids]) },
+});
+
+/** "PRIORITY:bucket" or "kind:bucket" → [first, second], each checked against its list. */
+function splitSegment(segment, firsts, seconds) {
+  const at = segment.indexOf(':');
+  const first = at < 0 ? segment : segment.slice(0, at);
+  const second = at < 0 ? null : segment.slice(at + 1);
+  if (!firsts.includes(first) || (second !== null && !seconds.includes(second))) {
+    throw badSegment();
+  }
+  return [first, second];
 }
 
 /**
@@ -101,15 +80,13 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
   const pendingConflicts = db
     .prepare("SELECT count(*) FROM conflicts WHERE status = 'OPEN'")
     .pluck();
-
-  /** WHERE clause of a work order widget with its filters (and a segment, for the rows). */
-  function workOrderWhere(key, ctx, segment) {
-    const base = WORK_ORDER_WIDGETS[key](ctx);
-    const scope = scopeClause('w', ctx);
-    const def = widgetDef(key);
-    const extra = segment ? SEGMENTS[def.segments].clause(segment, ctx) : {};
-    return combine(base, scope, extra);
-  }
+  // Date of the last change to CANCELLED of each cancelled work order (audit log, BR-L1).
+  const cancellations = db.prepare(
+    `SELECT entity_id AS id, max(at) AS at FROM audit_log
+     WHERE entity_type = 'work_orders' AND json_extract(changes, '$.status.to') = 'CANCELLED'
+     GROUP BY entity_id`,
+  );
+  const dailyHours = db.prepare('SELECT daily_hours FROM planning_settings WHERE id = 1').pluck();
 
   const count = (table, alias, { clause, params }) =>
     db.prepare(`SELECT count(*) FROM ${table} ${alias} ${clause}`).pluck().get(params);
@@ -123,17 +100,77 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
         .all(params)
         .map((r) => [r.value, r.count]),
     );
-  const assetsWhere = (ctx) => combine({ sql: "a.status = 'BROKEN_DOWN'" }, scopeClause('a', ctx));
 
-  /** Figures of one widget. */
-  function compute(key, ctx) {
-    switch (key) {
-      case 'assets_broken_down':
-        return { value: count('assets', 'a', assetsWhere(ctx)) };
-      case 'pending_conflicts':
-        return { value: pendingConflicts.get() };
-      case 'by_category': {
-        const counts = groupCount("coalesce(w.category, 'UNSPECIFIED')", workOrderWhere(key, ctx));
+  /** Day each cancelled work order was cancelled, in APP_TIMEZONE; its last update otherwise. */
+  function cancelledOn(rows, timeZone) {
+    const dates = new Map(
+      cancellations.all().map((r) => [r.id, dateInZone(timeZone, new Date(r.at))]),
+    );
+    for (const wo of rows) {
+      if (wo.status === 'CANCELLED' && !dates.has(wo.id)) {
+        dates.set(wo.id, dateInZone(timeZone, new Date(wo.updated_at)));
+      }
+    }
+    return dates;
+  }
+
+  /** Opened vs closed: the work orders of the scope and their buckets. */
+  function flow(ctx) {
+    const scope = combine(
+      { sql: 'w.created_on <= @today', params: { today: ctx.today } },
+      scopeClause('w', ctx),
+    );
+    const rows = db
+      .prepare(
+        `SELECT w.id, w.created_on, w.status, w.closed_on, w.updated_at FROM work_orders w
+         ${scope.clause}`,
+      )
+      .all(scope.params);
+    const { unit, buckets } = periodBuckets(ctx.today, ctx.period);
+    return { rows, unit, buckets, cancelled: cancelledOn(rows, ctx.timeZone) };
+  }
+
+  const periodRange = (ctx) => ({
+    sql: 'w.created_on BETWEEN @period_from AND @today',
+    params: { period_from: periodStart(ctx.today, ctx.period), today: ctx.today },
+  });
+
+  /** Hours left per unfinished work order: estimate minus WORK blocks before today. */
+  const HOURS_LEFT = `max(0, w.estimated_hours - coalesce((SELECT sum(a.hours) FROM allocations a
+      WHERE a.work_order_id = w.id AND a.kind = 'WORK' AND a.day < @today), 0))`;
+
+  /**
+   * The widgets. `where(ctx, segment)`: the rows of the widget (or of one segment), before
+   * the site and trade filters. `figures(ctx)`: its data (a count of `where` by default).
+   * `order`: order of the exported rows. Segments that do not exist → 400.
+   */
+  const WIDGETS = {
+    open_work_orders: { where: () => ({ sql: "w.status = 'OPEN'" }) },
+    in_progress_work_orders: { where: () => ({ sql: "w.status = 'IN_PROGRESS'" }) },
+    closed_this_month: {
+      where: ({ today }) => {
+        const { from, to } = monthRange(today);
+        return {
+          sql: "w.status = 'CLOSED' AND w.closed_on BETWEEN @month_from AND @month_to",
+          params: { month_from: from, month_to: to },
+        };
+      },
+    },
+    overdue_work_orders: {
+      where: ({ today }) => ({ sql: `${UNFINISHED} AND w.due_on < @today`, params: { today } }),
+    },
+    requests_to_review: { where: () => ({ sql: "w.review_status = 'PENDING'" }) },
+
+    by_category: {
+      where: (ctx, segment) => {
+        if (!segment) return periodRange(ctx);
+        if (segment === 'UNSPECIFIED')
+          return combine(periodRange(ctx), { sql: 'w.category IS NULL' });
+        if (!CATEGORIES.includes(segment)) throw badSegment();
+        return combine(periodRange(ctx), { sql: 'w.category = @segment', params: { segment } });
+      },
+      figures: (ctx, where) => {
+        const counts = groupCount("coalesce(w.category, 'UNSPECIFIED')", where());
         const items = CATEGORIES.map((category) => ({
           category,
           count: counts.get(category) ?? 0,
@@ -142,61 +179,327 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
           items.push({ category: 'UNSPECIFIED', count: counts.get('UNSPECIFIED') });
         }
         return { period: ctx.period, items };
-      }
-      case 'by_status': {
-        const counts = groupCount('w.status', workOrderWhere(key, ctx));
+      },
+    },
+    by_status: {
+      where: (ctx, segment) => {
+        if (!segment) return periodRange(ctx);
+        if (!WORK_ORDER_STATUSES.includes(segment)) throw badSegment();
+        return combine(periodRange(ctx), { sql: 'w.status = @segment', params: { segment } });
+      },
+      figures: (ctx, where) => {
+        const counts = groupCount('w.status', where());
         return {
           period: ctx.period,
           items: WORK_ORDER_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 })),
         };
-      }
-      case 'my_work': {
-        const week = rows(key, ctx).items;
+      },
+    },
+    // My work: the next 7 days, late or without a due date (docs/data-model.md → KPI definitions).
+    my_work: {
+      where: ({ today, userId }, segment) => {
+        if (segment && !['today', 'week'].includes(segment)) throw badSegment();
+        return {
+          sql: `w.assignee_id = @me AND ${UNFINISHED} AND (w.due_on IS NULL OR w.due_on <= @last_day)`,
+          params: { me: userId, last_day: segment === 'today' ? today : weekEnd(today) },
+        };
+      },
+      figures: (ctx) => {
+        const week = rows('my_work', ctx).items;
         return {
           today: ctx.today,
           week_end: weekEnd(ctx.today),
           today_items: week.filter((wo) => !wo.due_on || wo.due_on <= ctx.today),
           week_items: week,
         };
-      }
-      case 'recent_activity':
-        return { items: rows(key, ctx).items };
-      default:
-        return { value: count('work_orders', 'w', workOrderWhere(key, ctx)) };
-    }
+      },
+    },
+    recent_activity: {
+      where: () => ({ sql: '1' }),
+      order: 'w.updated_at DESC, w.id DESC',
+      limit: RECENT_ACTIVITY_SIZE,
+      figures: (ctx) => ({ items: rows('recent_activity', ctx).items }),
+    },
+
+    // --- Flow and backlog (§6.2, Phase 22) ---------------------------------------------------
+
+    // Segments: "opened:<bucket>", "closed:<bucket>", "cancelled:<bucket>" (a week or a month).
+    opened_vs_closed: {
+      where: (ctx, segment) => {
+        const data = flow(ctx);
+        const keys = data.buckets.map((b) => b.key);
+        const [kind, key] = segment
+          ? splitSegment(segment, ['opened', 'closed', 'cancelled'], keys)
+          : [null, null];
+        const chosen = key ? data.buckets.filter((b) => b.key === key) : data.buckets;
+        const from = chosen[0].from;
+        const to = chosen.at(-1).to;
+        const inRange = (date) => date !== null && date >= from && date <= to;
+        const ids = data.rows
+          .filter(
+            (wo) =>
+              ((!kind || kind === 'opened') && inRange(wo.created_on)) ||
+              ((!kind || kind === 'closed') && wo.status === 'CLOSED' && inRange(wo.closed_on)) ||
+              ((!kind || kind === 'cancelled') &&
+                wo.status === 'CANCELLED' &&
+                inRange(data.cancelled.get(wo.id) ?? null)),
+          )
+          .map((wo) => wo.id);
+        return idsIn(ids);
+      },
+      figures: (ctx) => {
+        const data = flow(ctx);
+        return {
+          period: ctx.period,
+          unit: data.unit,
+          buckets: flowSeries(data.rows, data.cancelled, data.buckets),
+        };
+      },
+    },
+
+    // Segments: "<PRIORITY>", "<PRIORITY>:<age bucket>" or ":<age bucket>" (every priority).
+    backlog_age: {
+      where: ({ today }, segment) => {
+        const parts = [{ sql: UNFINISHED }];
+        if (segment) {
+          const at = segment.indexOf(':');
+          const priority = at < 0 ? segment : segment.slice(0, at);
+          const bucket = at < 0 ? null : segment.slice(at + 1);
+          if (
+            (priority && !WORK_ORDER_PRIORITIES.includes(priority)) ||
+            (bucket !== null && !AGE_BUCKETS.some((b) => b.key === bucket)) ||
+            (!priority && bucket === null)
+          ) {
+            throw badSegment();
+          }
+          if (priority) parts.push({ sql: 'w.priority = @priority', params: { priority } });
+          if (bucket) {
+            const { from, to } = ageDates(bucket, today);
+            parts.push(
+              from
+                ? {
+                    sql: 'w.created_on BETWEEN @age_from AND @age_to',
+                    params: { age_from: from, age_to: to },
+                  }
+                : { sql: 'w.created_on <= @age_to', params: { age_to: to } },
+            );
+          }
+        }
+        return combine(...parts);
+      },
+      figures: (ctx, where) => {
+        const { clause, params } = where();
+        const bounds = {};
+        const cases = AGE_BUCKETS.map((b, i) => {
+          const { from, to } = ageDates(b.key, ctx.today);
+          bounds[`age${i}_from`] = from;
+          bounds[`age${i}_to`] = to;
+          bounds[`age${i}_key`] = b.key;
+          return from
+            ? `WHEN w.created_on BETWEEN @age${i}_from AND @age${i}_to THEN @age${i}_key`
+            : `WHEN w.created_on <= @age${i}_to THEN @age${i}_key`;
+        }).join(' ');
+        const found = db
+          .prepare(
+            `SELECT w.priority, CASE ${cases} END AS bucket, count(*) AS count
+             FROM work_orders w ${clause} GROUP BY w.priority, bucket`,
+          )
+          .all({
+            ...params,
+            ...Object.fromEntries(Object.entries(bounds).filter(([, v]) => v !== null)),
+          });
+        const at = (priority, bucket) =>
+          found.find((r) => r.priority === priority && r.bucket === bucket)?.count ?? 0;
+        const rowsOut = PRIORITIES_DOWN.map((priority) => ({
+          priority,
+          counts: AGE_BUCKETS.map((b) => at(priority, b.key)),
+        }));
+        const old = rowsOut
+          .filter((r) => ['URGENT', 'HIGH'].includes(r.priority))
+          .reduce(
+            (sum, r) =>
+              sum +
+              OLD_AGE_BUCKETS.reduce(
+                (s, b) => s + r.counts[AGE_BUCKETS.findIndex((x) => x.key === b)],
+                0,
+              ),
+            0,
+          );
+        return {
+          buckets: AGE_BUCKETS.map((b) => b.key),
+          rows: rowsOut,
+          total: found.reduce((sum, r) => sum + r.count, 0),
+          urgent_old: old,
+        };
+      },
+    },
+
+    // Segments: a trade, "UNSPECIFIED" (no trade) or "NO_ESTIMATE" (not counted in hours).
+    backlog_weeks: {
+      where: (ctx, segment) => {
+        if (!segment) return { sql: UNFINISHED };
+        if (segment === 'NO_ESTIMATE')
+          return { sql: `${UNFINISHED} AND w.estimated_hours IS NULL` };
+        const withHours = `${UNFINISHED} AND w.estimated_hours IS NOT NULL`;
+        if (segment === 'UNSPECIFIED') return { sql: `${withHours} AND w.category IS NULL` };
+        if (!CATEGORIES.includes(segment)) throw badSegment();
+        return { sql: `${withHours} AND w.category = @segment`, params: { segment } };
+      },
+      figures: (ctx, whereOf) => {
+        const where = whereOf();
+        const hours = db
+          .prepare(
+            `SELECT coalesce(w.category, 'UNSPECIFIED') AS category, count(*) AS work_orders,
+               sum(${HOURS_LEFT}) AS hours
+             FROM work_orders w ${where.clause} AND w.estimated_hours IS NOT NULL
+             GROUP BY category`,
+          )
+          .all({ ...where.params, today: ctx.today });
+        const withoutEstimate = db
+          .prepare(
+            `SELECT count(*) FROM work_orders w ${where.clause} AND w.estimated_hours IS NULL`,
+          )
+          .pluck()
+          .get(where.params);
+        // The planner's capacity before the corrective reserve (the backlog holds all work).
+        const people = [];
+        const scope = {
+          where: ["role IN ('TECHNICIAN', 'SUPERVISOR')", 'is_active = 1'],
+          params: {},
+        };
+        addInFilter(scope.where, scope.params, 'site', 'site', ctx.sites);
+        people.push(
+          ...db
+            .prepare(`SELECT specialty, site FROM users WHERE ${scope.where.join(' AND ')}`)
+            .all(scope.params),
+        );
+        const capacity = weeklyCapacity(people, {
+          daily_hours: dailyHours.get(),
+          reserve_percent: 0,
+        });
+        const byCategory = new Map(hours.map((r) => [r.category, r]));
+        const trades = ctx.categories.length ? ctx.categories : CATEGORIES;
+        const items = trades
+          .map((category) => {
+            const row = byCategory.get(category);
+            const cap = capacity.by_category[category] ?? 0;
+            const left = row?.hours ?? 0;
+            return {
+              category,
+              work_orders: row?.work_orders ?? 0,
+              hours: left,
+              capacity: cap,
+              weeks: weeksOfWork(left, cap),
+            };
+          })
+          .filter((i) => i.work_orders > 0 || i.capacity > 0)
+          .sort((a, b) => (b.weeks ?? Infinity) - (a.weeks ?? Infinity) || b.hours - a.hours);
+        const unspecified = byCategory.get('UNSPECIFIED');
+        return {
+          items,
+          unspecified: unspecified
+            ? { work_orders: unspecified.work_orders, hours: unspecified.hours }
+            : null,
+          without_estimate: withoutEstimate,
+        };
+      },
+    },
+
+    // Segments: "<KIND>" or "<KIND>:<bucket>" (PLANNED, REACTIVE, REQUESTS, IMPROVEMENT).
+    planned_vs_reactive: {
+      where: (ctx, segment) => {
+        const { buckets } = periodBuckets(ctx.today, ctx.period);
+        const [kind, key] = segment
+          ? splitSegment(
+              segment,
+              WORK_GROUPS,
+              buckets.map((b) => b.key),
+            )
+          : [null, null];
+        const chosen = key ? buckets.find((b) => b.key === key) : null;
+        return combine(
+          {
+            sql: "w.status = 'CLOSED' AND w.closed_on BETWEEN @closed_from AND @closed_to",
+            params: {
+              closed_from: chosen?.from ?? periodStart(ctx.today, ctx.period),
+              closed_to: chosen?.to ?? ctx.today,
+            },
+          },
+          kind ? { sql: WORK_GROUP_SQL[kind] } : {},
+        );
+      },
+      figures: (ctx, whereOf) => {
+        const where = whereOf();
+        const { unit, buckets } = periodBuckets(ctx.today, ctx.period);
+        const closed = db
+          .prepare(
+            `SELECT w.type, w.review_status, w.closed_on, w.actual_hours FROM work_orders w
+             ${where.clause}`,
+          )
+          .all(where.params);
+        const empty = () => Object.fromEntries(WORK_GROUPS.map((g) => [g, { count: 0, hours: 0 }]));
+        const series = buckets.map((b) => ({ ...b, values: empty() }));
+        for (const wo of closed) {
+          const key = bucketOf(buckets, wo.closed_on);
+          const cell = series.find((b) => b.key === key).values[workGroup(wo)];
+          cell.count++;
+          cell.hours += wo.actual_hours ?? 0;
+        }
+        return {
+          period: ctx.period,
+          unit,
+          groups: WORK_GROUPS,
+          buckets: series,
+          without_actual_hours: closed.filter((wo) => wo.actual_hours === null).length,
+        };
+      },
+    },
+  };
+
+  /** WHERE clause of a work order widget with its site and trade filters (and a segment). */
+  function workOrderWhere(key, ctx, segment) {
+    // Widgets whose `where` takes no segment (the tiles) have none to choose.
+    if (segment !== undefined && WIDGETS[key].where.length < 2) throw badSegment();
+    return combine(WIDGETS[key].where(ctx, segment), scopeClause('w', ctx));
+  }
+  const assetsWhere = (ctx) => combine({ sql: "a.status = 'BROKEN_DOWN'" }, scopeClause('a', ctx));
+
+  /** Figures of one widget. */
+  function compute(key, ctx) {
+    if (key === 'assets_broken_down') return { value: count('assets', 'a', assetsWhere(ctx)) };
+    if (key === 'pending_conflicts') return { value: pendingConflicts.get() };
+    // Built only when the widget needs it (opened vs closed computes its own rows).
+    const where = () => workOrderWhere(key, ctx);
+    const figures = WIDGETS[key].figures;
+    return figures ? figures(ctx, where) : { value: count('work_orders', 'w', where()) };
   }
 
   /** Records behind a widget (or one segment of it), at most ROWS_LIMIT. */
   function rows(key, ctx, segment) {
-    const def = widgetDef(key);
-    if (def.rows === 'assets') {
+    if (widgetDef(key).rows === 'assets') {
       const where = assetsWhere(ctx);
       const total = count('assets', 'a', where);
       const items = assets.selectWhere(where.clause, where.params, ROWS_LIMIT);
       return { kind: 'assets', items, total, truncated: total > items.length };
     }
+    const def = WIDGETS[key];
     const where = workOrderWhere(key, ctx, segment);
-    if (key === 'recent_activity') {
-      const items = workOrders.selectWhere(where.clause, where.params, {
-        orderBy: 'w.updated_at DESC, w.id DESC',
-        limit: RECENT_ACTIVITY_SIZE,
-      });
-      return { kind: 'work_orders', items, total: items.length, truncated: false };
-    }
-    const total = count('work_orders', 'w', where);
+    const limit = def.limit ?? ROWS_LIMIT;
+    const total = Math.min(count('work_orders', 'w', where), limit);
     const items = workOrders.selectWhere(where.clause, where.params, {
-      orderBy: 'w.number',
-      limit: ROWS_LIMIT,
+      orderBy: def.order ?? 'w.number',
+      limit,
     });
     if (key === 'my_work') items.sort(compareMyWork);
     return { kind: 'work_orders', items, total, truncated: total > items.length };
   }
 
-  /** Context of a widget: today, the user, and only the filters the widget uses. */
-  const contextFor = (key, filters, { today, userId }) => ({
+  /** Context of a widget: today, the user, the time zone, and only the filters it uses. */
+  const contextFor = (key, filters, { today, userId, timeZone }) => ({
     ...filtersFor(key, filters),
     today,
     userId,
+    timeZone,
   });
 
   return {
@@ -204,7 +507,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
      * GET /api/dashboard/widgets: figures of the listed widgets, in one read transaction.
      * @param {string[]} keys
      * @param {{ period: number, sites: string[], categories: string[] }} filters
-     * @param {{ today: string, userId: number }} context
+     * @param {{ today: string, userId: number, timeZone: string }} context
      */
     figures(keys, filters, context) {
       return db.transaction(() =>
@@ -216,14 +519,36 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
 
     /** GET /api/dashboard/widgets/:key/rows (CSV export). */
     rows(key, segment, filters, context) {
-      const def = widgetDef(key);
-      if (!def.rows) throw new HttpError(404, 'This widget has no records to export');
-      if (segment !== undefined) {
-        if (!def.segments || !SEGMENTS[def.segments].values.includes(segment)) {
-          throw new HttpError(400, 'Invalid query', { fields: { segment: 'Unknown segment' } });
-        }
-      }
+      if (!widgetDef(key).rows) throw new HttpError(404, 'This widget has no records to export');
       return rows(key, contextFor(key, filters, context), segment);
+    },
+
+    /**
+     * `drill=<widget>[:<segment>]` of the work order list (K9): the condition selecting the
+     * records of a widget segment, without the site and trade filters, which the list applies
+     * with its own `site` and `category` filters.
+     * @param {string} drill
+     * @param {number} period days
+     * @returns {{ sql: string, params: object }}
+     */
+    drillWhere(drill, period, context) {
+      const at = drill.indexOf(':');
+      const key = at < 0 ? drill : drill.slice(0, at);
+      const segment = at < 0 ? undefined : drill.slice(at + 1);
+      const def = widgetDef(key);
+      if (!def || def.rows !== 'work_orders' || def.key === 'recent_activity') {
+        throw new HttpError(400, 'Invalid query', { fields: { drill: 'Unknown widget' } });
+      }
+      const ctx = contextFor(key, withFilterDefaults({ period }), context);
+      try {
+        if (segment !== undefined && WIDGETS[key].where.length < 2) throw badSegment();
+        return combine(WIDGETS[key].where(ctx, segment));
+      } catch (err) {
+        if (err instanceof HttpError) {
+          throw new HttpError(400, 'Invalid query', { fields: { drill: 'Unknown segment' } });
+        }
+        throw err;
+      }
     },
   };
 }

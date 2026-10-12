@@ -16,8 +16,9 @@ export const ROWS_LIMIT = 5000;
 
 /**
  * The catalogue, in sidebar order. `filters`: dashboard filters the widget uses (`period`,
- * `sites`, `categories`). `rows`: records behind it for the CSV export (`null`: none).
- * `segments`: values of `segment` accepted by the rows endpoint, when it has some.
+ * `sites`, `categories`). `rows`: records behind it for the CSV export and the drill-down
+ * (`null`: none). `options`: settings saved with the widget, each with its allowed values
+ * (the first is the default).
  */
 export const WIDGETS = [
   { key: 'open_work_orders', filters: ['sites', 'categories'], rows: 'work_orders' },
@@ -27,14 +28,19 @@ export const WIDGETS = [
   { key: 'assets_broken_down', filters: ['sites', 'categories'], rows: 'assets' },
   { key: 'requests_to_review', filters: ['sites', 'categories'], rows: 'work_orders' },
   { key: 'pending_conflicts', filters: [], rows: null },
-  { key: 'by_category', filters: ['period', 'sites'], rows: 'work_orders', segments: 'category' },
+  // Flow and backlog (Phase 22).
+  { key: 'opened_vs_closed', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
+  { key: 'backlog_age', filters: ['sites', 'categories'], rows: 'work_orders' },
+  { key: 'backlog_weeks', filters: ['sites', 'categories'], rows: 'work_orders' },
   {
-    key: 'by_status',
+    key: 'planned_vs_reactive',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
-    segments: 'status',
+    options: { basis: ['count', 'hours'] },
   },
-  { key: 'my_work', filters: [], rows: 'work_orders', segments: 'my_work' },
+  { key: 'by_category', filters: ['period', 'sites'], rows: 'work_orders' },
+  { key: 'by_status', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
+  { key: 'my_work', filters: [], rows: 'work_orders' },
   { key: 'recent_activity', filters: ['sites', 'categories'], rows: 'work_orders' },
 ];
 
@@ -48,7 +54,27 @@ export function widgetDef(key) {
 
 /** Templates offered when creating a dashboard (§6.5; the others come with their widgets). */
 export const TEMPLATES = {
-  OVERVIEW: WIDGET_KEYS,
+  // Today's home dashboard: never grows with new widgets.
+  OVERVIEW: [
+    'open_work_orders',
+    'in_progress_work_orders',
+    'closed_this_month',
+    'overdue_work_orders',
+    'assets_broken_down',
+    'requests_to_review',
+    'pending_conflicts',
+    'by_category',
+    'by_status',
+    'my_work',
+    'recent_activity',
+  ],
+  BACKLOG: [
+    'overdue_work_orders',
+    'opened_vs_closed',
+    'backlog_age',
+    'backlog_weeks',
+    'planned_vs_reactive',
+  ],
   EMPTY: [],
 };
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);
@@ -59,17 +85,33 @@ export function templateWidgets(template) {
 }
 
 /**
- * BR-K3: every key known and at most once. Returns the first problem, or null.
- * @param {{ key: string }[]} widgets
+ * BR-K3: every key known and at most once, options known with allowed values. Returns the
+ * first problem, or null.
+ * @param {{ key: string, options?: object }[]} widgets
  */
 export function widgetsProblem(widgets) {
   const seen = new Set();
-  for (const { key } of widgets) {
-    if (!BY_KEY.has(key)) return `Unknown widget: ${key}`;
+  for (const { key, options = {} } of widgets) {
+    const def = BY_KEY.get(key);
+    if (!def) return `Unknown widget: ${key}`;
     if (seen.has(key)) return `This widget is already on the dashboard: ${key}`;
     seen.add(key);
+    for (const [name, value] of Object.entries(options)) {
+      const allowed = def.options?.[name];
+      if (!allowed) return `Unknown option of ${key}: ${name}`;
+      if (!allowed.includes(value)) return `Invalid ${name} for ${key}: ${value}`;
+    }
   }
   return null;
+}
+
+/** Options of a widget with their defaults filled in. */
+export function widgetOptions(key, options = {}) {
+  const defaults = Object.entries(BY_KEY.get(key)?.options ?? {}).map(([name, values]) => [
+    name,
+    values[0],
+  ]);
+  return { ...Object.fromEntries(defaults), ...options };
 }
 
 /** BR-K2: same name for the user, ignoring case ("Saclay" = "SACLAY", "Équipe" ≠ "Equipe"). */

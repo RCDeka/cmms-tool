@@ -94,15 +94,31 @@ function fit(ctx, text, width) {
  * Draws a widget as a JPG: title, filters, then its chart, its value or its table, and a
  * footer naming the dashboard and the date.
  * @param {{ title: string, subtitle: string, footer: string, font: string,
- *   chart?: HTMLCanvasElement, value?: string, note?: string,
+ *   charts?: { canvas: HTMLCanvasElement, caption?: string }[], legend?: [string, string][], value?: string, note?: string,
  *   table?: { columns: { label: string, numeric?: boolean }[], rows: unknown[][] } }} content
  * @returns {Promise<Blob>}
  */
-export function widgetImage({ title, subtitle, footer, font, chart, value, note, table }) {
+export function widgetImage({
+  title,
+  subtitle,
+  footer,
+  font,
+  charts = [],
+  legend,
+  value,
+  note,
+  table,
+}) {
   const inner = WIDTH - 2 * PAD;
   // Charts keep their size on screen (never enlarged, which would blur them).
-  const chartWidth = chart?.width ? Math.min(inner, chart.clientWidth || chart.width) : 0;
-  const chartHeight = chartWidth ? (chartWidth * chart.height) / chart.width : 0;
+  const sized = charts
+    .filter((c) => c.canvas.width)
+    .map(({ canvas, caption }) => {
+      const width = Math.min(inner, canvas.clientWidth || canvas.width);
+      return { canvas, caption, width, height: (width * canvas.height) / canvas.width };
+    });
+  const chartHeight = sized.reduce((sum, c) => sum + c.height + 24 + (c.caption ? 26 : 0), 0);
+  const legendHeight = legend?.length ? 32 : 0;
   const tableRows = table?.rows.length ? table.rows.length + 1 : 0;
   const height =
     PAD +
@@ -111,7 +127,8 @@ export function widgetImage({ title, subtitle, footer, font, chart, value, note,
     24 +
     (value !== undefined ? 90 : 0) +
     (note ? 30 : 0) +
-    (chartHeight ? chartHeight + 24 : 0) +
+    legendHeight +
+    chartHeight +
     tableRows * ROW +
     (tableRows ? 24 : 0) +
     40 +
@@ -151,9 +168,28 @@ export function widgetImage({ title, subtitle, footer, font, chart, value, note,
     ctx.fillText(fit(ctx, note, inner), PAD, y);
     y += 30;
   }
-  if (chartHeight) {
-    ctx.drawImage(chart, PAD, y, chartWidth, chartHeight);
-    y += chartHeight + 24;
+  if (legendHeight) {
+    // Legend: a swatch and the label (in text color) per series.
+    let x = PAD;
+    ctx.font = `15px ${font}`;
+    for (const [label, color] of legend) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y + 2, 14, 14);
+      ctx.fillStyle = COLORS.text;
+      ctx.fillText(label, x + 20, y + 1);
+      x += 20 + ctx.measureText(label).width + 24;
+    }
+    y += legendHeight;
+  }
+  for (const c of sized) {
+    if (c.caption) {
+      ctx.fillStyle = COLORS.muted;
+      ctx.font = `600 15px ${font}`;
+      ctx.fillText(fit(ctx, c.caption, inner), PAD, y);
+      y += 26;
+    }
+    ctx.drawImage(c.canvas, PAD, y, c.width, c.height);
+    y += c.height + 24;
   }
   if (tableRows) {
     const columnWidth = inner / table.columns.length;

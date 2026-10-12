@@ -23,12 +23,13 @@ import {
 import { h } from './dom.js';
 import { formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { FLOW_WIDGETS, tableElement } from './widgets-flow.js';
 
 export const PERIODS = [30, 90, 365];
 export const DEFAULT_FILTERS = { period: 30, sites: [], categories: [] };
 
 /** Sidebar groups, in order. */
-export const WIDGET_GROUPS = ['Key figures', 'Work orders', 'Lists'];
+export const WIDGET_GROUPS = ['Key figures', 'Flow and backlog', 'Work orders', 'Lists'];
 
 /**
  * The catalogue, in sidebar order. `size`: S (tile, 1 column), M (2), L (4).
@@ -102,6 +103,39 @@ export const WIDGETS = [
     rows: null,
     href: '/conflicts',
     attention: true,
+  },
+  {
+    key: 'opened_vs_closed',
+    label: 'Opened vs closed',
+    group: 'Flow and backlog',
+    size: 'L',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'backlog_age',
+    label: 'Backlog by age and priority',
+    group: 'Flow and backlog',
+    size: 'M',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'backlog_weeks',
+    label: 'Backlog in weeks of work',
+    group: 'Flow and backlog',
+    size: 'M',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
+    key: 'planned_vs_reactive',
+    label: 'Planned vs reactive work',
+    group: 'Flow and backlog',
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+    options: { basis: ['count', 'hours'] },
   },
   {
     key: 'by_category',
@@ -193,17 +227,69 @@ export function tileHref(def, filters) {
   return text ? `${path}?${text}` : path;
 }
 
+/**
+ * The work order list of one segment of a widget (a bar, a slice, a cell; K9), with the
+ * dashboard filters the widget uses: `period` for the server, `site` and `category` as the
+ * list's own filters. Pure.
+ * @param {{ key: string, filters: string[] }} def
+ * @param {string | null} segment
+ * @param {typeof DEFAULT_FILTERS} filters
+ */
+export function drillHref(def, segment, filters) {
+  const query = new URLSearchParams({
+    drill: segment === null ? def.key : `${def.key}:${segment}`,
+  });
+  if (def.filters.includes('period')) query.set('period', String(filters.period));
+  if (def.filters.includes('sites') && filters.sites.length) {
+    query.set('site', filters.sites.join('|'));
+  }
+  if (def.filters.includes('categories') && filters.categories.length) {
+    query.set('category', filters.categories.join(','));
+  }
+  return `/work-orders?${query}`;
+}
+
+/** Name of a segment for the drill-down list: "Urgent, 91+ days old". Pure. */
+function segmentLabel(key, segment) {
+  if (FLOW_WIDGETS[key]) return FLOW_WIDGETS[key].segment(segment);
+  if (key === 'by_category') return valueLabel('category', segment);
+  if (key === 'by_status') return valueLabel('work_order_status', segment);
+  if (key === 'my_work') return segment === 'today' ? 'today' : 'next 7 days';
+  return segment;
+}
+
+/**
+ * What a drill-down list shows: "Backlog by age and priority: Urgent, 91+ days old" (and the
+ * period when the widget uses one), or null for an unknown widget. Pure.
+ * @param {string} drill `<widget>[:<segment>]`
+ * @param {number} [period]
+ */
+export function drillLabel(drill, period) {
+  const at = drill.indexOf(':');
+  const key = at < 0 ? drill : drill.slice(0, at);
+  const def = widgetDef(key);
+  if (!def) return null;
+  const segment = at < 0 ? '' : segmentLabel(key, drill.slice(at + 1));
+  const days = def.filters.includes('period')
+    ? ` (last ${period ?? DEFAULT_FILTERS.period} days)`
+    : '';
+  return `${def.label}${segment ? `: ${segment}` : ''}${days}`;
+}
+
 const workOrderTitle = (wo) => `${wo.number} — ${wo.title}`;
 
 /**
  * Table view of a widget: the values it draws, with labels. Pure.
  * @param {string} key
  * @param {object} data the widget's figures from the server
- * @param {{ myWorkRange?: 'today' | 'week' }} [state]
- * @returns {{ columns: { label: string, numeric?: boolean }[], rows: unknown[][] }}
+ * @param {{ myWorkRange?: 'today' | 'week', options?: object,
+ *   drill?: (segment: string) => string }} [state] `drill` adds the links of the table view
+ * @returns {{ columns: { label: string, numeric?: boolean }[], rows: unknown[][],
+ *   links?: (string | null)[][] }}
  */
-export function widgetTable(key, data, { myWorkRange = 'today' } = {}) {
+export function widgetTable(key, data, { myWorkRange = 'today', options, drill } = {}) {
   const def = widgetDef(key);
+  if (FLOW_WIDGETS[key]) return FLOW_WIDGETS[key].table(data, { options, drill });
   if (isTile(def)) {
     return {
       columns: [{ label: 'Figure' }, { label: 'Value', numeric: true }],
@@ -314,41 +400,7 @@ function tableDetails(table, caption) {
     'details',
     { class: 'chart-table' },
     h('summary', {}, 'Show as a table'),
-    h(
-      'table',
-      { class: 'data-table' },
-      h('caption', { class: 'visually-hidden' }, caption),
-      h(
-        'thead',
-        {},
-        h(
-          'tr',
-          {},
-          table.columns.map((c) =>
-            h('th', { scope: 'col', class: c.numeric ? 'numeric' : null }, c.label),
-          ),
-        ),
-      ),
-      h(
-        'tbody',
-        {},
-        table.rows.map((row) =>
-          h(
-            'tr',
-            {},
-            row.map((cell, i) =>
-              i === 0
-                ? h('th', { scope: 'row' }, String(cell))
-                : h(
-                    'td',
-                    { class: table.columns[i].numeric ? 'numeric' : null },
-                    typeof cell === 'number' ? numberFormat.format(cell) : String(cell),
-                  ),
-            ),
-          ),
-        ),
-      ),
-    ),
+    tableElement(table, caption),
   );
 }
 
@@ -357,12 +409,22 @@ function tableDetails(table, caption) {
  * @param {string} key
  * @param {object} data the widget's figures
  * @param {{ filters: typeof DEFAULT_FILTERS, myWorkRange: 'today' | 'week',
- *   onMyWorkRange: (range: string) => void }} context
+ *   onMyWorkRange: (range: string) => void, options?: object,
+ *   onOption?: (name: string, value: string) => void,
+ *   navigate?: (href: string) => void }} context
  * @returns {{ element: HTMLElement | HTMLElement[], flagged?: boolean,
- *   chart?: { canvas: HTMLCanvasElement, rows: object[], draw: Function } }}
+ *   legend?: [string, number][],
+ *   charts?: { canvas: HTMLCanvasElement, draw: () => Promise<object> }[] }}
  */
 export function widgetBody(key, data, context) {
   const def = widgetDef(key);
+  // The records behind a segment: a link (tables, legends) and a click (chart marks).
+  const drill =
+    def.rows === 'work_orders' ? (segment) => drillHref(def, segment, context.filters) : null;
+  const open = drill && context.navigate ? (segment) => context.navigate(drill(segment)) : null;
+  if (FLOW_WIDGETS[key]) {
+    return FLOW_WIDGETS[key].body(data, { ...context, drill, open });
+  }
   if (isTile(def)) {
     const flagged = Boolean(def.attention && data.value > 0);
     return {
@@ -394,16 +456,23 @@ export function widgetBody(key, data, context) {
   switch (key) {
     case 'by_category': {
       const rows = chartRows({ by_category: data.items });
-      const body = categoryChartBody(rows, `${def.label}, last ${data.period} days`);
+      const body = categoryChartBody(rows, `${def.label}, last ${data.period} days`, (r) =>
+        drill(r.code),
+      );
+      const pick = open ? (r) => open(r.code) : undefined;
       return {
         element: body.element,
-        chart: { canvas: body.canvas, rows, draw: drawCategoryChart },
+        charts: [{ canvas: body.canvas, draw: () => drawCategoryChart(body.canvas, rows, pick) }],
       };
     }
     case 'by_status': {
       const rows = statusRows({ by_status: data.items });
-      const body = statusChartBody(rows);
-      return { element: body.element, chart: { canvas: body.canvas, rows, draw: drawStatusChart } };
+      const body = statusChartBody(rows, (r) => drill(r.code));
+      const pick = open ? (r) => open(r.code) : undefined;
+      return {
+        element: body.element,
+        charts: [{ canvas: body.canvas, draw: () => drawStatusChart(body.canvas, rows, pick) }],
+      };
     }
     case 'my_work': {
       const range = context.myWorkRange;
@@ -432,7 +501,19 @@ export function widgetBody(key, data, context) {
   }
 }
 
-/** Widgets whose image shows their table (no chart, or a chart that needs its legend). */
+/**
+ * Widgets whose image shows their table: no chart, or a chart whose values are only written
+ * in its table (the status pie). Pure.
+ */
 export function imageShowsTable(key) {
-  return !isTile(widgetDef(key)) && key !== 'by_category';
+  return ['by_status', 'my_work', 'recent_activity', 'backlog_age'].includes(key);
+}
+
+/** Widget options with their defaults filled in (the first allowed value). Pure. */
+export function widgetOptions(key, options = {}) {
+  const defaults = Object.entries(widgetDef(key)?.options ?? {}).map(([name, values]) => [
+    name,
+    values[0],
+  ]);
+  return { ...Object.fromEntries(defaults), ...options };
 }

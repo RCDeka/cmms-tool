@@ -159,7 +159,10 @@ export function createApp({
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
   app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
   app.use('/api/assets', assetsRouter({ assets, now }));
-  app.use('/api/work-orders', workOrdersRouter({ workOrders, timeZone: config.timeZone, now }));
+  app.use(
+    '/api/work-orders',
+    workOrdersRouter({ workOrders, widgets, timeZone: config.timeZone, now }),
+  );
   app.use('/api/conflicts', conflictsRouter({ conflicts }));
   app.use('/api/plans', plansRouter({ plans, timeZone: config.timeZone, now }));
   app.use(

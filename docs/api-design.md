@@ -191,6 +191,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?`, `priority?`, `type?`, `category?`, `site?`, `assignee_id?` (each one value or several, e.g. `status=OPEN,IN_PROGRESS,ON_HOLD`);
   - `to_review?=true`: staff requests waiting for a review (`review_status = PENDING`, D47);
+  - `drill?` (D59, K9): the records of a dashboard widget segment, `<widget>[:<segment>]` with the segments of `GET /api/dashboard/widgets/:key/rows` (`backlog_age:URGENT:91+`), with `period?` (30, 90 or 365; only with `drill`, 400 otherwise). The list's own `site` and `category` filters carry the dashboard's sites and trades. Unknown widget or segment, or a widget without work orders (`recent_activity`, `assets_broken_down`, `pending_conflicts`) → 400.
   - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
 - `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
@@ -371,11 +372,11 @@ SUPERVISOR and ADMIN (technicians and staff: 403). A dashboard of another user a
 - `200 { "items": [Dashboard] }` in sidebar order. A user without dashboards gets "Overview" created first, with every widget of the catalogue. `GET /:id`: one dashboard, 404 if not mine.
 
 ### POST /api/dashboards
-- Body: `{ "name": string, "template"?: "OVERVIEW" | "EMPTY", "copy_of"?: id }`: from a template (empty by default) or as a copy of one of my dashboards (widgets and filters). Placed last. More templates come with the widgets of Phases 22–24.
+- Body: `{ "name": string, "template"?: "OVERVIEW" | "BACKLOG" | "EMPTY", "copy_of"?: id }`: from a template (empty by default) or as a copy of one of my dashboards (widgets and filters). Placed last. Overview: the 11 widgets of the former dashboard; Backlog: overdue work orders and the four flow and backlog widgets.
 - `201 Dashboard`. Errors: 400; 404 `copy_of` not mine; 409 `BR-K2` name used (`details.fields.name = "Already used"`) or 20 dashboards already.
 
 ### PUT /api/dashboards/:id
-- Body: `{ "version": N, "name"?, "widgets"?: [{ "key", "options"?: {} }], "filters"?: { "period"?: 30 | 90 | 365, "sites"?: [string], "categories"?: [Category] } }` (at least one field; filters are replaced whole, duplicates dropped).
+- Body: `{ "version": N, "name"?, "widgets"?: [{ "key", "options"?: {} }], "filters"?: { "period"?: 30 | 90 | 365, "sites"?: [string], "categories"?: [Category] } }` (at least one field; filters are replaced whole, duplicates dropped). Widget options: only those of the catalogue, with an allowed value (`planned_vs_reactive`: `{ "basis": "count" | "hours" }`).
 - `200 Dashboard` (version + 1). Errors: 400 unknown or repeated widget (`details.fields.widgets`), invalid filters or options; 404; 409 `BR-V1` stale version, `BR-K2` name used.
 
 ### PUT /api/dashboards/order
@@ -386,12 +387,12 @@ SUPERVISOR and ADMIN (technicians and staff: 403). A dashboard of another user a
 
 ### GET /api/dashboard/widgets?keys=a,b&period=&site=&category=
 - `keys` (required): widgets to compute, comma-separated. Filters: `period` (30, 90 or 365; default 30), `site` (several joined by `|`), `category` (comma-separated). Each widget uses only the filters it declares in the catalogue.
-- `200 { "today", "generated_at", "widgets": { key: data } }`. Data: tiles `{ value }`; `by_category` `{ period, items: [{ category, count }] }` (every category, then `UNSPECIFIED` when some have none); `by_status` `{ period, items: [{ status, count }] }`; `my_work` `{ today, week_end, today_items: [WorkOrder], week_items: [WorkOrder] }` (no filter: the user's own work); `recent_activity` `{ items: [WorkOrder] }` (5). Computed in one read transaction.
+- `200 { "today", "generated_at", "widgets": { key: data } }`. Data: tiles `{ value }`; `by_category` `{ period, items: [{ category, count }] }` (every category, then `UNSPECIFIED` when some have none); `by_status` `{ period, items: [{ status, count }] }`; `my_work` `{ today, week_end, today_items: [WorkOrder], week_items: [WorkOrder] }` (no filter: the user's own work); `recent_activity` `{ items: [WorkOrder] }` (5). Phase 22: `opened_vs_closed` `{ period, unit: "week" | "month", buckets: [{ key, from, to, partial, opened, closed, cancelled, unfinished }] }`; `backlog_age` `{ buckets: ["0-7", "8-30", "31-90", "91+"], rows: [{ priority, counts: [n, n, n, n] }] (Urgent first), total, urgent_old }`; `backlog_weeks` `{ items: [{ category, work_orders, hours, capacity, weeks }] (most weeks first; weeks null without capacity), unspecified: { work_orders, hours } | null, without_estimate }`; `planned_vs_reactive` `{ period, unit, groups: ["PLANNED", "REACTIVE", "REQUESTS", "IMPROVEMENT"], buckets: [{ key, from, to, partial, values: { GROUP: { count, hours } } }], without_actual_hours }`. Definitions: `docs/data-model.md` → KPI definitions. Computed in one read transaction.
 - Errors: 400 missing or unknown key, invalid filter.
 
 ### GET /api/dashboard/widgets/:key/rows?segment=&period=&site=&category=
 - The records behind a widget for the Work orders (CSV) and Assets (CSV) exports (BR-K4): `200 { "kind": "work_orders" | "assets", "items": [WorkOrder | Asset], "total", "truncated" }`, at most 5,000 items, by number (by code for assets; `my_work` by priority then due date; `recent_activity` its 5).
-- `segment` narrows to one part of the widget: a category (or `UNSPECIFIED`) for `by_category`, a status for `by_status`, `today` or `week` for `my_work`.
+- `segment` narrows to one part of the widget: a category (or `UNSPECIFIED`) for `by_category`; a status for `by_status`; `today` or `week` for `my_work`; `opened|closed|cancelled:<bucket>` for `opened_vs_closed` (bucket `2026-W40` or `2026-09`); `<PRIORITY>`, `<PRIORITY>:<age>` or `:<age>` for `backlog_age` (age `0-7`, `8-30`, `31-90`, `91+`); a trade, `UNSPECIFIED` or `NO_ESTIMATE` for `backlog_weeks`; `<KIND>` or `<KIND>:<bucket>` for `planned_vs_reactive`. Tiles take no segment.
 - Errors: 400 unknown key or segment; 404 a widget without records (`pending_conflicts`).
 
 ## Maintenance plans and the year planner (added, D48, D49)

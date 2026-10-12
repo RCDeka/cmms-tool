@@ -29,8 +29,8 @@ const widgets = z
   .array(
     z.strictObject({
       key: z.string().max(60),
-      // No widget has options yet (K8 filters are per dashboard); the shape is kept for later.
-      options: z.strictObject({}).default({}),
+      // Checked against the catalogue (widgetsProblem): names and allowed values.
+      options: z.record(z.string().max(40), z.string().max(40)).default({}),
     }),
   )
   .max(WIDGET_KEYS.length);

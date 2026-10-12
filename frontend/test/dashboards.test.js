@@ -19,9 +19,8 @@ import {
 
 describe('widget catalogue', () => {
   it('matches the backend: keys, order, filters and records', () => {
-    expect(WIDGETS.map((w) => ({ key: w.key, filters: w.filters, rows: w.rows }))).toEqual(
-      backend.WIDGETS.map((w) => ({ key: w.key, filters: w.filters, rows: w.rows })),
-    );
+    const shape = (w) => ({ key: w.key, filters: w.filters, rows: w.rows, options: w.options });
+    expect(WIDGETS.map(shape)).toEqual(backend.WIDGETS.map(shape));
     expect(PERIODS).toEqual(backend.DASHBOARD_PERIODS);
     expect(DEFAULT_FILTERS.period).toBe(backend.DEFAULT_PERIOD);
   });

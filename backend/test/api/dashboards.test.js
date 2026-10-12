@@ -5,7 +5,7 @@ import argon2 from 'argon2';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
-import { MAX_DASHBOARDS, WIDGET_KEYS } from '../../src/rules/dashboards.js';
+import { MAX_DASHBOARDS, TEMPLATES } from '../../src/rules/dashboards.js';
 import { NOW, TEST_CONFIG, expectNoSecrets } from '../helpers/app.js';
 import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
 
@@ -157,7 +157,7 @@ const widgets = async (username, query) =>
   (await as(username).get(`/api/dashboard/widgets?${query}`).expect(200)).body.widgets;
 
 describe('GET /api/dashboards', () => {
-  it('creates "Overview" with every widget for a user without dashboards, once', async () => {
+  it('creates "Overview" with the widgets of the former dashboard for a user without dashboards, once', async () => {
     const first = await as('sup').get('/api/dashboards').expect(200);
     expect(first.body.items).toHaveLength(1);
     const [overview] = first.body.items;
@@ -167,7 +167,8 @@ describe('GET /api/dashboards', () => {
       version: 1,
       filters: { period: 30, sites: [], categories: [] },
     });
-    expect(overview.widgets.map((w) => w.key)).toEqual(WIDGET_KEYS);
+    expect(overview.widgets.map((w) => w.key)).toEqual(TEMPLATES.OVERVIEW);
+    expect(TEMPLATES.OVERVIEW).toHaveLength(11);
     const again = await as('sup').get('/api/dashboards').expect(200);
     expect(ids(again.body.items)).toEqual([overview.id]);
     expectNoSecrets(again.body);
@@ -205,7 +206,7 @@ describe('POST /api/dashboards', () => {
       template: 'OVERVIEW',
     });
     expect(overview.status).toBe(201);
-    expect(overview.body.widgets).toHaveLength(WIDGET_KEYS.length);
+    expect(overview.body.widgets).toHaveLength(TEMPLATES.OVERVIEW.length);
 
     const source = (await as('sup2').get('/api/dashboards')).body.items.find(
       (d) => d.name === 'Saclay',

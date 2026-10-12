@@ -20,6 +20,7 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { requireRole } from '../middleware/auth.js';
+import { DASHBOARD_PERIODS, DEFAULT_PERIOD } from '../rules/dashboards.js';
 import { validate } from '../middleware/validate.js';
 import { WORK_ORDER_SORTS } from '../services/work-orders.js';
 import { sendUpdateResult } from './write-response.js';
@@ -38,6 +39,13 @@ const listQuery = z.strictObject({
   mine: flagFilter,
   overdue: flagFilter,
   to_review: flagFilter,
+  // A segment of a dashboard widget (D59, K9): "backlog_age:URGENT:31-90", with its period.
+  drill: z.string().max(80).optional(),
+  period: z.coerce
+    .number()
+    .int()
+    .refine((p) => DASHBOARD_PERIODS.includes(p), `One of ${DASHBOARD_PERIODS.join(', ')} days`)
+    .optional(),
 });
 
 const statsQuery = z.strictObject({
@@ -47,19 +55,25 @@ const statsQuery = z.strictObject({
 /**
  * @param {object} deps
  * @param {ReturnType<import('../services/work-orders.js').createWorkOrderService>} deps.workOrders
+ * @param {ReturnType<import('../services/dashboard-widgets.js').createDashboardWidgetService>} deps.widgets
  * @param {string} deps.timeZone APP_TIMEZONE, for "today"
  * @param {() => Date} deps.now
  */
-export function workOrdersRouter({ workOrders, timeZone, now }) {
+export function workOrdersRouter({ workOrders, widgets, timeZone, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
-    res.json(
-      workOrders.list(req.valid.query, {
-        userId: req.user.id,
-        today: dateInZone(timeZone, now()),
-      }),
-    );
+    const { drill, period, ...query } = req.valid.query;
+    if (period !== undefined && drill === undefined) {
+      throw new HttpError(400, 'Invalid query', { fields: { period: 'Only with drill' } });
+    }
+    const today = dateInZone(timeZone, now());
+    const userId = req.user.id;
+    const extra =
+      drill === undefined
+        ? undefined
+        : widgets.drillWhere(drill, period ?? DEFAULT_PERIOD, { today, userId, timeZone });
+    res.json(workOrders.list(query, { userId, today, extra }));
   });
 
   // All roles may create (D27); BR-W12 restricts technicians in the service.
