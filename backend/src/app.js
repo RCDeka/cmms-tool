@@ -15,6 +15,7 @@ import { auditRouter, historyHandler } from './routes/audit.js';
 import { authRouter } from './routes/auth.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { dashboardsRouter } from './routes/dashboards.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { healthRouter } from './routes/health.js';
 import { planOccurrencesRouter } from './routes/plan-occurrences.js';
@@ -30,6 +31,8 @@ import { createAuthService } from './services/auth.js';
 import { createCommentService } from './services/comments.js';
 import { createConflictService } from './services/conflicts.js';
 import { createDashboardService } from './services/dashboard.js';
+import { createDashboardWidgetService } from './services/dashboard-widgets.js';
+import { createDashboardsService } from './services/dashboards.js';
 import { createFeedbackService } from './services/feedback.js';
 import { createOccurrenceService } from './services/occurrences.js';
 import { createPlanService } from './services/plans.js';
@@ -78,6 +81,8 @@ export function createApp({
   const referenceData = createReferenceDataService(db);
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
+  const dashboards = createDashboardsService(db);
+  const widgets = createDashboardWidgetService(db, { workOrders, assets });
   const audit = createAuditService(db);
   const feedback = createFeedbackService(db);
   const comments = createCommentService(db);
@@ -132,6 +137,7 @@ export function createApp({
       '/api/work-orders',
       '/api/conflicts',
       '/api/dashboard',
+      '/api/dashboards',
       '/api/audit-log',
       '/api/plans',
       '/api/plan-occurrences',
@@ -163,7 +169,11 @@ export function createApp({
   app.use('/api/planning', planningRouter({ planning, timeZone: config.timeZone, now }));
   app.use('/api/schedule', scheduleRouter({ schedule, planning, timeZone: config.timeZone, now }));
   app.use('/api/my-week', myWeekRouter({ schedule, timeZone: config.timeZone, now }));
-  app.use('/api/dashboard', dashboardRouter({ dashboard, timeZone: config.timeZone, now }));
+  app.use(
+    '/api/dashboard',
+    dashboardRouter({ dashboard, widgets, timeZone: config.timeZone, now }),
+  );
+  app.use('/api/dashboards', dashboardsRouter({ dashboards, now }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);
 

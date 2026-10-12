@@ -314,6 +314,25 @@ Weekend days opened for a week (P11): `week` (PK, ISO week), `saturday_open`, `s
 #### planning_settings
 One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7; 0.5–12 in half hours), `reserve_percent` (30; 0–80), `release_weeks_ahead` (4; 1–12), `max_block_hours` (3.5; 0.5–8 in half hours), `version`, `updated_by`, `updated_at`. Every change is logged (`entity_type = planning_settings`).
 
+### dashboards (added, D59, Phase 21)
+
+Personal dashboards of supervisors and admins (migration `011_dashboards.sql`; `docs/spec-dashboards.md`).
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| user_id | INTEGER | no | FK → users.id | owner (BR-K1) |
+| name | TEXT | no | 1–60 characters, trimmed | unique per user ignoring case: unique index on (`user_id`, `name COLLATE NOCASE`); the API also compares accented letters (BR-K2) |
+| position | INTEGER | no | | order in the sidebar |
+| widgets | TEXT | no | JSON array, default `[]` | `[{ "key": "by_status", "options": {} }, …]` in display order; keys from the catalogue, each once (BR-K3); no widget has options yet |
+| filters | TEXT | no | JSON object, default `{}` | `{ "period": 30 \| 90 \| 365, "sites": [string], "categories": [Category] }` |
+| version | INTEGER | no | default 1 | optimistic check: 409 when stale (one owner: no conflict console) |
+| created_at / updated_at | TEXT | no | | |
+
+Index: (`user_id`, `position`). Not in the audit log (personal preferences). A user without dashboards gets "Overview" (every widget) on their first `GET /api/dashboards`.
+
+Rules: BR-K1 a dashboard is only seen and changed by its owner (404 for others); BR-K2 1 to 20 dashboards per user, names unique ignoring case, the last one cannot be deleted; BR-K3 widget keys known and each at most once; BR-K4 the Work orders (CSV) of a widget lists exactly the records its figures count (one WHERE clause per widget in `services/dashboard-widgets.js`).
+
 ## Business rules
 
 ### Users and authentication
@@ -423,6 +442,7 @@ One row (`id = 1`), edited by the administrators (P16): `daily_hours` (default 7
 - Staff requests to review: `review_status = 'PENDING'` (only for supervisors and admins, D47).
 - Work orders by category / status / type (`stats?period=N`): work orders with `created_on` within the last N days. Work orders without `category` are counted under `UNSPECIFIED`.
 - Recent activity: the 5 work orders with the most recent `updated_at`.
+- Personal dashboard widgets (D59): the same definitions; the dashboard's sites and trades filter each widget that uses them (`site`, `category` of the work order, or of the asset for "Assets broken down"; conflicts are not filtered), and the period replaces the 30 days of the two charts. The catalogue (`backend/src/rules/dashboards.js`) lists the filters each widget uses.
 - My work today: non-terminal work orders with `assignee_id` = current user and (`due_on` ≤ today or empty), sorted by priority (`URGENT` first) then `due_on`.
 - My work, next 7 days: the same with `due_on` ≤ today + 6 days (`week_end`), so today's and late work are included (D43).
 

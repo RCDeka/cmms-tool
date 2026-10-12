@@ -361,6 +361,20 @@ export function createWorkOrderService(db) {
     /** Work order with its asset, or null. */
     getById,
 
+    /**
+     * Work orders matching a WHERE clause built by the dashboard widgets (constant SQL on the
+     * alias `w`, values bound in `params`).
+     * @param {string} clause
+     * @param {object} params
+     * @param {{ orderBy: string, limit: number }} options
+     */
+    selectWhere(clause, params, { orderBy, limit }) {
+      return db
+        .prepare(`${SELECT} ${clause} ORDER BY ${orderBy} LIMIT @__limit`)
+        .all({ ...params, __limit: limit })
+        .map(toWorkOrder);
+    },
+
     insert,
 
     /** The most recently updated work orders (dashboard → Recent activity). */

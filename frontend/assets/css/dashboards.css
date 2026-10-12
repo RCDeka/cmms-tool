@@ -1,0 +1,431 @@
+/* SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka) */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* Personal dashboards of supervisors and admins (D59, docs/ui-guidelines.md → Dashboards). */
+
+/* --- Sidebar: dashboards list and widget checkboxes ------------------------------------- */
+
+.nav-group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nav-group-title {
+  padding: var(--space-2) var(--space-3) 0;
+  color: var(--color-sidebar-muted);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+.nav-sublist {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.nav-sublist a {
+  overflow-wrap: anywhere;
+}
+
+.nav-action {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-sidebar-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-action:hover:not(:disabled) {
+  background: var(--color-sidebar-hover);
+  color: var(--color-sidebar-text);
+}
+
+.nav-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.widget-picker {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-sidebar-border);
+}
+
+.widget-picker-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.widget-picker-hint {
+  margin: 0;
+  color: var(--color-sidebar-muted);
+  font-size: var(--font-size-small);
+}
+
+.widget-group {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.widget-group legend {
+  padding: var(--space-2) 0 var(--space-1);
+  color: var(--color-sidebar-muted);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+.widget-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  cursor: pointer;
+}
+
+.widget-option input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-brand-red);
+}
+
+.widget-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* --- Toolbar: filters and the dashboard menu -------------------------------------------- */
+
+.dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+
+.dashboard-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.dashboard-filters:focus {
+  outline: none;
+}
+
+.dashboard-filters .segmented-option {
+  white-space: nowrap;
+}
+
+/* Phones: one filter per line, the period buttons share the width. */
+@media (max-width: 767px) {
+  .dashboard-filters,
+  .dashboard-filters .multi-select {
+    width: 100%;
+  }
+
+  /* The list filter bars put two fields per line (flex: 1 1 45%); here one per line. */
+  .dashboard-filters .filter-field {
+    flex: 1 1 100%;
+  }
+
+  .dashboard-filters .segmented {
+    display: flex;
+  }
+
+  .dashboard-filters .segmented-option {
+    flex: 1;
+  }
+}
+
+.dashboard-message {
+  margin: 0;
+}
+
+.dashboard-message:empty {
+  display: none;
+}
+
+/* Menus: a disclosure with a list of buttons (dashboard menu and widget ⋯ menus). */
+.page-menu,
+.widget-menu {
+  position: relative;
+  flex: none;
+}
+
+.page-menu summary,
+.widget-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.page-menu summary::-webkit-details-marker,
+.widget-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.page-menu summary::after {
+  content: ' ▾';
+}
+
+.menu-list {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  right: 0;
+  display: grid;
+  min-width: 15rem;
+  margin-top: 2px;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(var(--shadow-color) / 15%);
+}
+
+.menu-item {
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.menu-item:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* --- Widget grid: 4 columns, 2 below 1024 px, 1 below 768 px ---------------------------- */
+
+.widget-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.widget-size-s {
+  grid-column: span 1;
+}
+
+.widget-size-m {
+  grid-column: span 2;
+}
+
+.widget-size-l {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1023px) {
+  .widget-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .widget-size-m {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .widget-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .widget-size-s {
+    grid-column: 1 / -1;
+  }
+}
+
+.widget-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.widget-card.is-flagged {
+  border-color: var(--color-warning);
+  box-shadow: inset 4px 0 0 var(--color-warning);
+}
+
+.widget-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.widget-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-title {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+/* Tiles keep the stat tile look: a small label over a big value. */
+.widget-size-s .widget-title {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.widget-scope {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.widget-handle,
+.widget-menu summary {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: var(--touch-target);
+  margin-top: calc(-1 * var(--space-2));
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.widget-handle {
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  /* Dragging the handle moves the card; the rest of the card still scrolls the page. */
+  touch-action: none;
+}
+
+.widget-menu summary {
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.widget-handle:hover:not(:disabled),
+.widget-menu summary:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.widget-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Picked up with the keyboard. */
+.widget-card.is-grabbed {
+  box-shadow: 0 0 0 3px var(--color-primary);
+}
+
+/* Following the pointer; the placeholder keeps its place in the grid. */
+.widget-card.is-dragging {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.95;
+  box-shadow: 0 16px 40px rgb(var(--shadow-color) / 25%);
+}
+
+.widget-grid:has(.is-dragging) {
+  user-select: none;
+}
+
+.widget-placeholder {
+  border: 2px dashed var(--color-text-muted);
+  border-radius: 10px;
+  background: var(--color-neutral-bg);
+}
+
+.widget-body {
+  min-width: 0;
+}
+
+.widget-tile {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.widget-value {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.widget-value:hover {
+  color: var(--color-link-hover);
+  text-decoration: underline;
+}
+
+.widget-toolbar {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+/* --- Name dialog ------------------------------------------------------------------------- */
+
+.dialog-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dialog-form .dialog-title {
+  margin: 0;
+}
+
+.dialog-form .dialog-actions {
+  margin-top: 0;
+}
+
+.dialog-choices {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dialog-choices legend {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.dialog-choices .radio {
+  display: flex;
+  margin-right: 0;
+}

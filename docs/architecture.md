@@ -42,8 +42,8 @@ Request flow: `route → validate → service → rules → SQL`. Errors are thr
 frontend/
   index.html                  shell: sidebar, status bar, #main-content, #table-container, #detail-container
   sw.js                       service worker (must sit at the root for its scope)
-  assets/css/                 base, layout, table, detail, components (brief), planning (year planner),
-                              schedule (week scheduler, My week)
+  assets/css/                 base, layout, table, detail, components (brief), dashboards (personal
+                              dashboards), planning (year planner), schedule (week scheduler, My week)
   assets/js/
     app.js                    entry point: init DB, auth, router, network, queue flush; the record
                               views, dashboard, staff, admin and conflict pages
@@ -73,7 +73,13 @@ frontend/
     format.js                 value formatting (dates, enums as badges, users)
     layout.js                 shell: sidebar, menu, title, status bar, live region, split view
     conflicts.js              conflict badges, banner, supervisor console
-    dashboard.js              KPI tiles, chart, lists
+    dashboard.js              technicians' dashboard: KPI tiles, charts, lists (bodies shared with widgets.js)
+    dashboards-page.js        personal dashboards (D59): sidebar list and widget checkboxes, filters, the
+                              dashboard menu and dialogs, saving, exports, the copy kept on the device
+    widgets.js                widget catalogue (labels, sizes, groups), widget bodies, table views (the
+                              source of "Show as a table", Figures CSV and table images), CSV record columns
+    widget-order.js           drag (pointer) and keyboard moves of the widget cards, with auto-scroll
+    export.js                 CSV text (BOM, RFC 4180, formula guard), file names, download, JPG painter
     requests.js               staff pages: open / all requests, request form, request page (D46)
     comments.js               work order conversation (staff request page, work order panel)
     review.js                 review box of a staff request: approve and assign, or reject (D47)
@@ -116,7 +122,8 @@ export const ENTITIES = {
 |---|---|
 | `/` | redirect to `/dashboard` (staff: `/requests`) |
 | `/login` | login form |
-| `/dashboard` | home dashboard |
+| `/dashboard` | home dashboard (technicians); supervisors and admins: their first dashboard (D59) |
+| `/dashboard/:id` | one of my dashboards (SUPERVISOR, ADMIN) |
 | `/assets?page=N` | assets table |
 | `/assets/:id?page=N` | table page N + asset detail (split view); `page` is optional and keeps the table where the user opened the record |
 | `/work-orders?page=N` | work orders table |
@@ -156,7 +163,7 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 |---|---|---|
 | `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, scope, ids: [...], fetched_at }` (`scope`: query of the role's plain list, D44) |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
-| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display), the last 4 weeks of My week (`my_week`, by week, D52) |
+| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display), my dashboards (`dashboards`) and the last figures of each (`dashboard_data_<id>`, D59), the last 4 weeks of My week (`my_week`, by week, D52) |
 | `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
 | `sync_queue` (D10) | auto id | `{ op: 'create' \| 'update', entity, record_id, client_id?, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
 

@@ -30,7 +30,7 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 - **Local-first**: IndexedDB cache with prefetch of adjacent pages, silent revalidation, offline browsing and editing, sync queue.
 - **Save modes**: standard (explicit save, drafts every 60 s) and power user (auto-save when leaving a record).
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).
-- **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today".
+- **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today". Supervisors and admins build their own named dashboards (D59): widgets ticked in the sidebar, arranged by drag and drop or the keyboard, filtered by period, sites and trades, each exported as CSV (figures or the records behind them) or as a JPG image.
 - **Staff requests**: bank staff (role `STAFF`) submit requests ("I don't know" is accepted for the kind of problem and the urgency; the location is typed), follow their open requests with a plain-words status and next step, see all past requests, and exchange comments with the maintenance team, who handle each request as a work order. A supervisor or admin reviews each request first (dashboard tile "Staff requests to review"): approve it and assign a technician or supervisor, or reject it with a reason the requester sees.
 - **Roles**: `STAFF`, `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 

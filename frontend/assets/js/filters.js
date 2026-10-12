@@ -199,6 +199,69 @@ function installDropdownClosing() {
 }
 
 /**
+ * Several values can be ticked: a dropdown of checkboxes that behaves like a form control
+ * (`el.value` is the values joined by the separator, as in the URL). Used by the list filter
+ * bars and the dashboard filters.
+ * @param {{ id: string, labelId: string, options: [string, string][], separator?: string,
+ *   onChange: () => void, summary?: (value: string) => string | null }} options
+ * @returns {HTMLDetailsElement & { value: string }}
+ */
+export function multiSelect({ id, labelId, options, separator = ',', onChange, summary: text }) {
+  installDropdownClosing();
+  const summary = h('summary', { 'aria-labelledby': labelId });
+  const boxes = options.map(([value, label]) => {
+    const box = h('input', { type: 'checkbox', value });
+    return {
+      box,
+      text: label,
+      row: h('label', { class: 'multi-option' }, box, h('span', {}, label)),
+    };
+  });
+  const el = h(
+    'details',
+    { id, class: 'multi-select', onChange },
+    summary,
+    h(
+      'div',
+      { class: 'multi-options' },
+      boxes.map(({ row }) => row),
+    ),
+  );
+  const chosen = () => boxes.filter(({ box }) => box.checked);
+  const refresh = () => {
+    const picked = chosen();
+    const value = picked.map(({ box }) => box.value).join(separator);
+    summary.textContent =
+      text?.(value) ??
+      (picked.length === 0
+        ? 'Any'
+        : picked.length === 1
+          ? picked[0].text
+          : `${picked.length} selected`);
+  };
+  el.addEventListener('change', refresh);
+  el.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      el.open = false;
+      summary.focus();
+    }
+  });
+  Object.defineProperty(el, 'value', {
+    get: () =>
+      chosen()
+        .map(({ box }) => box.value)
+        .join(separator),
+    set: (value) => {
+      const wanted = value ? String(value).split(separator) : [];
+      for (const { box } of boxes) box.checked = wanted.includes(box.value);
+      refresh();
+    },
+  });
+  refresh();
+  return el;
+}
+
+/**
  * Filter bar. Controls are named after the query parameters; changes call `onChange` with
  * the new filters (search text after a short pause).
  * @param {object} options
@@ -231,57 +294,16 @@ export function renderFilterBar({
   const changed = () => onChange(read(), { typing: false });
   const typed = debounce(() => onChange(read(), { typing: true }), SEARCH_DELAY_MS);
 
-  // Several values can be ticked: a dropdown of checkboxes that behaves like a form control
-  // (`el.value` is the values joined by the separator, as in the URL).
   const select = (name, label, options, separator = ',') => {
     const labelId = `filter-${name}-label`;
-    const summary = h('summary', { 'aria-labelledby': labelId });
-    const boxes = options.map(([value, text]) => {
-      const box = h('input', { type: 'checkbox', value });
-      return { box, text, row: h('label', { class: 'multi-option' }, box, h('span', {}, text)) };
+    const el = multiSelect({
+      id: `filter-${name}`,
+      labelId,
+      options,
+      separator,
+      onChange: changed,
+      summary: (value) => (name === 'status' && value === NOT_FINISHED ? 'Not finished' : null),
     });
-    const el = h(
-      'details',
-      { id: `filter-${name}`, class: 'multi-select', onChange: changed },
-      summary,
-      h(
-        'div',
-        { class: 'multi-options' },
-        boxes.map(({ row }) => row),
-      ),
-    );
-    const chosen = () => boxes.filter(({ box }) => box.checked);
-    const refresh = () => {
-      const picked = chosen();
-      const value = picked.map(({ box }) => box.value).join(separator);
-      summary.textContent =
-        name === 'status' && value === NOT_FINISHED
-          ? 'Not finished'
-          : picked.length === 0
-            ? 'Any'
-            : picked.length === 1
-              ? picked[0].text
-              : `${picked.length} selected`;
-    };
-    el.addEventListener('change', refresh);
-    el.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        el.open = false;
-        summary.focus();
-      }
-    });
-    Object.defineProperty(el, 'value', {
-      get: () =>
-        chosen()
-          .map(({ box }) => box.value)
-          .join(separator),
-      set: (value) => {
-        const wanted = value ? String(value).split(separator) : [];
-        for (const { box } of boxes) box.checked = wanted.includes(box.value);
-        refresh();
-      },
-    });
-    refresh();
     controls.set(name, el);
     return h(
       'div',

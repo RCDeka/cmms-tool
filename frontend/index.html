@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/assets/css/table.css" />
     <link rel="stylesheet" href="/assets/css/detail.css" />
     <link rel="stylesheet" href="/assets/css/components.css" />
+    <link rel="stylesheet" href="/assets/css/dashboards.css" />
     <link rel="stylesheet" href="/assets/css/planning.css" />
     <link rel="stylesheet" href="/assets/css/schedule.css" />
     <script type="module" src="/assets/js/app.js"></script>
@@ -27,11 +28,13 @@
     <link rel="modulepreload" href="/assets/js/config.js" />
     <link rel="modulepreload" href="/assets/js/conflicts.js" />
     <link rel="modulepreload" href="/assets/js/dashboard.js" />
+    <link rel="modulepreload" href="/assets/js/dashboards-page.js" />
     <link rel="modulepreload" href="/assets/js/db.js" />
     <link rel="modulepreload" href="/assets/js/detail.js" />
     <link rel="modulepreload" href="/assets/js/dom.js" />
     <link rel="modulepreload" href="/assets/js/editor.js" />
     <link rel="modulepreload" href="/assets/js/entities.js" />
+    <link rel="modulepreload" href="/assets/js/export.js" />
     <link rel="modulepreload" href="/assets/js/feedback.js" />
     <link rel="modulepreload" href="/assets/js/enums.js" />
     <link rel="modulepreload" href="/assets/js/filters.js" />
@@ -66,6 +69,8 @@
     <link rel="modulepreload" href="/assets/js/session.js" />
     <link rel="modulepreload" href="/assets/js/sync.js" />
     <link rel="modulepreload" href="/assets/js/table.js" />
+    <link rel="modulepreload" href="/assets/js/widget-order.js" />
+    <link rel="modulepreload" href="/assets/js/widgets.js" />
     <link rel="modulepreload" href="/assets/vendor/idb-8.0.3/index.js" />
   </head>
   <body class="is-logged-out">
@@ -86,8 +91,13 @@
         <li data-roles="STAFF" hidden>
           <a href="/requests/new" data-link data-nav="request_new">New request</a>
         </li>
-        <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
+        <li data-roles="TECHNICIAN" hidden>
           <a href="/dashboard" data-link data-nav="dashboard">Dashboard</a>
+        </li>
+        <!-- Personal dashboards of supervisors and admins (D59), filled by dashboards-page.js. -->
+        <li data-roles="SUPERVISOR ADMIN" class="nav-group" hidden>
+          <span class="nav-group-title" id="dashboard-nav-title">Dashboards</span>
+          <ul class="nav-sublist" id="dashboard-nav" aria-labelledby="dashboard-nav-title"></ul>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
           <a href="/assets" data-link data-nav="assets">Assets</a>
@@ -120,6 +130,13 @@
           <a href="/admin/planning" data-link data-nav="planning_settings">Planning settings</a>
         </li>
       </ul>
+      <!-- Widget checkboxes of the dashboard on screen (D59). -->
+      <section
+        id="widget-picker"
+        class="widget-picker"
+        aria-labelledby="widget-picker-title"
+        hidden
+      ></section>
       <div class="user-box">
         <p class="user-name" id="user-name"></p>
         <p class="user-role" id="user-role"></p>

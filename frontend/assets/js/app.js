@@ -17,6 +17,13 @@ import { apiFetch, onUnauthorized } from './api.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import { renderDashboard } from './dashboard.js';
+import {
+  hasDashboards,
+  initDashboardsPage,
+  leaveDashboards,
+  loadDashboardNav,
+  showDashboards,
+} from './dashboards-page.js';
 import { feedbackUrl, openFeedbackDialog, renderFeedbackLog } from './feedback.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
@@ -190,12 +197,18 @@ async function render(route) {
   // The planner and the scheduler keep their state only while the user stays on them.
   leavePlanner(route.name);
   leaveSchedule(route.name);
+  leaveDashboards(route.name);
   switch (route.name) {
     case 'list':
     case 'detail':
     case 'create':
       return showEntity(route, isCurrent);
     case 'dashboard':
+      // Supervisors and admins have personal dashboards (D59); technicians the fixed one.
+      if (hasDashboards()) {
+        leaveRecordViews('dashboard', 'Dashboard');
+        return showDashboards(route, isCurrent);
+      }
       return showDashboard(isCurrent);
     case 'audit':
       return hasRole('SUPERVISOR', 'ADMIN')
@@ -278,6 +291,7 @@ async function forgetOtherUsersData(user) {
 /** After login or at startup: lists for forms, leftover drafts, the queue. */
 function startSession(user) {
   setRefs(loadRefs(user));
+  loadDashboardNav().catch(() => {});
   loadQueue()
     .then(() => enqueueLeftoverDrafts(user))
     .then(() => resumeQueue())
@@ -1403,6 +1417,7 @@ function init() {
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
   const pageHooks = { render, leaveRecordViews, showConsoleError, showPlaceholder };
   initPlannerPage(pageHooks);
+  initDashboardsPage(pageHooks);
   initSchedulePage(pageHooks);
   document.addEventListener('keydown', onPlannerShortcut);
   document.addEventListener('keydown', onScheduleShortcut);

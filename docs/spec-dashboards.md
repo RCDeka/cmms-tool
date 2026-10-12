@@ -1,6 +1,6 @@
 # Custom Dashboards and Supervisor KPIs: Specification
 
-Status: **specified, not started** (product owner discussion, 2026-10-12; decision D59). Phases 21 to 24 in `docs/roadmap-mvp.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **specified** (product owner discussion, 2026-10-12; decision D59); **Phase 21 is implemented** (D60, which lists where it completes or departs from this file). Phases 21 to 24 in `docs/roadmap-mvp.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 

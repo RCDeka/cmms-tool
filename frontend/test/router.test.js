@@ -8,6 +8,7 @@ describe('parseRoute', () => {
   it.each([
     ['/', '', { name: 'root', page: 1 }],
     ['/dashboard', '', { name: 'dashboard', page: 1 }],
+    ['/dashboard/7', '', { name: 'dashboard', id: 7, page: 1 }],
     ['/assets', '', { name: 'list', entity: 'assets', page: 1 }],
     ['/assets', '?page=3', { name: 'list', entity: 'assets', page: 3 }],
     ['/assets/', '?page=3', { name: 'list', entity: 'assets', page: 3 }],
@@ -37,7 +38,9 @@ describe('parseRoute', () => {
     '/assets/1/extra',
     '/work_orders',
     '/conflicts/x',
-    '/dashboard/1',
+    '/dashboard/x',
+    '/dashboard/0',
+    '/dashboard/1/extra',
   ])('%s is not found', (path) => {
     expect(parseRoute(path).name).toBe('notFound');
   });

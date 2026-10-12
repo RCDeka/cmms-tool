@@ -152,6 +152,17 @@ export function createAssetService(db) {
     getById,
 
     /**
+     * Assets matching a WHERE clause built by the dashboard widgets (constant SQL on the alias
+     * `a`, values bound in `params`), by code.
+     */
+    selectWhere(clause, params, limit) {
+      return db
+        .prepare(`${SELECT} ${clause} ORDER BY a.code LIMIT @__limit`)
+        .all({ ...params, __limit: limit })
+        .map(toAsset);
+    },
+
+    /**
      * PUT /api/assets/:id (BR-V1 to BR-V4, permission matrix).
      * @returns {{ status: 'applied' | 'conflict' | 'locked', conflictId?: number, item: object }}
      */

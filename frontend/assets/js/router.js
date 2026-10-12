@@ -100,7 +100,13 @@ export function parseRoute(pathname, search = '') {
   if (first === 'account' && !second) return { name: 'account', page };
   if (first === 'login' && !second)
     return { name: 'login', page, next: safeNext(query.get('next')) };
-  if (first === 'dashboard' && !second) return { name: 'dashboard', page };
+  if (first === 'dashboard') {
+    // Personal dashboards of supervisors and admins (D59): /dashboard/:id.
+    if (!second) return { name: 'dashboard', page };
+    return ID.test(second)
+      ? { name: 'dashboard', id: Number(second), page }
+      : { name: 'notFound', page };
+  }
   if (first === 'audit-log' && !second) {
     const type = query.get('type');
     return {

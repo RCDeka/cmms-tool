@@ -21,6 +21,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | Action | STAFF | TECHNICIAN | SUPERVISOR | ADMIN |
 |---|---|---|---|---|
 | Read assets, work orders, dashboard, record history | no (403) | yes | yes | yes |
+| Personal dashboards (`/dashboards`) and their widgets (`/dashboard/widgets…`) (D59) | no | no | yes | yes |
 | Read reference data (`GET /reference-data`) | yes | yes | yes | yes |
 | `/requests` (own requests: list, create, read, comment; D46) | yes | no | no | no |
 | `GET/POST /work-orders/:id/comments` | no | yes | yes | yes |
@@ -45,7 +46,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | Lock or unlock an appointment (`PUT /schedule/allocations/:id/lock`) | no | own blocks | yes | yes |
 | Order a day (`PUT /schedule/day-order`) | no | own day | yes | yes |
 
-Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule` and `/api/my-week` (403), whatever the method (D46).
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/dashboards`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule` and `/api/my-week` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -362,6 +363,37 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
+## Personal dashboards (added, D59, Phase 21)
+
+SUPERVISOR and ADMIN (technicians and staff: 403). A dashboard of another user answers 404 (BR-K1). Rules BR-K1 to BR-K4 in `docs/data-model.md`. Shape `Dashboard`: `{ id, name, position, widgets: [{ key, options }], filters: { period, sites, categories }, version, created_at, updated_at }` (filters always complete: period 30 and empty lists by default).
+
+### GET /api/dashboards, GET /api/dashboards/:id
+- `200 { "items": [Dashboard] }` in sidebar order. A user without dashboards gets "Overview" created first, with every widget of the catalogue. `GET /:id`: one dashboard, 404 if not mine.
+
+### POST /api/dashboards
+- Body: `{ "name": string, "template"?: "OVERVIEW" | "EMPTY", "copy_of"?: id }`: from a template (empty by default) or as a copy of one of my dashboards (widgets and filters). Placed last. More templates come with the widgets of Phases 22–24.
+- `201 Dashboard`. Errors: 400; 404 `copy_of` not mine; 409 `BR-K2` name used (`details.fields.name = "Already used"`) or 20 dashboards already.
+
+### PUT /api/dashboards/:id
+- Body: `{ "version": N, "name"?, "widgets"?: [{ "key", "options"?: {} }], "filters"?: { "period"?: 30 | 90 | 365, "sites"?: [string], "categories"?: [Category] } }` (at least one field; filters are replaced whole, duplicates dropped).
+- `200 Dashboard` (version + 1). Errors: 400 unknown or repeated widget (`details.fields.widgets`), invalid filters or options; 404; 409 `BR-V1` stale version, `BR-K2` name used.
+
+### PUT /api/dashboards/order
+- Body: `{ "ids": [id, …] }`: each of my dashboards once, in the new order. `204`. Errors: 400 (missing, extra or repeated id).
+
+### DELETE /api/dashboards/:id?version=N
+- `204`. Errors: 400 without `version`; 404; 409 `BR-V1` stale version, `BR-K2` last dashboard.
+
+### GET /api/dashboard/widgets?keys=a,b&period=&site=&category=
+- `keys` (required): widgets to compute, comma-separated. Filters: `period` (30, 90 or 365; default 30), `site` (several joined by `|`), `category` (comma-separated). Each widget uses only the filters it declares in the catalogue.
+- `200 { "today", "generated_at", "widgets": { key: data } }`. Data: tiles `{ value }`; `by_category` `{ period, items: [{ category, count }] }` (every category, then `UNSPECIFIED` when some have none); `by_status` `{ period, items: [{ status, count }] }`; `my_work` `{ today, week_end, today_items: [WorkOrder], week_items: [WorkOrder] }` (no filter: the user's own work); `recent_activity` `{ items: [WorkOrder] }` (5). Computed in one read transaction.
+- Errors: 400 missing or unknown key, invalid filter.
+
+### GET /api/dashboard/widgets/:key/rows?segment=&period=&site=&category=
+- The records behind a widget for the Work orders (CSV) and Assets (CSV) exports (BR-K4): `200 { "kind": "work_orders" | "assets", "items": [WorkOrder | Asset], "total", "truncated" }`, at most 5,000 items, by number (by code for assets; `my_work` by priority then due date; `recent_activity` its 5).
+- `segment` narrows to one part of the widget: a category (or `UNSPECIFIED`) for `by_category`, a status for `by_status`, `today` or `week` for `my_work`.
+- Errors: 400 unknown key or segment; 404 a widget without records (`pending_conflicts`).
+
 ## Maintenance plans and the year planner (added, D48, D49)
 
 Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The balancing assistant (Phase 20) and the week scheduler and My week (Phase 19) follow.
@@ -505,7 +537,7 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |
-| Dashboard | `GET /api/dashboard` |
+| Dashboard | `GET /api/dashboard`, `GET/POST /api/dashboards`, `GET/PUT/DELETE /api/dashboards/:id`, `PUT /api/dashboards/order`, `GET /api/dashboard/widgets`, `GET /api/dashboard/widgets/:key/rows` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
 | Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/suggestions`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |
 | Week scheduler | `GET /api/schedule`, `POST /api/schedule/allocations`, `PUT/DELETE /api/schedule/allocations/:id`, `PUT /api/schedule/allocations/:id/lock`, `PUT /api/schedule/day-order`, `PUT /api/schedule/capacity`, `PUT /api/schedule/weeks/:week`, `GET /api/my-week` |
