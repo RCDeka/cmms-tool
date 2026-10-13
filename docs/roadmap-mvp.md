@@ -154,4 +154,4 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 6. Staff requests, next steps: notify the maintenance team of new comments (new requests now have their dashboard tile, D47), let a requester cancel their own request, room list instead of the free-text location, photos.
 7. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).
 8. ~~Demo data with history (D62)~~ → done (D64).
-9. Mobile use (review of 2026-10-08, `docs/mobile-review.md`): findings M1 to M17 on current phones; which features must work on a phone is to be decided with the product owner. M1 (confirmation message lost after a panel save) is a bug on desktop too.
+9. Mobile use (review of 2026-10-08, `docs/mobile-review.md`): findings M1 to M17 on current phones; which features must work on a phone is to be decided with the product owner. M1 (confirmation message lost after a panel save, desktop too) is fixed.

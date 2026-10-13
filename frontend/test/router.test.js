@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
-import { detailUrl, listUrl, parseRoute, safeNext } from '../assets/js/router.js';
+import {
+  detailUrl,
+  listUrl,
+  navigate,
+  parseRoute,
+  safeNext,
+  startRouter,
+} from '../assets/js/router.js';
 
 describe('parseRoute', () => {
   it.each([
@@ -98,5 +105,21 @@ describe('URL builders', () => {
       id: 9,
       page: 4,
     });
+  });
+});
+
+// M1 (docs/mobile-review.md): a message written after `await navigate(...)` was lost, because
+// navigate resolved before the new page was rendered and the render then replaced it.
+describe('navigate', () => {
+  it('resolves only once the new route is rendered', async () => {
+    const steps = [];
+    startRouter(async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      steps.push(`rendered ${route.name}`);
+    });
+    await navigate('/schedule?week=2026-W42');
+    steps.push('message');
+    expect(steps).toEqual(['rendered schedule', 'message']);
+    expect(location.pathname + location.search).toBe('/schedule?week=2026-W42');
   });
 });

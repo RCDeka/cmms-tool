@@ -199,7 +199,8 @@ export function currentRoute() {
 }
 
 /**
- * Goes to a URL without reloading: pushState (or replaceState) then render.
+ * Goes to a URL without reloading: pushState (or replaceState) then render. Resolves once the
+ * new page is rendered, so a caller can then write a message on it (M1).
  * @param {string} url
  * @param {{ replace?: boolean }} [options]
  */
@@ -208,13 +209,13 @@ export async function navigate(url, { replace = false, force = false } = {}) {
   if (!force && guard && !(await guard(url))) return;
   history[replace ? 'replaceState' : 'pushState'](null, '', url);
   lastUrl = url;
-  listener(currentRoute());
+  await listener(currentRoute());
 }
 
 /**
  * Starts routing: renders on back/forward, and turns clicks on internal links
  * (`<a data-link>` and the sidebar links) into navigate() calls.
- * @param {(route: Route) => void} onRoute
+ * @param {(route: Route) => void | Promise<void>} onRoute resolves when the route is rendered
  */
 export function startRouter(onRoute) {
   listener = onRoute;
