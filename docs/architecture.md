@@ -32,6 +32,8 @@ backend/src/
                        planning (occurrence series, warnings, capacity, weekly figures and tiles),
                        schedule (days, daily capacity, hours left, warnings, appointments, tray, tiles)
   lib/                 small helpers (dates in APP_TIMEZONE, ISO weeks, pagination)
+  assistant/           AI assistant (D66): the provider chosen by AI_PROVIDER (none so far) and the
+                       fixed prompts; guardrail rules in rules/assistant-input.js and assistant-output.js
 ```
 
 Request flow: `route → validate → service → rules → SQL`. Errors are thrown as `HttpError(status, message, details)` and formatted by the error handler.
@@ -102,6 +104,7 @@ frontend/
     planning-settings.js      planning settings page (administrators) with the capacity preview
     widget-settings.js        dashboard widgets page (administrators): widgets switched on or off (D65)
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
+    find-work-order.js        "Find a work order" dialog of the top bar (AI assistant, D66, D67)
     schedule.js               week scheduler: week switcher, open weekends, tiles, tray, people × days grid
                               (Phase 19, D52); its URLs and panels
     schedule-editing.js       drag of tray cards and blocks onto a person's day (pointer), + / − resize
@@ -287,10 +290,11 @@ supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conf
 - **My week** (`/my-week`): `GET /api/my-week`, saved on the device (`config.my_week`, the last 4 weeks fetched) with its work orders in `wo_records`; offline, the saved week is shown with a notice and its changes (order, lock) are disabled.
 - **Balancing assistant** (`/planning/suggestions`, Phase 20, D53): a planner panel that asks `POST /api/planning/suggestions` once per range and filters, shows the moves as ghost chips on the grid (the visits leaving faded) and the tiles and load strip as if the ticked moves were accepted (`previewMoves` in `planning-rules.js`, the same figures as the server's), and, on Accept, sends each ticked move as an ordinary visit move, in order; the moves done form one Undo step (a refused one is reported, the others stay).
 
-## AI readiness (future)
+## AI assistant (D66)
 
 - Buttons that need AI carry the `.ai-only` class and are disabled offline (see Network state).
-- The detail panel has a reserved "AI assistant" area, hidden by a feature flag until the endpoints exist.
+- **Find a work order** (Phase 26, D67): a top bar button on every page (technicians, supervisors, admins) opens `find-work-order.js`'s dialog. It starts from the asset of the record open in the detail panel (the asset itself, or a work order's asset), else from the one site the list is filtered on, else everywhere; the user can remove that context. `POST /api/assistant/find-work-order` is called with a longer timeout (`ASSISTANT_TIMEOUT_MS`, 25 s) than other calls. **Open** goes to the work order; **New work order** opens the creation form (with the asset) and puts the text in the description through `setCreationText` (`editor.js`), as if typed (the form is dirty and drafted). The text not used yet is kept for the next opening. Without a model, the dialog shows the server's search results with a notice.
+- The detail panel keeps a reserved "AI assistant" area for the report formatting (Phase 25), shown only when `assistant` is true in the reference data.
 
 ## Security
 

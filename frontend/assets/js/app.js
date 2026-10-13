@@ -14,6 +14,7 @@ import {
   usersUrl,
 } from './admin-users.js';
 import { apiFetch, onUnauthorized } from './api.js';
+import { ASSISTANT_TIMEOUT_MS } from './config.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import { renderDashboard } from './dashboard.js';
@@ -26,6 +27,7 @@ import {
   showWidgetSettings,
 } from './dashboards-page.js';
 import { feedbackUrl, openFeedbackDialog, renderFeedbackLog } from './feedback.js';
+import { openFindDialog } from './find-work-order.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
@@ -42,6 +44,7 @@ import {
   onBeforeUnload,
   setRefs,
   setRerender,
+  setCreationText,
   setServerRecordListener,
   showCreate,
   showCreateAsset,
@@ -739,6 +742,48 @@ function screenTitle() {
   return record && record !== page ? `${page} — ${record}` : page;
 }
 
+/** The asset a record is about (the asset itself, or the asset of a work order), or null. */
+function assetOfRecord(entity, record) {
+  const asset = entity === 'assets' ? record : record.asset;
+  return asset ? { id: asset.id, code: asset.code, name: asset.name } : null;
+}
+
+/**
+ * Where "Find a work order" starts looking: the asset of the open record, else the site the
+ * list is filtered on (one site only), else everywhere.
+ */
+function findContext() {
+  if (openDetail?.asset) return { asset: openDetail.asset };
+  const site = currentRoute().filters?.site;
+  return typeof site === 'string' && site && !site.includes('|') ? { site } : null;
+}
+
+function openFind() {
+  const button = document.getElementById('find-button');
+  openFindDialog(document.getElementById('find-dialog'), {
+    context: findContext(),
+    find: (body) =>
+      apiFetch('/assistant/find-work-order', {
+        method: 'POST',
+        body,
+        timeoutMs: ASSISTANT_TIMEOUT_MS,
+      }),
+    onOpen: (wo) => navigate(`/work-orders/${wo.id}`),
+    onCreate: (text, context) => {
+      setCreationText(text);
+      navigate(`/work-orders/new${context?.asset ? `?asset_id=${context.asset.id}` : ''}`);
+    },
+  });
+  // Back to the button when the dialog closes without opening a page.
+  document.getElementById('find-dialog').addEventListener(
+    'close',
+    () => {
+      if (!document.activeElement || document.activeElement === document.body) button.focus();
+    },
+    { once: true },
+  );
+}
+
 function openFeedback() {
   openFeedbackDialog(document.getElementById('feedback-dialog'), {
     pageTitle: screenTitle(),
@@ -1228,6 +1273,7 @@ async function showDetail(route, isCurrent) {
       .catch(() => {});
   }
 
+  openDetail.asset = assetOfRecord(route.entity, record);
   await showRecord({ route, record, onClose });
   if (!isCurrent()) return;
   measureDetailOpening();
@@ -1419,6 +1465,7 @@ async function onLogout() {
 function init() {
   initNetwork();
   initLayout({ onLogout });
+  document.getElementById('find-button').addEventListener('click', openFind);
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
   const pageHooks = { render, leaveRecordViews, showConsoleError, showPlaceholder };
   initPlannerPage(pageHooks);

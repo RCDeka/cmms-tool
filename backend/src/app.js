@@ -9,7 +9,9 @@ import helmet from 'helmet';
 import { REPO_ROOT } from './config/index.js';
 import { authenticate, requireRole } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
+import { createAssistantProvider } from './assistant/provider.js';
 import { adminUsersRouter } from './routes/admin-users.js';
+import { assistantRouter } from './routes/assistant.js';
 import { assetsRouter } from './routes/assets.js';
 import { auditRouter, historyHandler } from './routes/audit.js';
 import { authRouter } from './routes/auth.js';
@@ -26,6 +28,7 @@ import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
 import { myWeekRouter, scheduleRouter } from './routes/schedule.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
+import { createAssistantService } from './services/assistant.js';
 import { createAuditService } from './services/audit.js';
 import { createAuthService } from './services/auth.js';
 import { createCommentService } from './services/comments.js';
@@ -53,6 +56,12 @@ export const LOGIN_RATE_LIMIT = { windowMs: 15 * 60 * 1000, limit: 10 };
 /** 30 improvement ideas per hour per user (D40). */
 export const FEEDBACK_RATE_LIMIT = { windowMs: 60 * 60 * 1000, limit: 30 };
 
+/** 30 calls to the AI assistant per hour per user (BR-AI4). */
+export const ASSISTANT_RATE_LIMIT = { windowMs: 60 * 60 * 1000, limit: 30 };
+
+/** One JSON line per assistant request, never the texts (BR-AI11). */
+const logAssistant = (entry) => console.info(JSON.stringify(entry));
+
 /**
  * Builds the Express application. It does not listen, so tests can use it with Supertest.
  * @param {object} deps
@@ -62,6 +71,10 @@ export const FEEDBACK_RATE_LIMIT = { windowMs: 60 * 60 * 1000, limit: 30 };
  * @param {() => Date} [deps.now] clock, replaceable in tests
  * @param {{ windowMs: number, limit: number }} [deps.loginRateLimit]
  * @param {{ windowMs: number, limit: number }} [deps.feedbackRateLimit]
+ * @param {{ windowMs: number, limit: number }} [deps.assistantRateLimit]
+ * @param {import('./assistant/provider.js').AssistantProvider | null} [deps.assistantProvider]
+ *   the model behind the assistant; defaults to the one chosen by AI_PROVIDER
+ * @param {(entry: object) => void} [deps.assistantLog]
  */
 export function createApp({
   db,
@@ -70,6 +83,9 @@ export function createApp({
   now = () => new Date(),
   loginRateLimit = LOGIN_RATE_LIMIT,
   feedbackRateLimit = FEEDBACK_RATE_LIMIT,
+  assistantRateLimit = ASSISTANT_RATE_LIMIT,
+  assistantProvider = createAssistantProvider(config),
+  assistantLog = logAssistant,
 }) {
   const app = express();
   // In production Nginx runs on the same host: trust it for the client IP (rate limiting).
@@ -79,7 +95,13 @@ export function createApp({
   const auth = createAuthService(config, users);
   const assets = createAssetService(db);
   const workOrders = createWorkOrderService(db);
-  const referenceData = createReferenceDataService(db);
+  const assistant = createAssistantService(db, {
+    workOrders,
+    provider: assistantProvider,
+    timeoutMs: config.aiTimeoutMs,
+    log: assistantLog,
+  });
+  const referenceData = createReferenceDataService(db, { assistant: assistant.enabled });
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
   const widgetSettings = createWidgetSettingsService(db);
@@ -146,6 +168,7 @@ export function createApp({
       '/api/planning',
       '/api/schedule',
       '/api/my-week',
+      '/api/assistant',
     ],
     requireRole(...MAINTENANCE_ROLES),
   );
@@ -169,6 +192,7 @@ export function createApp({
     workOrdersRouter({ workOrders, widgets, widgetSettings, timeZone: config.timeZone, now }),
   );
   app.use('/api/conflicts', conflictsRouter({ conflicts }));
+  app.use('/api/assistant', assistantRouter({ assistant, callLimit: assistantRateLimit }));
   app.use('/api/plans', plansRouter({ plans, timeZone: config.timeZone, now }));
   app.use(
     '/api/plan-occurrences',

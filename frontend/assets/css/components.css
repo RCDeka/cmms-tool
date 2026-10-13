@@ -782,6 +782,111 @@ a.button {
   min-height: 36px;
 }
 
+/* Find a work order (D66, D67) */
+.find-dialog {
+  width: min(92vw, 640px);
+}
+
+.find-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.find-form .field-label {
+  font-weight: 600;
+}
+
+.find-form textarea {
+  width: 100%;
+  min-height: 6rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.find-form textarea[aria-invalid] {
+  border-color: var(--color-danger);
+}
+
+.find-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-left: 3px solid var(--color-brand-red);
+  overflow-wrap: anywhere;
+}
+
+.find-results:empty {
+  display: none;
+}
+
+.find-results {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.find-result-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.find-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.find-result-main {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.find-result-main p {
+  margin: 0;
+}
+
+.find-result-title {
+  font-weight: 600;
+}
+
+.find-result-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.find-result-meta,
+.find-result-reason {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.find-level {
+  font-weight: 600;
+}
+
+.find-level-strong {
+  color: var(--color-success);
+}
+
+.find-none {
+  margin: 0;
+}
+
 /* Staff requests (D46): cards rather than a table, a progress line and the conversation. */
 .requests-page,
 .request-page {

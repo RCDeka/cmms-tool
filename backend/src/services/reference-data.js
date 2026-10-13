@@ -10,8 +10,11 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 
-/** @param {import('better-sqlite3').Database} db */
-export function createReferenceDataService(db) {
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ assistant: boolean }} options a model is configured for the assistant (D66)
+ */
+export function createReferenceDataService(db, { assistant }) {
   const sites = db
     .prepare('SELECT site FROM assets UNION SELECT site FROM work_orders ORDER BY site')
     .pluck();
@@ -27,6 +30,7 @@ export function createReferenceDataService(db) {
         work_order_types: WORK_ORDER_TYPES,
         work_order_statuses: WORK_ORDER_STATUSES,
         work_order_priorities: WORK_ORDER_PRIORITIES,
+        assistant,
       };
     },
   };

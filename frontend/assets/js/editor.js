@@ -570,6 +570,14 @@ async function submitCreateAsset() {
 // --- Creation -----------------------------------------------------------------------------
 
 /** Creation form for /work-orders/new (?asset_id= pre-fills the asset). */
+/** Text handed over by "Find a work order" → "New work order" (D67): the next form's description. */
+let creationText = '';
+
+/** Sets the description of the next creation form (used once). */
+export function setCreationText(text) {
+  creationText = text;
+}
+
 export async function showCreate({ route, onClose }) {
   const user = currentUser();
   const draft = await getDraft('work_orders', 'new');
@@ -618,6 +626,13 @@ export async function showCreate({ route, onClose }) {
     );
   }
   editor = ed;
+  if (creationText) {
+    // As if typed: the form is dirty and the text is kept in the draft.
+    const description = creationText;
+    creationText = '';
+    await ed.handle.setValues({ description });
+    onInput();
+  }
   renderDetail(detailContainer, {
     entity: 'work_orders',
     record: {},

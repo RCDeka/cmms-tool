@@ -17,8 +17,16 @@ describe('loadConfig', () => {
       jwtExpiresIn: '8h',
       timeZone: 'Europe/Paris',
       seedPassword: undefined,
+      aiProvider: 'none',
+      aiTimeoutMs: 15000,
     });
     expect(cfg.databasePath).toBe(path.join(REPO_ROOT, 'data', 'cmms.sqlite'));
+  });
+
+  it('knows no AI provider but none until one is chosen (D66), and bounds the timeout', () => {
+    expect(() => loadConfig({ ...valid, AI_PROVIDER: 'openai' })).toThrow(/AI_PROVIDER/);
+    expect(() => loadConfig({ ...valid, AI_TIMEOUT_MS: '500' })).toThrow(/AI_TIMEOUT_MS/);
+    expect(loadConfig({ ...valid, AI_TIMEOUT_MS: '20000' }).aiTimeoutMs).toBe(20000);
   });
 
   it('keeps :memory: as is and coerces PORT', () => {

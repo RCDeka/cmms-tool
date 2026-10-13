@@ -38,6 +38,7 @@
     <link rel="modulepreload" href="/assets/js/feedback.js" />
     <link rel="modulepreload" href="/assets/js/enums.js" />
     <link rel="modulepreload" href="/assets/js/filters.js" />
+    <link rel="modulepreload" href="/assets/js/find-work-order.js" />
     <link rel="modulepreload" href="/assets/js/form.js" />
     <link rel="modulepreload" href="/assets/js/format.js" />
     <link rel="modulepreload" href="/assets/js/history.js" />
@@ -168,6 +169,20 @@
         <h1 id="page-title" data-app-name>Tacto</h1>
         <button
           type="button"
+          id="find-button"
+          class="button button-primary find-button ai-only"
+          aria-haspopup="dialog"
+          data-roles="TECHNICIAN SUPERVISOR ADMIN"
+          hidden
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+            <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M15 15l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <span>Find a work order</span>
+        </button>
+        <button
+          type="button"
           id="feedback-button"
           class="button button-secondary feedback-button"
           aria-haspopup="dialog"
@@ -227,6 +242,7 @@
       class="dialog asset-dialog"
       aria-labelledby="asset-dialog-title"
     ></dialog>
+    <dialog id="find-dialog" class="dialog find-dialog" aria-labelledby="find-title"></dialog>
     <dialog
       id="feedback-dialog"
       class="dialog feedback-dialog"

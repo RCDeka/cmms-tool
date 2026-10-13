@@ -35,15 +35,18 @@ export function onUnauthorized(handler) {
 /**
  * Calls the API and returns the parsed JSON body (null for 204).
  * @param {string} path path under /api, e.g. '/assets?page=2'
- * @param {{ method?: string, body?: unknown, signal?: AbortSignal }} [options]
+ * @param {{ method?: string, body?: unknown, signal?: AbortSignal, timeoutMs?: number }} [options]
  */
-export async function apiFetch(path, { method = 'GET', body, signal } = {}) {
+export async function apiFetch(
+  path,
+  { method = 'GET', body, signal, timeoutMs = REQUEST_TIMEOUT_MS } = {},
+) {
   const headers = { Accept: 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(timeoutMs);
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {

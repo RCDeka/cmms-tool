@@ -41,6 +41,7 @@ const SHELL_FILES = [
   '/assets/js/feedback.js',
   '/assets/js/enums.js',
   '/assets/js/filters.js',
+  '/assets/js/find-work-order.js',
   '/assets/js/form.js',
   '/assets/js/format.js',
   '/assets/js/history.js',

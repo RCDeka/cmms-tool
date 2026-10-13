@@ -34,6 +34,9 @@ const schema = z
     SEED_PASSWORD: z.string().min(10, 'must be at least 10 characters (BR-U2)').optional(),
     BACKUP_DIR: z.string().min(1).default('./data/backups'),
     BACKUP_KEEP_DAYS: z.coerce.number().int().min(1).max(3650).default(14),
+    // AI assistant (D66): the provider is still to be chosen (spec, open point 1).
+    AI_PROVIDER: z.enum(['none']).default('none'),
+    AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.JWT_SECRET.startsWith('change-me')) {
@@ -76,6 +79,8 @@ export function loadConfig(env = process.env) {
     seedPassword: cfg.SEED_PASSWORD,
     backupDir: path.resolve(REPO_ROOT, cfg.BACKUP_DIR),
     backupKeepDays: cfg.BACKUP_KEEP_DAYS,
+    aiProvider: cfg.AI_PROVIDER,
+    aiTimeoutMs: cfg.AI_TIMEOUT_MS,
   };
 }
 

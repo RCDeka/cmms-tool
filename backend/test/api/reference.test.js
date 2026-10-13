@@ -25,6 +25,7 @@ describe('GET /api/reference-data', () => {
     expect(res.body.work_order_statuses).toEqual(WORK_ORDER_STATUSES);
     expect(Object.keys(res.body).sort()).toEqual([
       'asset_statuses',
+      'assistant',
       'categories',
       'criticalities',
       'sites',

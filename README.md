@@ -80,6 +80,7 @@ cd frontend && npm install && npm test               # frontend logic tests
 | `SEED_PASSWORD` | password given to every mock user by the seed |
 | `HOST` | interface the API listens on (default `127.0.0.1`: only local clients such as Nginx) |
 | `BACKUP_DIR`, `BACKUP_KEEP_DAYS` | where `npm run db:backup` writes, and how many days of backups are kept |
+| `AI_PROVIDER`, `AI_TIMEOUT_MS` | model behind the AI assistant (`none` until a provider is chosen: "Find a work order" then shows search results) and how long to wait for it (D66, D67) |
 
 ## Deployment (Linux VPS)
 

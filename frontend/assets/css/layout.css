@@ -122,12 +122,19 @@ body:not(.is-logged-out) {
   border-bottom: 3px solid var(--color-brand-red);
 }
 
-/* Suggest an improvement: on every page, at the end of the top bar (D40). */
+/* Find a work order (D67) and Suggest an improvement (D40): on every page, at the end of the
+   top bar. */
+.find-button,
 .feedback-button {
-  margin-left: auto;
   flex: none;
 }
 
+.find-button,
+.find-button[hidden] + .feedback-button {
+  margin-left: auto;
+}
+
+.find-button svg,
 .feedback-button svg {
   flex: none;
   width: 20px;
@@ -135,11 +142,13 @@ body:not(.is-logged-out) {
 }
 
 @media (max-width: 640px) {
+  .find-button,
   .feedback-button {
     width: var(--touch-target);
     padding: 0;
   }
 
+  .find-button span,
   .feedback-button span {
     position: absolute;
     width: 1px;

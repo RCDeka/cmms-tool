@@ -26,6 +26,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | Read reference data (`GET /reference-data`) | yes | yes | yes | yes |
 | `/requests` (own requests: list, create, read, comment; D46) | yes | no | no | no |
 | `GET/POST /work-orders/:id/comments` | no | yes | yes | yes |
+| `POST /assistant/find-work-order` (D67) | no | yes | yes | yes |
 | `PUT /work-orders/:id/review` (approve and assign, or reject a staff request; D47) | no | no | yes | yes |
 | `PUT /assets/:id` | no | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
 | `POST /assets`, `DELETE /assets/:id` | no | no | yes | yes |
@@ -47,7 +48,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | Lock or unlock an appointment (`PUT /schedule/allocations/:id/lock`) | no | own blocks | yes | yes |
 | Order a day (`PUT /schedule/day-order`) | no | own day | yes | yes |
 
-Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/dashboards`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule` and `/api/my-week` (403), whatever the method (D46).
+Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/dashboards`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule`, `/api/my-week` and `/api/assistant` (403), whatever the method (D46).
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
@@ -300,11 +301,28 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 ## Reference data and users (added)
 
 ### GET /api/reference-data
-- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...] }`. `sites` comes from the data; the other lists are the enum codes.
+- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...], "assistant": boolean }`. `sites` comes from the data; the other lists are the enum codes. `assistant` is true when a model is configured for the AI assistant (`AI_PROVIDER`, D66).
 
 ### GET /api/users
 - Roles: SUPERVISOR, ADMIN. Returns the users that can be assigned to a work order (for dropdowns).
 - `200 [{ id, last_name, first_name, role, site, specialty }]` (active users only).
+
+## AI assistant (added, D66, D67)
+
+Specified in `docs/spec-ai-assistant.md` (guardrails in its section 4). The model never saves anything and only ranks records the server chose.
+
+### POST /api/assistant/find-work-order
+- Roles: TECHNICIAN, SUPERVISOR, ADMIN (STAFF 403).
+- Body: `{ "raw_text": string, "asset_id"?: integer, "site"?: string }` (nothing else).
+- Layer 1, before any call to the model: the text is normalised (BR-AI1) and must hold 10 to 2 000 characters and 3 words (BR-AI2: 400 with `details.rule` and `details.fields.raw_text`); `asset_id` must exist (422, `BR-AI3`) and a `site` sent with it must be the asset's (422, `BR-W2`).
+- Candidate set (no AI): at most 30 open work orders (`OPEN`, `IN_PROGRESS`, `ON_HOLD`): with `asset_id`, the asset's; else those whose text or asset matches the text (full-text, any word), within `site` if given; ordered by relevance (bm25, title words weigh most), the user's own work raised.
+- With a model (`assistant: true`) and candidates: one call, then the answer is checked (BR-AI5, BR-AI7, BR-AI8). Rate limited: 30 calls per hour per user, counted only when the model is called (429).
+- `200 { "mode": "ASSISTANT" | "SEARCH", "notice": null | "NOT_CONFIGURED" | "UNAVAILABLE" | "UNUSABLE", "candidates": [{ "work_order": WorkOrder, "score": number | null, "reason": string | null }] }`.
+  - `ASSISTANT`: at most 5 matches, score 0.3 to 1, highest first; `reason` is the model's (≤ 200 characters, shown as text). An empty list without a call when no open work order matches.
+  - `SEARCH` (D67): the first 10 candidates, `score` and `reason` null; `notice` says why: no model configured, the model failed or timed out (`AI_TIMEOUT_MS`), or its answer was unusable.
+  - `work_order` is the complete record from the database (D7), never text from the model.
+- Errors: 400; 401; 403; 422 (`BR-AI3`, `BR-W2`, or `BR-AI5` when the model judges the text not about maintenance: nothing else is returned); 429.
+- One JSON log line per request (endpoint, user id, text length, candidates, outcome, duration), never the text (BR-AI11).
 
 ## Suggestions (added, D40)
 
