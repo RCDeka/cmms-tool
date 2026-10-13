@@ -8,7 +8,7 @@
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { h, pageMessage, replaceChildren } from './dom.js';
-import { formatDateTime, formatWeek, personName } from './format.js';
+import { badge, formatDateTime, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { addWeeks } from './planning-rules.js';
 import { longDayLabel, myWeekUrl } from './schedule.js';
@@ -55,21 +55,26 @@ export async function readMyWeek(week) {
   return latest ? (saved[latest.current_week] ?? null) : null;
 }
 
+/** Blocks of a work order in the weeks saved on the device (the user's own). */
+export async function savedBlocksOf(workOrderId) {
+  const saved = (await DB.getConfig(MY_WEEK_CACHE)) ?? {};
+  return Object.values(saved)
+    .flatMap((w) => w.days.flatMap((d) => d.blocks.map((b) => ({ ...b, technician: w.user }))))
+    .filter((b) => b.work_order_id === workOrderId)
+    .sort((a, b) => a.day.localeCompare(b.day));
+}
+
 /** Work orders of the weeks saved on the device: never evicted from the cache. */
 export async function myWeekWorkOrderIds() {
   const saved = (await DB.getConfig(MY_WEEK_CACHE)) ?? {};
   return Object.values(saved).flatMap((w) => w.work_orders.map((o) => o.id));
 }
 
-function blockCard(block, day, { onMove, onLock, canChange }) {
+/** Buttons of a block, behind "Change…" so the job stays readable (M4). */
+function blockActions(block, day, { onMove, onLock, canChange }) {
   const wo = block.work_order;
   const free = day.blocks.filter((b) => !b.locked_start);
   const index = free.indexOf(block);
-  const title =
-    block.kind === 'WORK'
-      ? h('a', { href: `/work-orders/${wo.id}`, 'data-link': true }, `${wo.number} — ${wo.title}`)
-      : h('strong', {}, valueLabel('allocation_kind', block.kind));
-  const where = wo ? [wo.site, wo.building, wo.location].filter(Boolean).join(' · ') : null;
   const moveButton = (direction, text) =>
     h(
       'button',
@@ -88,26 +93,18 @@ function blockCard(block, day, { onMove, onLock, canChange }) {
     lockTimes(block.hours).map((t) => h('option', { value: t, selected: t === '09:00' }, t)),
   );
   return h(
-    'li',
-    {
-      class: `my-block block-${block.kind.toLowerCase()}${block.locked_start ? ' is-locked' : ''}`,
-      tabindex: '-1',
-      dataset: { block: String(block.id) },
-    },
-    block.locked_start
-      ? h(
-          'p',
-          { class: 'block-lock' },
-          `🔒 ${appointmentText(block.locked_start, block.hours)} · locked by ${personName(block.locked_by)}`,
-        )
-      : null,
-    h('p', { class: 'my-block-title' }, title),
+    'details',
+    { class: 'my-block-change' },
     h(
-      'p',
-      { class: 'block-meta' },
-      [formatDuration(block.hours), where].filter(Boolean).join(' · '),
+      'summary',
+      { class: 'button button-secondary' },
+      'Change…',
+      h(
+        'span',
+        { class: 'visually-hidden' },
+        ` ${block.kind === 'WORK' ? wo.number : valueLabel('allocation_kind', block.kind)}`,
+      ),
     ),
-    block.note ? h('p', { class: 'block-note' }, block.note) : null,
     h(
       'div',
       { class: 'my-block-actions' },
@@ -142,15 +139,62 @@ function blockCard(block, day, { onMove, onLock, canChange }) {
   );
 }
 
+function blockCard(block, day, { past, ...options }) {
+  const wo = block.work_order;
+  const title =
+    block.kind === 'WORK'
+      ? h('a', { href: `/work-orders/${wo.id}`, 'data-link': true }, `${wo.number} — ${wo.title}`)
+      : h('strong', {}, valueLabel('allocation_kind', block.kind));
+  const where = wo ? [wo.site, wo.building, wo.location].filter(Boolean).join(' · ') : null;
+  return h(
+    'li',
+    {
+      class: `my-block block-${block.kind.toLowerCase()}${block.locked_start ? ' is-locked' : ''}`,
+      tabindex: '-1',
+      dataset: { block: String(block.id) },
+    },
+    block.locked_start
+      ? h(
+          'p',
+          { class: 'block-lock' },
+          `🔒 ${appointmentText(block.locked_start, block.hours)} · locked by ${personName(block.locked_by)}`,
+        )
+      : null,
+    h('p', { class: 'my-block-title' }, title),
+    // Status and priority of the job (M5).
+    wo
+      ? h(
+          'p',
+          { class: 'my-block-badges' },
+          badge('status', 'work_order_status', wo.status),
+          ' ',
+          badge('priority', 'work_order_priority', wo.priority),
+        )
+      : null,
+    h(
+      'p',
+      { class: 'block-meta' },
+      [formatDuration(block.hours), where].filter(Boolean).join(' · '),
+    ),
+    block.note ? h('p', { class: 'block-note' }, block.note) : null,
+    // Days gone by are history: nothing to change (M4).
+    past ? null : blockActions(block, day, options),
+  );
+}
+
 /**
- * Renders My week.
+ * Renders My week. Today is marked (M3); days before it show no buttons (M4).
  * @param {HTMLElement} container
- * @param {{ data: object, savedOffline: boolean, canChange: boolean,
+ * @param {{ data: object, today: string, savedOffline: boolean, canChange: boolean,
+ *   canAddTravel?: boolean,
  *   onMove: (day: object, block: object, direction: -1 | 1) => void,
  *   onLock: (block: object, start: string | null) => void }} options
- * @returns {{ say: (text: string, tone?: string) => void }}
+ * @returns {{ say: (text: string, tone?: string) => void, todaySection: HTMLElement | null }}
  */
-export function renderMyWeek(container, { data, savedOffline, canChange, onMove, onLock }) {
+export function renderMyWeek(
+  container,
+  { data, today, savedOffline, canChange, canAddTravel = false, onMove, onLock },
+) {
   const { element: message, say } = pageMessage();
   const link = (week, text, label) =>
     h(
@@ -166,12 +210,16 @@ export function renderMyWeek(container, { data, savedOffline, canChange, onMove,
   const days = data.days.map((day) =>
     h(
       'section',
-      { class: 'my-day', 'aria-labelledby': `my-day-${day.day}` },
+      {
+        class: `my-day${day.day === today ? ' is-today' : ''}${day.day < today ? ' is-past' : ''}`,
+        'aria-labelledby': `my-day-${day.day}`,
+      },
       h(
         'h2',
-        { id: `my-day-${day.day}` },
+        { id: `my-day-${day.day}`, tabindex: '-1' },
         longDayLabel(day.day),
         day.override ? ` · ${valueLabel('capacity_reason', day.override.reason)}` : '',
+        day.day === today ? [' ', h('span', { class: 'badge badge-tone-info' }, 'Today')] : null,
       ),
       h(
         'p',
@@ -183,7 +231,7 @@ export function renderMyWeek(container, { data, savedOffline, canChange, onMove,
         ? h(
             'ul',
             { class: 'cell-warnings' },
-            dayWarningTexts(day).map((text) =>
+            dayWarningTexts(day, { canAddTravel }).map((text) =>
               h('li', {}, h('span', { 'aria-hidden': 'true' }, '⚠ '), text),
             ),
           )
@@ -192,7 +240,9 @@ export function renderMyWeek(container, { data, savedOffline, canChange, onMove,
         ? h(
             'ol',
             { class: 'my-blocks' },
-            day.blocks.map((b) => blockCard(b, day, { onMove, onLock, canChange })),
+            day.blocks.map((b) =>
+              blockCard(b, day, { onMove, onLock, canChange, past: day.day < today }),
+            ),
           )
         : h('p', { class: 'muted' }, 'Nothing scheduled.'),
     ),
@@ -234,5 +284,6 @@ export function renderMyWeek(container, { data, savedOffline, canChange, onMove,
   );
   return {
     say,
+    todaySection: days.find((section) => section.classList.contains('is-today')) ?? null,
   };
 }

@@ -7,12 +7,14 @@ import { currentUser } from './auth.js';
 import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { notice, renderDetail } from './detail.js';
-import { h } from './dom.js';
+import { h, isPhone } from './dom.js';
+import { detailFieldsOf } from './entities.js';
 import { formatDateTime } from './format.js';
 import { buildCreateForm, buildEditForm } from './form.js';
 import { commentsSection } from './comments.js';
 import { historySection } from './history.js';
 import { reviewPanel } from './review.js';
+import { scheduledSection } from './work-order-schedule.js';
 import { announce, confirmDialog } from './layout.js';
 import { apiFetch } from './api.js';
 import { applyToPage, isOnline } from './network.js';
@@ -205,16 +207,21 @@ function draftNotice(draft, onRestore, onDiscard) {
 /**
  * Shows a record in the detail panel: an edit form if the user may change something, else
  * read-only fields.
- * @param {{ route: object, record: object, onClose: () => void }} options record already
- *   includes pending changes (withPending)
+ * @param {{ route: object, record: object, onClose: () => void, backLabel?: string }} options
+ *   record already includes pending changes (withPending); backLabel: where "Back" goes (M8)
  */
-export async function showRecord({ route, record, onClose }) {
+export async function showRecord({ route, record, onClose, backLabel }) {
   const entity = route.entity;
   const user = currentUser();
   const draft = await getDraft(entity, route.id);
   const editable = editableFields(entity, user, record);
+  // On site the job comes first (M9).
+  const fields = detailFieldsOf(entity, user.role === 'TECHNICIAN' || isPhone());
 
   const notices = [];
+  if (entity === 'work_orders' && typeof record.id === 'number') {
+    notices.push(scheduledSection(record.id, user, localToday()));
+  }
   if (entity === 'work_orders' && record.review_status === 'PENDING') {
     notices.push(
       canReviewRequests(user)
@@ -279,7 +286,16 @@ export async function showRecord({ route, record, onClose }) {
   const consoleLink = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (!editable.length) {
     editor = null;
-    renderDetail(detailContainer, { entity, record, onClose, notices, actions, consoleLink });
+    renderDetail(detailContainer, {
+      entity,
+      record,
+      onClose,
+      notices,
+      actions,
+      consoleLink,
+      backLabel,
+      fields,
+    });
     detailContainer.append(...recordSections(entity, record, user));
     applyToPage(detailContainer);
     return;
@@ -290,6 +306,7 @@ export async function showRecord({ route, record, onClose }) {
     entity,
     record,
     editable,
+    fields,
     ctx: await formCtx(),
     onSave: () => saveRecord(),
     onDiscard: async () => {
@@ -324,6 +341,8 @@ export async function showRecord({ route, record, onClose }) {
     notices,
     actions,
     body: ed.handle.form,
+    backLabel,
+    fields,
   });
   detailContainer.append(...recordSections(entity, record, user));
   applyToPage(detailContainer);

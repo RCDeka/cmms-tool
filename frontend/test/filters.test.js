@@ -7,6 +7,7 @@ import {
   currentSort,
   defaultFilters,
   effectiveFilters,
+  filterCount,
   filtersQuery,
   hasFilters,
   isPlainList,
@@ -205,6 +206,27 @@ describe('renderFilterBar', () => {
     sites: ['Lyon Part-Dieu Branch'],
     users: [{ id: 4, first_name: 'Karim', last_name: 'Benali' }],
   };
+
+  it('folds the filters behind a "Filters (n)" button, the search apart (M12)', () => {
+    expect(filterCount({ q: 'pump', sort: 'title', order: 'asc' })).toBe(0);
+    expect(filterCount({ status: 'OPEN', mine: true, q: 'pump' })).toBe(2);
+    const { element, setFilters } = renderFilterBar({
+      entity: 'work_orders',
+      filters: { q: 'pump', status: 'OPEN' },
+      refs,
+      canFilterAssignee: true,
+      onChange: vi.fn(),
+    });
+    const toggle = element.querySelector('.filter-toggle');
+    expect(toggle.textContent).toBe('Filters (1)');
+    expect(element.querySelector('.filter-more #filter-q')).toBeNull();
+    expect(element.querySelector('.filter-more #filter-status')).not.toBeNull();
+    toggle.click();
+    expect(element.classList.contains('is-expanded')).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    setFilters({});
+    expect(toggle.textContent).toBe('Filters');
+  });
 
   it('reports select changes at once and typing after a pause', () => {
     vi.useFakeTimers();

@@ -251,6 +251,12 @@
   color: var(--color-text);
 }
 
+@media (pointer: coarse), (max-width: 767px) {
+  .cell-capacity {
+    min-height: var(--touch-target);
+  }
+}
+
 .day-cell.is-over .cell-capacity {
   color: var(--color-danger);
 }
@@ -391,6 +397,19 @@
   font-size: 1.125rem;
 }
 
+/* Today stands out (M3); days already done step back. */
+.my-day.is-today {
+  border: 2px solid var(--color-info);
+}
+
+.my-day.is-past {
+  background: var(--color-bg);
+}
+
+.my-day.is-past h2 {
+  color: var(--color-text-muted);
+}
+
 .my-day-total {
   margin: var(--space-1) 0;
   color: var(--color-text-muted);
@@ -436,6 +455,31 @@
   font-weight: 600;
 }
 
+.my-block-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
+}
+
+/* "Change…" folds the buttons of a block (M4). */
+.my-block-change {
+  margin-top: var(--space-2);
+}
+
+.my-block-change > summary {
+  list-style: none;
+  width: fit-content;
+}
+
+.my-block-change > summary::-webkit-details-marker {
+  display: none;
+}
+
+.my-block-change[open] > summary {
+  background: var(--color-neutral-bg);
+}
+
 .my-block-actions {
   display: flex;
   flex-wrap: wrap;
@@ -445,6 +489,89 @@
 
 .my-block-actions select {
   min-height: var(--touch-target);
+}
+
+/* Wide screens: the tiles, the whole tray and every day; the phone helpers stay hidden. */
+.schedule-summary,
+.help-coarse,
+.day-switcher,
+.schedule-tray .tray-toggle {
+  display: none;
+}
+
+.schedule-main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Touch screens have no drag, keys or Ctrl: the help says to tap (M15). */
+@media (pointer: coarse), (max-width: 767px) {
+  .help-fine {
+    display: none;
+  }
+
+  .help-coarse {
+    display: inline;
+  }
+}
+
+@media (max-width: 767px) {
+  /* One line of figures instead of five tiles (M13). */
+  .planner-tiles .schedule-summary {
+    display: block;
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .scheduler .planner-tiles .kpi-grid {
+    display: none;
+  }
+
+  /* The tray folds behind a button, so the grid comes first (M13). */
+  .schedule-tray .tray-toggle {
+    display: inline-flex;
+    width: 100%;
+  }
+
+  .schedule-tray:not(.is-open) .tray-body {
+    display: none;
+  }
+
+  .schedule-tray h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  /* One day at a time, people as rows (M14). */
+  .day-switcher {
+    display: flex;
+  }
+
+  .day-switcher .segmented-option {
+    flex: 1;
+  }
+
+  .schedule-grid .day-col:not(.is-shown-day),
+  .schedule-grid .day-cell:not(.is-shown-day) {
+    display: none;
+  }
+
+  .schedule-grid .person-cell {
+    min-width: 0;
+    width: 38%;
+  }
+
+  .schedule-grid .day-cell {
+    min-width: 0;
+  }
+
+  .schedule-scroll {
+    max-height: none;
+  }
 }
 
 @media (max-width: 1023px) {

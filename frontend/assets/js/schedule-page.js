@@ -450,7 +450,13 @@ export async function showMyWeek(route, isCurrent) {
   if (!isCurrent()) return;
   setSplitView(false);
   replaceChildren(detailContainer);
-  const focusBlock = (id) => tableContainer.querySelector(`[data-block="${id}"]`)?.focus();
+  // After a change, the block keeps its "Change…" buttons open (M4).
+  const focusBlock = (id) => {
+    const block = tableContainer.querySelector(`[data-block="${id}"]`);
+    const change = block?.querySelector('.my-block-change');
+    if (change) change.open = true;
+    block?.focus();
+  };
   const change = async (send, done, blockId) => {
     try {
       await send();
@@ -466,8 +472,10 @@ export async function showMyWeek(route, isCurrent) {
   };
   const view = renderMyWeek(tableContainer, {
     data,
+    today: todayDate(),
     savedOffline,
     canChange: !savedOffline,
+    canAddTravel: hasRole('SUPERVISOR', 'ADMIN'),
     onMove: (day, block, direction) => {
       const ids = reorder(day.blocks, block.id, direction);
       if (!ids) return;
@@ -492,6 +500,13 @@ export async function showMyWeek(route, isCurrent) {
         block.id,
       ),
   });
+  // The week opens on today, not on the days already done (M3). On a Monday the week's
+  // toolbar stays in view.
+  const todayTitle = view.todaySection?.querySelector('h2');
+  if (todayTitle && view.todaySection.previousElementSibling?.classList.contains('my-day')) {
+    todayTitle.focus({ preventScroll: true });
+    view.todaySection.scrollIntoView({ block: 'start' });
+  }
 }
 
 /**

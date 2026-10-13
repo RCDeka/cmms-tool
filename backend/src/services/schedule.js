@@ -163,6 +163,9 @@ export function createScheduleService(db, { workOrders, planning }) {
   const blocksBetween = db.prepare(
     `${BLOCK_SELECT} WHERE al.day BETWEEN ? AND ? ORDER BY al.day, al.technician_id, al.id`,
   );
+  const blocksOfWorkOrder = db.prepare(
+    `${BLOCK_SELECT} WHERE al.work_order_id = ? AND al.day >= ? ORDER BY al.day, al.id`,
+  );
   const blocksOfPerson = db.prepare(
     `${BLOCK_SELECT} WHERE al.technician_id = ? AND al.day BETWEEN ? AND ? ORDER BY al.day, al.id`,
   );
@@ -491,6 +494,31 @@ export function createScheduleService(db, { workOrders, planning }) {
         week_total: daysOut.reduce((sum, d) => sum + d.total, 0),
         week_capacity: daysOut.reduce((sum, d) => sum + d.capacity, 0),
         work_orders: workOrderIds.map((id) => workOrders.getById(id)),
+      };
+    },
+
+    /**
+     * GET /api/schedule/work-orders/:id: the blocks of a work order from today on, each with
+     * its person, for the "Scheduled" line of the work order panel (M10).
+     */
+    workOrderBlocks(id, { now, timeZone }) {
+      if (!workOrderRow.get(id)) throw new HttpError(404, 'Work order not found');
+      const items = blocksOfWorkOrder
+        .all(id, dateInZone(timeZone, now))
+        .map(toBlock)
+        .sort((a, b) => a.day.localeCompare(b.day) || compareBlocks(a, b));
+      return {
+        items: items.map((b) => {
+          const person = personById.get(b.technician_id);
+          return {
+            ...b,
+            technician: {
+              id: person.id,
+              first_name: person.first_name,
+              last_name: person.last_name,
+            },
+          };
+        }),
       };
     },
 

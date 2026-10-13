@@ -530,6 +530,10 @@ a.button {
   border-radius: 10px;
 }
 
+.my-week-link {
+  margin: var(--space-2) 0;
+}
+
 .dashboard-card h2 {
   font-size: 1.0625rem;
 }
@@ -727,6 +731,94 @@ a.button {
 
 .audit-table td {
   vertical-align: top;
+}
+
+/* Phones: each change is a card (record and what, then when and who, then the fields), not
+   a five-column table to scroll sideways. */
+@media (max-width: 767px) {
+  #main-content:not(.split-view) .audit-table {
+    min-width: 0;
+  }
+
+  .audit-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .audit-table,
+  .audit-table tbody {
+    display: block;
+  }
+
+  .audit-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'record record'
+      'what what'
+      'when who'
+      'changes changes';
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .audit-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .audit-table td {
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .audit-table .audit-record {
+    grid-area: record;
+    font-weight: 600;
+  }
+
+  .audit-table .audit-what {
+    grid-area: what;
+  }
+
+  .audit-table .audit-when,
+  .audit-table .audit-who {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-small);
+  }
+
+  .audit-table .audit-when {
+    grid-area: when;
+  }
+
+  .audit-table .audit-who {
+    grid-area: who;
+  }
+
+  .audit-table .audit-who::before {
+    content: '· ';
+  }
+
+  .audit-table .audit-changes {
+    grid-area: changes;
+  }
+
+  .audit-table .audit-changes:empty {
+    display: none;
+  }
+
+  .audit-table .audit-record a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+  }
 }
 
 /* Suggest an improvement (D40) */

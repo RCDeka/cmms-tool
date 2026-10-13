@@ -306,7 +306,7 @@ function blockItem(block, person, { canEdit, selected, week }) {
   );
 }
 
-function dayCell(person, dayInfo, column, { canEdit, panel, week }) {
+function dayCell(person, dayInfo, column, { canEdit, panel, week, shownDay }) {
   const day = person.days.find((d) => d.day === dayInfo.day);
   const blocks = person.blocks.filter((b) => b.day === dayInfo.day);
   const warnings = dayWarningTexts(day);
@@ -315,7 +315,7 @@ function dayCell(person, dayInfo, column, { canEdit, panel, week }) {
   return h(
     'td',
     {
-      class: `day-cell${day.warnings.includes('OVER_CAPACITY') ? ' is-over' : ''}${day.capacity === 0 ? ' is-off' : ''}${column.open ? '' : ' is-closed'}`,
+      class: `day-cell${day.warnings.includes('OVER_CAPACITY') ? ' is-over' : ''}${day.capacity === 0 ? ' is-off' : ''}${column.open ? '' : ' is-closed'}${dayInfo.day === shownDay ? ' is-shown-day' : ''}`,
       dataset: { person: String(person.id), day: dayInfo.day },
     },
     h(
@@ -439,7 +439,8 @@ function grid(data, options) {
               'th',
               {
                 scope: 'col',
-                class: `day-col${d.day === today ? ' is-today' : ''}${d.weekday > 5 ? ' is-weekend' : ''}`,
+                class: `day-col${d.day === today ? ' is-today' : ''}${d.weekday > 5 ? ' is-weekend' : ''}${d.day === options.shownDay ? ' is-shown-day' : ''}`,
+                dataset: { day: d.day },
               },
               dayLabel(d.day),
               d.day === today ? h('span', { class: 'visually-hidden' }, ' (today)') : null,
@@ -464,6 +465,18 @@ function grid(data, options) {
   );
 }
 
+/** The tiles in one line, for phones (M13): booked, left to schedule, carried over. Pure. */
+export function scheduleSummaryText(tiles) {
+  const left = tiles.hours_left;
+  return [
+    `${numberFormat.format(tiles.booked_hours)} h booked of ${numberFormat.format(tiles.available_hours)} h`,
+    `${numberFormat.format(left.planned + left.carried_over)} h left to schedule`,
+    tiles.carried_over ? `${tiles.carried_over} carried over` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function tilesSection(data) {
   return h(
     'section',
@@ -473,6 +486,7 @@ function tilesSection(data) {
       { id: 'schedule-tiles-heading', class: 'visually-hidden', tabindex: '-1' },
       `Key figures of ${formatWeek(data.week)}`,
     ),
+    h('p', { class: 'schedule-summary' }, scheduleSummaryText(data.tiles)),
     h(
       'ul',
       { class: 'kpi-grid' },
@@ -574,11 +588,67 @@ function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
       ? h(
           'p',
           { id: 'schedule-help', class: 'planner-help muted' },
-          'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour; Ctrl + Z undoes, Ctrl + Y redoes.',
+          // Help by input type (M15): phones and tablets have no drag, keys or Ctrl.
+          h(
+            'span',
+            { class: 'help-fine' },
+            'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour; Ctrl + Z undoes, Ctrl + Y redoes.',
+          ),
+          h(
+            'span',
+            { class: 'help-coarse' },
+            'Tap a work order in “To schedule” to schedule it, or a block to move, resize or remove it.',
+          ),
         )
       : null,
     message,
   );
+}
+
+/** Whether the tray is unfolded on phones (folded at first: the grid comes first, M13). */
+let trayOpen = false;
+/** Day shown on phones, one at a time (M14); kept while the week is redrawn. */
+let phoneDay = null;
+
+const trayToggleText = (count, open) =>
+  open ? 'Hide the work orders to schedule' : `Show the work orders to schedule (${count})`;
+
+/** Day of the one-day view (phones, M14): the one chosen, else today, else the first. Pure. */
+export function dayToShow(days, today, chosen = phoneDay) {
+  const shown = days.map((d) => d.day);
+  if (shown.includes(chosen)) return chosen;
+  return shown.includes(today) ? today : (shown[0] ?? null);
+}
+
+/** Day switcher of the one-day view, shown on phones only (schedule.css). */
+function daySwitcher(days, shownDay, scheduleGrid) {
+  const group = h(
+    'div',
+    { class: 'segmented day-switcher', role: 'group', 'aria-label': 'Day shown' },
+    days.map((d) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'segmented-option',
+          dataset: { day: d.day },
+          'aria-pressed': String(d.day === shownDay),
+          'aria-label': longDayLabel(d.day),
+          onClick: () => {
+            phoneDay = d.day;
+            for (const button of group.querySelectorAll('button')) {
+              button.setAttribute('aria-pressed', String(button.dataset.day === d.day));
+            }
+            for (const cell of scheduleGrid.querySelectorAll('[data-day]')) {
+              cell.classList.toggle('is-shown-day', cell.dataset.day === d.day);
+            }
+          },
+        },
+        dayLabel(d.day).split(' ')[0],
+      ),
+    ),
+  );
+  return group;
 }
 
 /**
@@ -597,6 +667,35 @@ export function renderScheduler(
 ) {
   const { element: message, say } = pageMessage();
   const people = data.people.length;
+  const shownDay = dayToShow(data.days, today);
+  const tray = h(
+    'aside',
+    {
+      class: `schedule-tray${trayOpen ? ' is-open' : ''}`,
+      'aria-labelledby': 'tray-heading',
+    },
+    h('h2', { id: 'tray-heading' }, 'To schedule'),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'button button-secondary tray-toggle',
+        'aria-expanded': String(trayOpen),
+        'aria-controls': 'tray-body',
+        onClick: (event) => {
+          trayOpen = !trayOpen;
+          tray.classList.toggle('is-open', trayOpen);
+          event.currentTarget.setAttribute('aria-expanded', String(trayOpen));
+          event.currentTarget.textContent = trayToggleText(data.tray.length, trayOpen);
+        },
+      },
+      trayToggleText(data.tray.length, trayOpen),
+    ),
+    h('div', { class: 'tray-body', id: 'tray-body' }, trayGroups(data, { canEdit, panel })),
+  );
+  const scheduleGrid = people
+    ? grid(data, { canEdit, panel, today, shownDay })
+    : h('p', { class: 'empty-state' }, 'No active technician or supervisor.');
   replaceChildren(
     container,
     h(
@@ -607,15 +706,13 @@ export function renderScheduler(
       h(
         'div',
         { class: 'schedule-layout' },
+        tray,
         h(
-          'aside',
-          { class: 'schedule-tray', 'aria-labelledby': 'tray-heading' },
-          h('h2', { id: 'tray-heading' }, 'To schedule'),
-          trayGroups(data, { canEdit, panel }),
+          'div',
+          { class: 'schedule-main' },
+          people ? daySwitcher(data.days, shownDay, scheduleGrid) : null,
+          scheduleGrid,
         ),
-        people
-          ? grid(data, { canEdit, panel, today })
-          : h('p', { class: 'empty-state' }, 'No active technician or supervisor.'),
       ),
     ),
   );

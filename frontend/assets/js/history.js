@@ -265,11 +265,12 @@ export function renderAuditLog(
     h(
       'tr',
       {},
-      h('td', { class: 'nowrap' }, formatDateTime(entry.at)),
-      h('td', {}, entry.user ? personName(entry.user) : '—'),
-      h('td', {}, recordLink(entry)),
-      h('td', {}, entryTitle(entry)),
-      h('td', {}, changeList(entry.entity_type, entry, lookups)),
+      // Classes place each cell on the phone card (components.css).
+      h('td', { class: 'nowrap audit-when' }, formatDateTime(entry.at)),
+      h('td', { class: 'audit-who' }, entry.user ? personName(entry.user) : '—'),
+      h('td', { class: 'audit-record' }, recordLink(entry)),
+      h('td', { class: 'audit-what' }, entryTitle(entry)),
+      h('td', { class: 'audit-changes' }, changeList(entry.entity_type, entry, lookups)),
     ),
   );
   replaceChildren(

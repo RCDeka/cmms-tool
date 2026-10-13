@@ -357,16 +357,23 @@ export function myWorkItems(data, range) {
   return range === 'week' ? (data.my_work_week ?? []) : data.my_work_today;
 }
 
-/** "My work" card with its Today / Next 7 days switch; the switch redraws the card only. */
-function myWorkSection(data) {
+/**
+ * "My work" card with its Today / Next 7 days switch; the switch redraws the card only.
+ * `myWeekLink`: people with a My week get a link to the day's scheduled blocks (M7).
+ */
+function myWorkSection(data, myWeekLink) {
   const section = h('section', { class: 'dashboard-card', 'aria-labelledby': 'mywork-heading' });
   const paint = (focusKey) => {
     replaceChildren(
       section,
-      ...myWorkContent(data, (key) => {
-        myWorkRange = key;
-        paint(key);
-      }),
+      ...myWorkContent(
+        data,
+        (key) => {
+          myWorkRange = key;
+          paint(key);
+        },
+        myWeekLink,
+      ),
     );
     if (focusKey) section.querySelector(`[data-range="${focusKey}"]`)?.focus();
   };
@@ -408,15 +415,26 @@ export function myWorkNote(weekEnd, range) {
   );
 }
 
-function myWorkContent(data, onRange) {
+function myWorkContent(data, onRange, myWeekLink) {
   const items = myWorkItems(data, myWorkRange);
   return [
     h(
       'div',
       { class: 'card-header' },
-      h('h2', { id: 'mywork-heading' }, 'My work'),
+      h('h2', { id: 'mywork-heading', tabindex: '-1' }, 'My work'),
       myWorkSwitch(myWorkRange, onRange),
     ),
+    myWeekLink
+      ? h(
+          'p',
+          { class: 'my-week-link' },
+          h(
+            'a',
+            { href: '/my-week', 'data-link': true, class: 'button button-secondary' },
+            'Today in My week →',
+          ),
+        )
+      : null,
     myWorkNote(data.week_end, myWorkRange),
     workList(items, data.today, myWorkRange === 'week'),
   ];
@@ -471,15 +489,19 @@ export function workList(items, today, week) {
 /**
  * Renders the dashboard. Returns the charts, drawn afterwards (async) with
  * `chart.draw(chart.canvas, chart.rows)`. Technicians get no chart: their dashboard is about
- * their own work (product owner, 2026-10-04).
+ * their own work (product owner, 2026-10-04), so "My work" comes first, before the team
+ * tiles (M7).
  * @param {HTMLElement} container
  * @param {{ data: object, stats: object, fromCache: boolean, fetchedAt: string,
- *   charts?: boolean }} options
+ *   charts?: boolean, myWeekLink?: boolean }} options
  * @returns {{ canvas: HTMLCanvasElement, rows: object[], draw: Function, element: HTMLElement }[]}
  */
-export function renderDashboard(container, { data, stats, fromCache, fetchedAt, charts = true }) {
+export function renderDashboard(
+  container,
+  { data, stats, fromCache, fetchedAt, charts = true, myWeekLink = false },
+) {
   const shown = charts ? [chartSection(stats), statusChartSection(stats)] : [];
-  const myWork = myWorkSection(data);
+  const myWork = myWorkSection(data, myWeekLink);
   const recent = recentSection(data.recent_activity);
   replaceChildren(
     container,
@@ -493,19 +515,21 @@ export function renderDashboard(container, { data, stats, fromCache, fetchedAt, 
             `Offline: figures saved on this device on ${formatDateTime(fetchedAt)}.`,
           )
         : null,
-      kpiSection(data.kpis),
       charts
-        ? h(
-            'div',
-            { class: 'dashboard-grid' },
+        ? [
+            kpiSection(data.kpis),
             h(
               'div',
-              { class: 'dashboard-charts' },
-              shown.map((c) => c.element),
+              { class: 'dashboard-grid' },
+              h(
+                'div',
+                { class: 'dashboard-charts' },
+                shown.map((c) => c.element),
+              ),
+              h('div', { class: 'dashboard-lists' }, myWork, recent),
             ),
-            h('div', { class: 'dashboard-lists' }, myWork, recent),
-          )
-        : h('div', { class: 'dashboard-grid' }, myWork, recent),
+          ]
+        : [myWork, kpiSection(data.kpis), recent],
     ),
   );
   // An empty pie has no canvas on the page: nothing to draw.

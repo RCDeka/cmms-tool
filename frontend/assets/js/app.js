@@ -32,7 +32,7 @@ import * as DB from './db.js';
 import { storesOf } from './db.js';
 import { renderDetailMessage, showUpdateAvailable } from './detail.js';
 import { renderAuditLog, withPeople } from './history.js';
-import { h, replaceChildren } from './dom.js';
+import { h, isPhone, replaceChildren } from './dom.js';
 import {
   clearEditor,
   currentEditor,
@@ -113,10 +113,12 @@ import {
   showRequestErrors,
 } from './requests.js';
 import {
+  cameFrom,
   currentRoute,
   detailUrl,
   listUrl,
   navigate,
+  returnPage,
   setNavigationGuard,
   startRouter,
 } from './router.js';
@@ -245,9 +247,19 @@ async function render(route) {
     case 'planning':
     case 'plan':
     case 'blockedWeeks':
-      return showPlanning(route, isCurrent);
     case 'suggestions':
     case 'planCreate':
+      // 52 weeks × plans do not fit a phone: tablets and computers only (M17).
+      if (isPhone()) {
+        return showPlaceholder(
+          'planning',
+          'Year planner',
+          'The year planner needs a larger screen: open it on a tablet or a computer.',
+          true,
+        );
+      }
+      if (!['suggestions', 'planCreate'].includes(route.name))
+        return showPlanning(route, isCurrent);
       return hasRole('SUPERVISOR', 'ADMIN')
         ? showPlanning(route, isCurrent)
         : showPlaceholder(
@@ -477,6 +489,7 @@ async function paintDashboard(snapshot, fromCache, isCurrent) {
     fromCache,
     fetchedAt: snapshot.fetched_at,
     charts: !hasRole('TECHNICIAN'),
+    myWeekLink: hasRole('TECHNICIAN', 'SUPERVISOR'),
   });
   try {
     for (const chart of charts) await chart.draw(chart.canvas, chart.rows);
@@ -486,6 +499,9 @@ async function paintDashboard(snapshot, fromCache, isCurrent) {
     if (isCurrent()) tableContainer.querySelector('.chart-table')?.setAttribute('open', '');
   }
 }
+
+/** First heading of the dashboard: technicians' "My work" comes before the tiles (M7). */
+const dashboardHeading = () => (hasRole('TECHNICIAN') ? '#mywork-heading' : '#kpi-heading');
 
 /** Dashboard: the copy saved on this device first, then fresh figures from the server. */
 async function showDashboard(isCurrent) {
@@ -498,7 +514,7 @@ async function showDashboard(isCurrent) {
   } else {
     renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the dashboard…'));
   }
-  tableContainer.querySelector('#kpi-heading')?.focus();
+  tableContainer.querySelector(dashboardHeading())?.focus();
   if (!isOnline() && cached) return;
 
   // Refresh keeps the frame: the previous render stays, dimmed, until new figures arrive.
@@ -514,7 +530,7 @@ async function showDashboard(isCurrent) {
     if (!isCurrent()) return;
     const hadFocus = tableContainer.contains(document.activeElement);
     await paintDashboard(snapshot, false, isCurrent);
-    if (hadFocus) tableContainer.querySelector('#kpi-heading')?.focus();
+    if (hadFocus) tableContainer.querySelector(dashboardHeading())?.focus();
   } catch (err) {
     if (!isCurrent() || cached) return; // the saved copy stays on screen with its date
     showConsoleError(err, () => render(currentRoute()));
@@ -1224,7 +1240,13 @@ function offerUpdate(route) {
 
 async function showDetail(route, isCurrent) {
   const cfg = ENTITIES[route.entity];
-  const onClose = () => navigate(listUrl(route.entity, route.page, route.filters));
+  // Opened from another page (My week, the dashboard…): "Back" returns there (M8).
+  const origin = returnPage(cameFrom());
+  const backLabel = origin ? `Back to ${origin}` : undefined;
+  const onClose = origin
+    ? () => history.back()
+    : () => navigate(listUrl(route.entity, route.page, route.filters));
+  if (origin) setTitle(cfg.singular);
   setSplitView(true);
   openDetail = { entity: route.entity, id: route.id };
 
@@ -1243,6 +1265,7 @@ async function showDetail(route, isCurrent) {
       title: cfg.singular,
       message: `Loading ${cfg.singular.toLowerCase()}…`,
       onClose,
+      backLabel,
     });
     try {
       record = withPending(
@@ -1259,6 +1282,7 @@ async function showDetail(route, isCurrent) {
         title: cfg.singular,
         message,
         onClose,
+        backLabel,
         onRetry: err.status === 404 ? undefined : () => render(currentRoute()),
       });
       return;
@@ -1274,7 +1298,7 @@ async function showDetail(route, isCurrent) {
   }
 
   openDetail.asset = assetOfRecord(route.entity, record);
-  await showRecord({ route, record, onClose });
+  await showRecord({ route, record, onClose, backLabel });
   if (!isCurrent()) return;
   measureDetailOpening();
   restoreFocus(() => detailContainer.querySelector('.detail-title')?.focus());

@@ -145,8 +145,51 @@ export const ENTITIES = {
       'updated_by',
       'updated_at',
     ],
+    // On phones and for technicians (M9): the job on site first (what, where, the report and
+    // time), the record's bookkeeping after.
+    fieldWorkFields: [
+      'status',
+      'review_status',
+      'priority',
+      'description',
+      'site',
+      'location',
+      'asset',
+      'due_on',
+      'work_report',
+      'actual_hours',
+      'estimated_hours',
+      'started_on',
+      'closed_on',
+      'title',
+      'number',
+      'type',
+      'category',
+      'plan',
+      'planned_week',
+      'assignee',
+      'supervisor',
+      'created_on',
+      'created_by',
+      'reviewed_by',
+      'reviewed_at',
+      'review_note',
+      'updated_by',
+      'updated_at',
+    ],
   },
 };
+
+/**
+ * Fields of a record panel, in order: the field-work order when the entity has one and
+ * `fieldWork` is asked for (M9). Pure.
+ * @param {string} entityKey
+ * @param {boolean} fieldWork
+ */
+export function detailFieldsOf(entityKey, fieldWork) {
+  const cfg = ENTITIES[entityKey];
+  return fieldWork && cfg.fieldWorkFields ? cfg.fieldWorkFields : cfg.detailFields;
+}
 
 /** Entity for a UI path segment ('assets', 'work-orders'), or undefined. */
 export function entityForSegment(segment) {

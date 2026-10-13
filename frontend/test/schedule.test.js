@@ -23,7 +23,14 @@ import {
   reorder,
   splitProposal,
 } from '../assets/js/schedule-rules.js';
-import { blockView, renderScheduler, scheduleUrl } from '../assets/js/schedule.js';
+import {
+  blockView,
+  dayToShow,
+  renderScheduler,
+  scheduleSummaryText,
+  scheduleUrl,
+} from '../assets/js/schedule.js';
+import { scheduledTexts } from '../assets/js/work-order-schedule.js';
 
 const DAYS = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09'];
 
@@ -130,6 +137,11 @@ describe('rules of the interface', () => {
     expect(dayWarningTexts({ total: 2, capacity: 0, sites: [], warnings: ['ABSENT'] })).toEqual([
       'Work on a day off',
     ]);
+  });
+
+  it('tells a technician how many sites, without asking them to add travel time (M6)', () => {
+    const day = { total: 4, capacity: 7, sites: ['Lyon', 'Saclay'], warnings: ['SEVERAL_SITES'] };
+    expect(dayWarningTexts(day, { canAddTravel: false })).toEqual(['2 sites on this day']);
   });
 
   it('writes appointments and offers half-hour start times', () => {
@@ -390,6 +402,49 @@ describe('the scheduler grid', () => {
     expect(container.querySelector('a.cell-capacity')).toBeNull();
   });
 
+  it('says to tap on touch screens, to drag elsewhere (M13, M15)', () => {
+    render(weekData());
+    const help = container.querySelector('#schedule-help');
+    expect(help.querySelector('.help-fine').textContent).toMatch(/^Drag a work order/);
+    expect(help.querySelector('.help-coarse').textContent).toMatch(/^Tap a work order/);
+  });
+
+  it('sums the tiles up in one line for phones (M13)', () => {
+    expect(scheduleSummaryText(weekData().tiles)).toBe(
+      '6.5 h booked of 35 h · 0.5 h left to schedule · 1 carried over',
+    );
+  });
+
+  it('folds the tray behind a button for phones (M13)', () => {
+    render(weekData());
+    const tray = container.querySelector('.schedule-tray');
+    const toggle = tray.querySelector('.tray-toggle');
+    expect(toggle.textContent).toBe('Show the work orders to schedule (3)');
+    expect(tray.classList.contains('is-open')).toBe(false);
+    toggle.click();
+    expect(tray.classList.contains('is-open')).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    toggle.click(); // folded again for the next tests
+  });
+
+  it('shows one day at a time on phones, today first, and switches days (M14)', () => {
+    expect(dayToShow(weekData().days, DAYS[2], null)).toBe(DAYS[2]);
+    expect(dayToShow(weekData().days, '2026-10-20', null)).toBe(DAYS[0]);
+    expect(dayToShow(weekData().days, DAYS[2], DAYS[4])).toBe(DAYS[4]);
+    render(weekData());
+    const shown = () =>
+      [...container.querySelectorAll('.schedule-grid .is-shown-day')].map((el) => el.dataset.day);
+    expect(shown()).toEqual([DAYS[0], DAYS[0]]);
+    container.querySelector(`.day-switcher [data-day="${DAYS[3]}"]`).click();
+    expect(shown()).toEqual([DAYS[3], DAYS[3]]);
+    expect(
+      container.querySelector(`.day-switcher [data-day="${DAYS[3]}"]`).getAttribute('aria-pressed'),
+    ).toBe('true');
+    // Kept when the week is drawn again (after a change).
+    render(weekData());
+    expect(shown()).toEqual([DAYS[3], DAYS[3]]);
+  });
+
   it('describes blocks for screen readers', () => {
     const data = weekData();
     const view = blockView(data.people[0].blocks[1], data.people[0]);
@@ -633,6 +688,63 @@ describe('My week on the device (P18)', () => {
     ).toBe(true);
   });
 
+  it('marks today, shows status and priority, and folds the buttons behind Change… (M3–M5)', () => {
+    const container = document.createElement('div');
+    const data = myWeek('2026-W41', '2026-10-05T08:00:00.000Z');
+    data.days.push({ ...day(DAYS[1]), weekday: 2, blocks: [] });
+    const view = renderMyWeek(container, {
+      data,
+      today: DAYS[1],
+      savedOffline: false,
+      canChange: true,
+      onMove: vi.fn(),
+      onLock: vi.fn(),
+    });
+    expect(view.todaySection.querySelector('h2').textContent).toBe('Tuesday 6 October Today');
+    const block = container.querySelector('[data-block="1"]');
+    expect(block.querySelector('.my-block-badges').textContent).toBe('Open Normal');
+    // Monday is gone by: nothing to change there.
+    expect(block.querySelector('.my-block-change')).toBeNull();
+    expect(container.querySelector('.my-day.is-past')).not.toBeNull();
+  });
+
+  it('tells a technician about two sites without asking for travel time (M6)', () => {
+    const container = document.createElement('div');
+    const data = myWeek('2026-W41', '2026-10-05T08:00:00.000Z');
+    data.days[0] = {
+      ...data.days[0],
+      sites: ['Lyon', 'Saclay'],
+      warnings: ['SEVERAL_SITES'],
+    };
+    renderMyWeek(container, {
+      data,
+      today: DAYS[0],
+      savedOffline: false,
+      canChange: true,
+      onMove: vi.fn(),
+      onLock: vi.fn(),
+    });
+    expect(container.querySelector('.cell-warnings').textContent).toBe('⚠ 2 sites on this day');
+  });
+
+  it('lists the scheduled days of a work order from today on (M10)', () => {
+    const blocks = [
+      { day: DAYS[0], hours: 2, locked_start: null, technician_id: 4 },
+      { day: DAYS[1], hours: 2, locked_start: '10:00', technician_id: 4 },
+      {
+        day: DAYS[2],
+        hours: 3.5,
+        locked_start: null,
+        technician_id: 5,
+        technician: { first_name: 'Paul', last_name: 'Martin' },
+      },
+    ];
+    expect(scheduledTexts(blocks, 4, DAYS[1])).toEqual([
+      'Tue 6 Oct · 2 h · appointment 10:00–12:00 · you',
+      'Wed 7 Oct · 3 h 30 · Paul Martin',
+    ]);
+  });
+
   it('reorders and locks from My week online', () => {
     const container = document.createElement('div');
     const data = myWeek('2026-W41', '2026-10-05T08:00:00.000Z');
@@ -646,7 +758,7 @@ describe('My week on the device (P18)', () => {
       onMove,
       onLock: vi.fn(),
     });
-    const buttons = [...container.querySelectorAll('[data-block="6"] button')];
+    const buttons = [...container.querySelectorAll('[data-block="6"] .my-block-actions button')];
     expect(buttons.map((b) => [b.textContent, b.disabled])).toEqual([
       ['Move up', false],
       ['Move down', true],

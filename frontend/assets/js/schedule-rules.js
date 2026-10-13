@@ -58,13 +58,18 @@ export function leftText(item) {
   return 'Fully scheduled';
 }
 
-/** Warnings of a day as text (BR-S5, BR-S8, BR-S10), never color alone. Pure. */
-export function dayWarningTexts(day) {
+/**
+ * Warnings of a day as text (BR-S5, BR-S8, BR-S10), never color alone. `canAddTravel`: the
+ * reader schedules (supervisors, admins); a technician only learns how many sites (M6). Pure.
+ */
+export function dayWarningTexts(day, { canAddTravel = true } = {}) {
   const texts = {
     OVER_CAPACITY: `Over capacity: ${formatDuration(day.total)} / ${formatDuration(day.capacity)}`,
     ABSENT: 'Work on a day off',
     WEEKEND_CLOSED: 'Weekend day not open',
-    SEVERAL_SITES: `${day.sites.length} sites: add travel time`,
+    SEVERAL_SITES: canAddTravel
+      ? `${day.sites.length} sites: add travel time`
+      : `${day.sites.length} sites on this day`,
   };
   return day.warnings.map((w) => texts[w]);
 }

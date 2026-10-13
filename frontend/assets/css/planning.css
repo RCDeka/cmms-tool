@@ -289,6 +289,13 @@
   min-height: 24px;
 }
 
+/* Touch screens: a finger-sized target (M16). */
+@media (pointer: coarse) {
+  .plan-link {
+    min-height: var(--touch-target);
+  }
+}
+
 .plan-link:hover {
   color: var(--color-link-hover);
   text-decoration: underline;

@@ -185,6 +185,36 @@ let listener = () => {};
 let guard = null;
 let lastUrl = typeof location === 'undefined' ? '' : location.pathname + location.search;
 
+/** Pages a record can be opened from, other than its own list, and their names (M8). */
+const RETURN_PAGES = {
+  dashboard: 'Dashboard',
+  myWeek: 'My week',
+  schedule: 'Week scheduler',
+  planning: 'Year planner',
+  plan: 'Year planner',
+  conflicts: 'Conflicts',
+  conflict: 'Conflicts',
+  audit: 'Audit log',
+};
+
+/**
+ * Name of the page a record was opened from, when "Back" should return there rather than to
+ * the record's list (M8: a technician opening a work order from My week), else null. Pure.
+ * @param {string | null | undefined} fromUrl path and query of the previous page in the app
+ */
+export function returnPage(fromUrl) {
+  if (!fromUrl) return null;
+  const at = fromUrl.indexOf('?');
+  const from =
+    at === -1 ? parseRoute(fromUrl) : parseRoute(fromUrl.slice(0, at), fromUrl.slice(at));
+  return RETURN_PAGES[from.name] ?? null;
+}
+
+/** Path and query of the page the current one was opened from in the app, or null. */
+export function cameFrom() {
+  return history.state?.from ?? null;
+}
+
 /**
  * Called before leaving the current URL; resolves to false to stay (unsaved changes).
  * @param {((toUrl: string) => Promise<boolean> | boolean) | null} fn
@@ -207,7 +237,9 @@ export function currentRoute() {
 export async function navigate(url, { replace = false, force = false } = {}) {
   if (url === location.pathname + location.search && !replace) return;
   if (!force && guard && !(await guard(url))) return;
-  history[replace ? 'replaceState' : 'pushState'](null, '', url);
+  // Each entry remembers the page it was opened from (M8); a replacement keeps it.
+  if (replace) history.replaceState(history.state, '', url);
+  else history.pushState({ from: lastUrl }, '', url);
   lastUrl = url;
   await listener(currentRoute());
 }

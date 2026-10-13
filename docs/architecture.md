@@ -113,6 +113,7 @@ frontend/
     schedule-history.js       Undo / Redo of the scheduler's changes (D54)
     schedule-rules.js         split proposal, hours left, durations and warnings as text, day reordering
     my-week.js                My week, and the weeks saved on the device for offline reading
+    work-order-schedule.js    "Scheduled" box of a work order panel: its blocks from today on (D68)
     dom.js                    escapeHtml, element helpers
   assets/vendor/              idb, chart.js (vendored, D17)
   test/                       Vitest + fake-indexeddb + jsdom

@@ -7,7 +7,7 @@ import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
 import { isEmpty, renderValue } from './format.js';
 
-function header(title, onClose) {
+function header(title, onClose, backLabel = 'Back to list') {
   return h(
     'div',
     { class: 'detail-header' },
@@ -15,7 +15,7 @@ function header(title, onClose) {
     h(
       'button',
       { type: 'button', class: 'button button-secondary back-to-list', onClick: onClose },
-      '← Back to list',
+      `← ${backLabel}`,
     ),
     h('h2', { class: 'detail-title', id: 'detail-title', tabindex: '-1' }, title),
     h(
@@ -70,13 +70,26 @@ export function notice(tone, ...content) {
  * @param {HTMLElement[]} [options.actions] buttons or links above the fields
  * @param {HTMLElement} [options.body] replaces the read-only fields
  * @param {boolean} [options.consoleLink] adds a link to the conflict console (supervisors)
+ * @param {string} [options.backLabel] where "Back" goes on small screens (M8)
+ * @param {string[]} [options.fields] fields in their order (default: the entity's)
  */
 export function renderDetail(
   container,
-  { entity, record, onClose, title, notices = [], actions = [], body = null, consoleLink = false },
+  {
+    entity,
+    record,
+    onClose,
+    title,
+    notices = [],
+    actions = [],
+    body = null,
+    consoleLink = false,
+    backLabel,
+    fields: order = ENTITIES[entity].detailFields,
+  },
 ) {
   const cfg = ENTITIES[entity];
-  const fields = cfg.detailFields
+  const fields = order
     .filter((field) => !isEmpty(record[field]))
     .map((field) => [
       h('dt', {}, cfg.fields[field].label),
@@ -84,7 +97,7 @@ export function renderDetail(
     ]);
   replaceChildren(
     container,
-    header(title ?? cfg.title(record), onClose),
+    header(title ?? cfg.title(record), onClose, backLabel),
     record.has_conflict ? conflictBanner(consoleLink) : null,
     notices,
     actions.length ? h('div', { class: 'detail-actions' }, actions) : null,
@@ -95,12 +108,13 @@ export function renderDetail(
 /**
  * Renders a loading, not-found or error state in the detail panel.
  * @param {HTMLElement} container
- * @param {{ title: string, message: string, onClose: () => void, onRetry?: () => void }} options
+ * @param {{ title: string, message: string, onClose: () => void, onRetry?: () => void,
+ *   backLabel?: string }} options
  */
-export function renderDetailMessage(container, { title, message, onClose, onRetry }) {
+export function renderDetailMessage(container, { title, message, onClose, onRetry, backLabel }) {
   replaceChildren(
     container,
-    header(title, onClose),
+    header(title, onClose, backLabel),
     h(
       'p',
       { class: 'detail-message' },

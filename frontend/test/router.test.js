@@ -3,10 +3,12 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  cameFrom,
   detailUrl,
   listUrl,
   navigate,
   parseRoute,
+  returnPage,
   safeNext,
   startRouter,
 } from '../assets/js/router.js';
@@ -121,5 +123,34 @@ describe('navigate', () => {
     steps.push('message');
     expect(steps).toEqual(['rendered schedule', 'message']);
     expect(location.pathname + location.search).toBe('/schedule?week=2026-W42');
+  });
+});
+
+// M8: a work order opened from My week goes back to My week, not to the work order list.
+describe('returnPage', () => {
+  it.each([
+    ['/my-week', 'My week'],
+    ['/my-week?week=2026-W41', 'My week'],
+    ['/dashboard', 'Dashboard'],
+    ['/schedule/blocks/4?week=2026-W41', 'Week scheduler'],
+    ['/audit-log?type=work_orders', 'Audit log'],
+  ])('%s → %s', (url, name) => {
+    expect(returnPage(url)).toBe(name);
+  });
+
+  it.each([null, undefined, '', '/work-orders?page=2', '/work-orders/5', '/assets/3', '/nowhere'])(
+    '%s → back to the list',
+    (url) => {
+      expect(returnPage(url)).toBeNull();
+    },
+  );
+
+  it('remembers the page each entry was opened from; a replacement keeps it', async () => {
+    startRouter(async () => {});
+    await navigate('/my-week');
+    await navigate('/work-orders/5');
+    expect(cameFrom()).toBe('/my-week');
+    await navigate('/work-orders/5?page=2', { replace: true });
+    expect(cameFrom()).toBe('/my-week');
   });
 });

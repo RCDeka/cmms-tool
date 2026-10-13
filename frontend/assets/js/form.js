@@ -374,10 +374,17 @@ function errorApi(form, controls, summary) {
  * other fields as text. Save and Discard are enabled when something changed.
  * @returns {object} handle: getChanges, setValues, setErrors, focusFirstError, setDirty
  */
-export function buildEditForm({ entity, record, editable, ctx, onSave, onDiscard }) {
-  const cfg = ENTITIES[entity];
+export function buildEditForm({
+  entity,
+  record,
+  editable,
+  ctx,
+  onSave,
+  onDiscard,
+  fields = ENTITIES[entity].detailFields,
+}) {
   const fullCtx = { ...ctx, record, mode: 'edit' };
-  const { rows, controls } = buildRows(entity, cfg.detailFields, editable, record, fullCtx);
+  const { rows, controls } = buildRows(entity, fields, editable, record, fullCtx);
   const summary = h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' });
   const save = h(
     'button',

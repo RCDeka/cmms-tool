@@ -242,3 +242,22 @@ describe('renderDashboard', () => {
     expect(host.textContent).toContain('No activity yet.');
   });
 });
+
+// M7: a technician's own work comes before the team tiles, with a link to My week.
+describe('technician dashboard', () => {
+  it('shows My work first, then the tiles, with "Today in My week"', () => {
+    document.body.innerHTML = '<section id="host"></section>';
+    const host = document.getElementById('host');
+    renderDashboard(host, {
+      data: { today: '2026-10-04', kpis, recent_activity: [], my_work_today: [] },
+      stats: null,
+      fromCache: false,
+      fetchedAt: 'x',
+      charts: false,
+      myWeekLink: true,
+    });
+    const headings = [...host.querySelectorAll('h2')].map((h2) => h2.id);
+    expect(headings.indexOf('mywork-heading')).toBeLessThan(headings.indexOf('kpi-heading'));
+    expect(host.querySelector('.my-week-link a').getAttribute('href')).toBe('/my-week');
+  });
+});

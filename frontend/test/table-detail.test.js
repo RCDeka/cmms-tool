@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderDetail } from '../assets/js/detail.js';
+import { detailFieldsOf, ENTITIES } from '../assets/js/entities.js';
 import { focusRow, focusSortButton, renderTable, selectRow } from '../assets/js/table.js';
 
 const asset = (id, extra = {}) => ({
@@ -290,5 +291,18 @@ describe('renderDetail', () => {
     const banner = container.querySelector('.banner-warning');
     expect(banner.textContent).toContain('⚠');
     expect(banner.textContent).toContain('Conflict');
+  });
+});
+
+// M9: on phones and for technicians, the job on site comes before the record's bookkeeping.
+describe('field-work order of a work order', () => {
+  it('holds the same fields as the office order, the job first', () => {
+    const office = ENTITIES.work_orders.detailFields;
+    const field = detailFieldsOf('work_orders', true);
+    expect([...field].sort()).toEqual([...office].sort());
+    expect(field.slice(0, 3)).toEqual(['status', 'review_status', 'priority']);
+    expect(field.indexOf('work_report')).toBeLessThan(field.indexOf('created_by'));
+    expect(detailFieldsOf('work_orders', false)).toBe(office);
+    expect(detailFieldsOf('assets', true)).toBe(ENTITIES.assets.detailFields);
   });
 });

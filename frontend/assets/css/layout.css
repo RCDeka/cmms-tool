@@ -96,6 +96,16 @@ body:not(.is-logged-out) {
   margin-bottom: var(--space-2);
 }
 
+/* A finger-sized target on touch screens and phones (M16). */
+@media (pointer: coarse), (max-width: 1023px) {
+  .user-account {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    margin-bottom: 0;
+  }
+}
+
 .user-account:hover {
   color: #ffffff;
 }
@@ -297,5 +307,10 @@ body.is-offline #status-bar {
 
   #detail-container {
     border-left: none;
+  }
+
+  /* Pages that need a larger screen: the year planner (M17). */
+  .nav-not-phone {
+    display: none;
   }
 }

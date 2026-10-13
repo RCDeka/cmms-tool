@@ -43,7 +43,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `POST /plans`, `PUT /plans/:id`, `PUT /plans/:id/anchor`, `POST /planning/release`, `POST /planning/suggestions` | no | no | yes | yes |
 | Move, skip, restore a visit (`/plan-occurrences/:id…`); add or remove blocked weeks | no | no | yes | yes |
 | `PUT /planning/settings` (reserve, daily capacity, release horizon, longest block) | no | no | no | yes |
-| Read the week schedule (`GET /schedule`) and their own week (`GET /my-week`) (D52) | no | yes | yes | yes |
+| Read the week schedule (`GET /schedule`, `GET /schedule/work-orders/:id`) and their own week (`GET /my-week`) (D52, D68) | no | yes | yes | yes |
 | Allocate, move, resize, remove blocks; capacity of a day; open weekends | no | no | yes | yes |
 | Lock or unlock an appointment (`PUT /schedule/allocations/:id/lock`) | no | own blocks | yes | yes |
 | Order a day (`PUT /schedule/day-order`) | no | own day | yes | yes |
@@ -523,6 +523,9 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
   ```
 - A person's blocks of a day: appointments by start time, then work, then other time, each in the person's order. People deactivated since they got blocks this week are listed with `inactive: true`.
 
+### GET /api/schedule/work-orders/:id
+- Every maintenance role (D68). `200 { "items": [Block + { technician: UserRef }] }`: the blocks of the work order from today on (`APP_TIMEZONE`), by day, appointments first. The "Scheduled" box of the work order panel. Errors: 400 (bad id); 404 (no such work order).
+
 ### POST /api/schedule/allocations
 - SUPERVISOR, ADMIN. Body: `{ "blocks": [{ "kind", "work_order_id"? (WORK only, required for it), "technician_id", "day", "hours", "note"? }] }` (1–20 blocks: a split is one request, all or nothing).
 - `201 { "created": true, "items": Block[] }`. The first block of a work order sets its `planned_week` and, when unassigned, its assignee (BR-S3).
@@ -569,4 +572,4 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Dashboard | `GET /api/dashboard`, `GET/POST /api/dashboards`, `GET/PUT/DELETE /api/dashboards/:id`, `PUT /api/dashboards/order`, `GET /api/dashboard/widgets`, `GET /api/dashboard/widgets/:key/rows` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
 | Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/suggestions`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |
-| Week scheduler | `GET /api/schedule`, `POST /api/schedule/allocations`, `PUT/DELETE /api/schedule/allocations/:id`, `PUT /api/schedule/allocations/:id/lock`, `PUT /api/schedule/day-order`, `PUT /api/schedule/capacity`, `PUT /api/schedule/weeks/:week`, `GET /api/my-week` |
+| Week scheduler | `GET /api/schedule`, `GET /api/schedule/work-orders/:id`, `POST /api/schedule/allocations`, `PUT/DELETE /api/schedule/allocations/:id`, `PUT /api/schedule/allocations/:id/lock`, `PUT /api/schedule/day-order`, `PUT /api/schedule/capacity`, `PUT /api/schedule/weeks/:week`, `GET /api/my-week` |

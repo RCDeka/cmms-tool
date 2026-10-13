@@ -614,3 +614,42 @@ describe('GET /api/my-week', () => {
     expect(data.work_orders).toEqual([]);
   });
 });
+
+describe('GET /api/schedule/work-orders/:id (M10)', () => {
+  it('lists the blocks of a work order from today on, appointments first, with their person', async () => {
+    const wo = await newWorkOrder({ estimated_hours: 4 });
+    const [, tuesday] = await allocate(
+      block(wo, { hours: 1 }),
+      block(wo, { day: TUE, hours: 1 }),
+      block(wo, { day: TUE, hours: 1, technician_id: userId('technician2') }),
+    );
+    await sup()
+      .put(`/api/schedule/allocations/${tuesday.id}/lock`, {
+        locked_start: '14:00',
+        version: tuesday.version,
+      })
+      .expect(200);
+    // A block before today (Sunday 4 October) is history: not listed.
+    ctx.db
+      .prepare(
+        `INSERT INTO allocations (kind, work_order_id, technician_id, day, hours, created_by, created_at, updated_at)
+         VALUES ('WORK', ?, ?, '2026-10-01', 1, ?, '2026-10-01T08:00:00Z', '2026-10-01T08:00:00Z')`,
+      )
+      .run(wo.id, userId('technician1'), userId('supervisor1'));
+
+    const data = (await as('technician1').get(`/api/schedule/work-orders/${wo.id}`).expect(200))
+      .body;
+    expectNoSecrets(data);
+    expect(data.items.map((b) => [b.day, b.locked_start, b.technician.id])).toEqual([
+      [MON, null, userId('technician1')],
+      [TUE, '14:00', userId('technician1')],
+      [TUE, null, userId('technician2')],
+    ]);
+    expect(Object.keys(data.items[0].technician).sort()).toEqual(['first_name', 'id', 'last_name']);
+  });
+
+  it('answers 404 for an unknown work order and 400 for a bad id', async () => {
+    await sup().get('/api/schedule/work-orders/999999').expect(404);
+    await sup().get('/api/schedule/work-orders/abc').expect(400);
+  });
+});

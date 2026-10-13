@@ -93,3 +93,8 @@ export function pageMessage() {
   }
   return { element, say };
 }
+
+/** Phone-sized screen: under 768 px wide (docs/ui-guidelines.md). False where unknown. */
+export function isPhone() {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches;
+}

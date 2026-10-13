@@ -34,6 +34,10 @@ export function scheduleRouter({ schedule, planning, timeZone, now }) {
     res.json(schedule.week(req.valid.query.week, context()));
   });
 
+  router.get('/work-orders/:id', validate({ params: idParams }), (req, res) => {
+    res.json(schedule.workOrderBlocks(req.valid.params.id, context()));
+  });
+
   router.post('/allocations', write, (req, res) => {
     res
       .status(201)

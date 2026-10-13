@@ -142,6 +142,14 @@ export function withoutSort(filters = {}) {
   return Object.fromEntries(Object.entries(filters).filter(([name]) => !SORT_KEYS.includes(name)));
 }
 
+/**
+ * How many filters are on, search and sort apart: the count on the "Filters" button that
+ * folds them on phones (M12). A dashboard drill-down counts once. Pure.
+ */
+export function filterCount(filters = {}) {
+  return Object.keys(withoutSort(filters)).filter((name) => !['q', 'period'].includes(name)).length;
+}
+
 /** The sort part of the filters (`{}` for the default order). Pure. */
 export function sortOf(filters = {}) {
   return filters.sort ? { sort: filters.sort, order: filters.order } : {};
@@ -423,6 +431,26 @@ export function renderFilterBar({
     ),
   );
 
+  // On phones the filters fold behind a button; the search stays in view (M12, table.css).
+  const more = h('div', { class: 'filter-more', id: `filter-more-${entity}` });
+  const toggle = h(
+    'button',
+    {
+      type: 'button',
+      class: 'button button-secondary filter-toggle',
+      'aria-expanded': 'false',
+      'aria-controls': more.id,
+      onClick: () => {
+        const open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', String(open));
+        element.classList.toggle('is-expanded', open);
+      },
+    },
+    'Filters',
+  );
+  const search = parts.filter((part) => part.classList.contains('filter-search'));
+  more.append(...parts.filter((part) => !search.includes(part)), clear);
+
   const element = h(
     'form',
     {
@@ -437,8 +465,9 @@ export function renderFilterBar({
       },
     },
     drillChip,
-    parts,
-    clear,
+    search,
+    toggle,
+    more,
   );
 
   /** Shows filters chosen elsewhere (back button, link) without disturbing typing. */
@@ -453,6 +482,8 @@ export function renderFilterBar({
     }
     // Always shown (disabled when there is nothing to clear) so the bar never shifts.
     clear.disabled = sameFilters(entity, withoutSort(next), defaults);
+    const count = filterCount(next);
+    toggle.textContent = count ? `Filters (${count})` : 'Filters';
   };
   setFilters(filters);
   return { element, setFilters };

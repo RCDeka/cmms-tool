@@ -333,6 +333,15 @@
   gap: var(--space-2);
 }
 
+/* Wide screens: the filters sit in the bar as they are; the fold button is for phones. */
+.filter-more {
+  display: contents;
+}
+
+.filter-bar .filter-toggle {
+  display: none;
+}
+
 @media (max-width: 767px) {
   .filter-field select,
   .multi-select {
@@ -342,6 +351,99 @@
 
   .filter-field {
     flex: 1 1 45%;
+  }
+
+  /* The filters fold behind "Filters (n)"; the search stays (M12). Qualified by .filter-bar
+     to win over the generic .button display rule. */
+  .filter-bar .filter-toggle {
+    display: inline-flex;
+  }
+
+  .filter-more {
+    display: none;
+  }
+
+  .filter-bar.is-expanded .filter-more {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-2) var(--space-3);
+    width: 100%;
+  }
+
+  /* Work orders as cards: number and status, title, priority and due date (M12). */
+  #main-content:not(.split-view) .wo-table {
+    min-width: 0;
+  }
+
+  .wo-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .wo-table,
+  .wo-table tbody {
+    display: block;
+  }
+
+  .wo-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'number status'
+      'title title'
+      'priority due';
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wo-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .wo-table td {
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .wo-table .col-number {
+    grid-area: number;
+    font-weight: 600;
+  }
+
+  .wo-table .col-title {
+    grid-area: title;
+  }
+
+  .wo-table .col-status {
+    grid-area: status;
+    justify-self: end;
+  }
+
+  .wo-table .col-priority {
+    grid-area: priority;
+  }
+
+  .wo-table .col-due-on {
+    grid-area: due;
+    justify-self: end;
+    color: var(--color-text-muted);
+  }
+
+  .wo-table .col-due-on:not(:empty)::before {
+    content: 'Due ';
+  }
+
+  .wo-table .col-site,
+  .wo-table .col-assignee {
+    display: none;
   }
 }
 
