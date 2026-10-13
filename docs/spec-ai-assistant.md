@@ -1,6 +1,6 @@
 # AI Assistant: Specification
 
-Status: **draft, to be confirmed by the product owner** (2026-10-13; decision D66). Scope: two features of the brief's "AI feature" section, **work report formatting** and **finding the matching work order**, with the guardrails of section 4. Phases 25 and 26 in `docs/roadmap-mvp.md`, **not started**. Phase 25 cannot start before open point 1 (which model provider, and where the data goes) is decided. As each phase is implemented, its endpoints and screens move into `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **draft, to be confirmed by the product owner** (2026-10-13; decision D66). Scope: two features of the brief's "AI feature" section, **work report formatting** and **finding the matching work order**, with the guardrails of section 4. Phases 25 and 26 in `docs/roadmap-mvp.md`. **Phase 26 is implemented first** (D67), with the guardrail layers and the provider module; without a model it shows search results. Phase 25 and the first real provider wait for open point 1 (which model provider, and where the data goes). As each phase is implemented, its endpoints and screens move into `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 
@@ -30,7 +30,7 @@ Non-goals in these phases: a conversational copilot, documents and manuals (RAG)
 |---|---|---|
 | A1 | Who | Technicians, supervisors and administrators. Staff have no access (403), like every maintenance endpoint (D46). |
 | A2 | Online only | Server-side processing only. Buttons carry `.ai-only` (disabled offline, brief). Everything else in Tacto works without the assistant. |
-| A3 | Feature switch | The assistant exists only when the server has a provider configured (`AI_PROVIDER`). Otherwise the endpoints answer 503 and the assistant area is not shown. |
+| A3 | Feature switch | The model is used only when the server has a provider configured (`AI_PROVIDER`). Without one, **Find a work order** stays visible and shows the search results (D67); the report formatting area (Phase 25) is not shown and its endpoint answers 503. |
 | A4 | Guardrails | Four layers in a fixed order (section 4): **local input checks**, **maintenance relevance**, **transformation**, **local output checks**. Each layer can stop the request; a stopped request shows nothing from the model. |
 | A5 | Relevance check in the same call | Layers 2 and 3 run in **one** model call: its answer starts with the verdict, which the server reads first. If the verdict is "not maintenance", the rest of the answer is thrown away unread. See the rationale in section 4. |
 | A6 | Context from the server | The client sends only the raw text and record ids. The server reads the context from the database, and only records the user may read. It never sends user names or e-mail addresses to the provider. |
@@ -87,15 +87,15 @@ Pure function `rules/assistant-output.js`, run on every answer before the user s
 | Not allowed / not found / terminal work order (BR-AI3) | 403 / 404 / 422 | As for the ordinary edit |
 | Not maintenance (BR-AI5) | 422 | The relevance message |
 | Rate limit (BR-AI4) | 429 | "Too many assistant requests. Try again in a few minutes." |
-| Unusable answer (BR-AI7) | 502 | The message of BR-AI7 |
-| Provider not configured, unreachable or timed out | 503 | "The assistant is not available right now." |
+| Unusable answer (BR-AI7) | 502 (find-work-order: 200 with the search results, D67) | The message of BR-AI7 |
+| Provider not configured, unreachable or timed out | 503 (find-work-order: 200 with the search results, D67) | "The assistant is not available right now." |
 
 In every case the raw text stays in the textarea.
 
 ## 5. Server design
 
-- `backend/src/assistant/provider.js`: one function `complete({ system, input, schema, timeoutMs })` that returns the parsed JSON or throws. One implementation per provider, chosen by `AI_PROVIDER` (`none`, `fake`, and the provider decided in open point 1). `fake` returns preset answers for the tests and counts its calls.
-- Environment: `AI_PROVIDER` (default `none`), `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS` (default 15000). Documented in `.env.example` and the README.
+- `backend/src/assistant/provider.js`: a provider has one function `complete({ system, input, signal })` that resolves to the parsed JSON answer or rejects; the service enforces the timeout and aborts the signal. One implementation per provider, chosen by `AI_PROVIDER`: only `none` exists until open point 1 is decided. Tests pass their own provider to `createApp` (preset answers, calls counted).
+- Environment: `AI_PROVIDER` (default `none`), `AI_TIMEOUT_MS` (default 15000); the provider's own settings (key, model) come with it. Documented in `.env.example` and the README.
 - `routes/assistant.js` (zod, roles, layer 1 through the rule), `services/assistant.js` (context and candidate set in SQL, provider call, layer 4), pure rules in `rules/assistant-input.js` and `rules/assistant-output.js`.
 - `GET /api/reference-data` gains `assistant: boolean` (a provider is configured), so the frontend shows or hides the assistant area (`docs/architecture.md`: area reserved behind a feature flag).
 - No migration in Phases 25 and 26.
@@ -129,17 +129,21 @@ In every case the raw text stays in the textarea.
 
 - Roles: TECHNICIAN, SUPERVISOR, ADMIN. STAFF 403.
 - Body: `{ "raw_text": string, "asset_id"?: integer, "site"?: string }`. `asset_id` must exist (422) and comes with no `site` (BR-W2 logic: 422 if both differ).
-- **Candidate set (no AI, BR-AI8):** non-terminal work orders, at most **30**, chosen in this order of priority: the asset's work orders when `asset_id` is given; else the site's; then those matching the raw text in the full-text index (D38); for technicians, those assigned to them first. Each work order appears once. If the set is empty, **no call is made**: `200 { "candidates": [] }`.
+- **Candidate set (no AI, BR-AI8):** non-terminal work orders, at most **30**: with `asset_id`, the asset's work orders; else those whose text or asset matches the raw text in the full-text indexes (D38, any word of 3 letters or more, common words left out), within the `site` if given. Ordered by relevance (bm25; title words weigh most; the asset's match adds up), the user's own work raised by a fifth. If the set is empty, **no call is made**.
 - Context per candidate: `id`, `number`, `title`, `description` (first 300 characters), `type`, `status`, `category`, `site`, `location`, asset `code` and `name`, `created_on`, `due_on`, `planned_week`, and `assigned_to_me` (boolean). No people.
 - Model answer schema: `{ "verdict": "MAINTENANCE" | "NOT_MAINTENANCE", "matches": [{ "id": integer, "score": number 0–1, "reason": string ≤ 200 }] }`, at most 5.
 - Layer 4: ids outside the candidate set or repeated are dropped (BR-AI8); matches with a score below **0.3** are dropped; the rest are sorted by score.
-- `200 { "candidates": [{ "work_order": <complete work order record, D7>, "score": number, "reason": string }] }`. The record comes from the database, not from the model; only `reason` comes from the model.
+- `200 { "mode": "ASSISTANT" | "SEARCH", "notice": null | "NOT_CONFIGURED" | "UNAVAILABLE" | "UNUSABLE", "candidates": [{ "work_order": <complete work order record, D7>, "score": number | null, "reason": string | null }] }`. The record comes from the database, not from the model; only `reason` comes from the model.
+- **Search results instead of the model (D67):** when no model is configured, when it fails or times out, or when its answer is unusable, the answer is `mode: "SEARCH"` with the first 10 candidates, `score` and `reason` null, and `notice` saying why. A text judged not about maintenance is still refused (422, BR-AI5): the fallback never bypasses the verdict.
 
-### Screen
+### Screen (D67)
 
-- **Find a work order** (`.ai-only`) in the work order list toolbar, and **Find a work order for this asset** in the asset detail panel (with `asset_id`). Both open a dialog: textarea with counter, button **Find**, results as rows (number, title, asset, status, the reason, a match level "Strong" ≥ 0.7, "Possible" otherwise; never the raw score alone).
-- **Open** on a result opens the work order in the split view and carries the raw text into its assistant area, ready for **Format** (section 6).
-- **None of these: new work order** opens the creation form with the raw text in the description (no AI; the assistant does not fill other fields). Technicians create work orders assigned to themselves, as today (BR-W12).
+- **Find a work order**: a button at the end of the **top bar, on every page**, before "Suggest an improvement" (technicians, supervisors, admins; primary, black; `.ai-only`: visible but disabled offline, with its tooltip; icon only under 640 px). It stays visible without a model.
+- The dialog starts from **where the user is**: the asset of the record open in the detail panel (the asset itself, or the asset of a work order), else the one site the list is filtered on, else everywhere. The context is shown above the text ("Asset: AST-0025 Booster pump – Utility building L0") with **Remove** to search everywhere.
+- Textarea "What did you do?" with a counter (2 000), button **Find**, then the results: number and title, status badge, asset and site, and with the model a match level "Strong" (≥ 0.7) or "Possible" with the reason (never the raw score). Search results carry the notice ("Search results: the assistant is not set up yet."). No match: "No open work order matches this job."
+- **Open** on a result opens the work order in the split view. Once Phase 25 exists, the text is carried into its assistant area, ready for **Format** (section 6); until then it stays in the dialog for the next opening.
+- **None of these? New work order** opens the creation form (with the asset of the context) and puts the raw text in the description, as if typed (no AI; no other field is filled). Technicians create work orders assigned to themselves, as today (BR-W12).
+- The text typed and not used yet is offered again when the dialog reopens; errors (too short, not maintenance, server unreachable) are shown under the text, which is kept.
 
 ## 8. Logging and monitoring
 
@@ -159,12 +163,12 @@ Cause and action codes as columns on work orders, filled from the report proposa
 
 ## 11. Phases and acceptance
 
-- **Phase 25: guardrails and report formatting.** Provider module with `none` and `fake` plus the chosen provider, layers 1 to 4, `POST /api/assistant/format-report`, `assistant` in the reference data, the assistant area in the work order panel, logging, the evaluation set. Acceptance: a technician on a work order assigned to them types "pump 2 tripped again, coil of the contactor burnt, swapped from stock, 1h30, check supply voltage next visit"; the proposal shows Findings, Cause, Work done, Parts and Follow-up, and 1.5 h; "Use this report" fills both fields and the save gives a new version; a 2 001-character text is refused at once with the count and the provider is not called (`fake` call count 0); "write me a poem about spring" is refused as not maintenance and no proposal is shown; a malformed answer gives 502 and shows nothing from the model; an answer with an unknown field is refused; the provider timing out gives 503 and the typed text is kept; offline, Format is disabled with its tooltip; without `AI_PROVIDER` the area is hidden and the endpoint answers 503; a technician on someone else's work order gets 403, on a closed one 422; staff get 403; the 31st call in an hour gets 429; the logs hold no raw text.
-- **Phase 26: finding the work order.** `POST /api/assistant/find-work-order`, the dialog from the list and the asset panel, Open with the text carried over, "None of these: new work order". Acceptance: with an asset given, only that asset's open work orders are candidates and the expected one comes first (`fake` answer); ids outside the candidate set, repeated ids and scores below 0.3 are dropped; with no open work order on the asset and no text match, the provider is not called and the dialog offers the new work order; the candidates are complete records from the database; Open puts the raw text in the work order's assistant area; staff get 403; offline, both buttons are disabled.
+- **Phase 25: report formatting** (the guardrails and the provider module come from Phase 26, D67). The chosen provider, layers 3 and 4 for the report, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging, the evaluation set. Acceptance: a technician on a work order assigned to them types "pump 2 tripped again, coil of the contactor burnt, swapped from stock, 1h30, check supply voltage next visit"; the proposal shows Findings, Cause, Work done, Parts and Follow-up, and 1.5 h; "Use this report" fills both fields and the save gives a new version; a 2 001-character text is refused at once with the count and the provider is not called (the test provider counts no call); "write me a poem about spring" is refused as not maintenance and no proposal is shown; a malformed answer gives 502 and shows nothing from the model; an answer with an unknown field is refused; the provider timing out gives 503 and the typed text is kept; offline, Format is disabled with its tooltip; without `AI_PROVIDER` the area is hidden and the endpoint answers 503; a technician on someone else's work order gets 403, on a closed one 422; staff get 403; the 31st call in an hour gets 429; the logs hold no raw text.
+- **Phase 26: finding the work order** — implemented first (D67), with the provider module and the four guardrail layers that Phase 25 will reuse. `POST /api/assistant/find-work-order`, the top bar button and its dialog, Open, "None of these? New work order", the search results without a model. Acceptance: with an asset given, only that asset's open work orders are candidates and the expected one comes first (test provider); ids outside the candidate set, repeated ids and scores below 0.3 are dropped; with no open work order matching, the model is not called and the dialog offers the new work order with the text in its description; the candidates are complete records from the database; a text refused by layer 1 never reaches the model; a text judged not maintenance is refused with nothing shown; without a model, or when it fails, times out or answers something unusable, the search results are shown with a notice; staff get 403; offline, the button is disabled; the logs hold no text. Waiting for the provider: the evaluation set and the check against a real model.
 
 ## 12. Open points
 
 1. **Provider and data handling (blocks Phase 25).** Which model provider, where it is hosted, and on what terms (no use of the data for training, retention, EU hosting), or a self-hosted model. To be approved by the bank's security and data protection teams. The data sent is limited to section 6 and 7 contexts (no people), but report texts can mention people or places.
-2. Confirm A5 (relevance check in the same call) or ask for a separate classifying call.
+2. ~~Confirm A5~~: confirmed by the product owner (2026-10-13, D67): the relevance verdict comes first in the same call.
 3. Confirm A8 (report in the language of the raw text).
 4. Limits: 2 000 characters, 30 calls per user per hour, 30 candidates, score threshold 0.3. To adjust after the first weeks of use.

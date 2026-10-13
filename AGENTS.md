@@ -20,7 +20,7 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant (report formatting and finding the work order) is specified as a draft (D66, `docs/spec-ai-assistant.md`) and not started: implement it only phase by phase as scheduled in `docs/roadmap-mvp.md`; Phase 25 waits for the provider decision. See the backlog in `docs/roadmap-mvp.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant is specified as a draft (D66, `docs/spec-ai-assistant.md`): finding the work order is implemented without a real model yet (Phase 26, D67); the report formatting (Phase 25) and the first provider wait for the provider decision. See the backlog in `docs/roadmap-mvp.md`.
 
 ## Code conventions
 

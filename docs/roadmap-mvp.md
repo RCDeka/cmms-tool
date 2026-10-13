@@ -139,10 +139,10 @@ Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance cri
 
 ## AI assistant (D66)
 
-Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full acceptance criteria). Not started: Phase 25 waits for the provider and data-handling decision (open point 1).
+Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full acceptance criteria). Phase 26 is done first (D67); Phase 25 waits for the provider and data-handling decision (open point 1).
 
-- **Phase 25: guardrails and report formatting.** Provider module, the four guardrail layers, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging without texts, the evaluation set. Acceptance: see the spec, section 11.
-- **Phase 26: finding the work order.** `POST /api/assistant/find-work-order` with its SQL candidate set, the dialog from the list and the asset panel, the text carried into the found work order, "None of these: new work order". Acceptance: see the spec, section 11.
+- **Phase 25: report formatting.** The chosen provider, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging without texts, the evaluation set. Acceptance: see the spec, section 11.
+- **Phase 26: finding the work order** — done first (D67), without a real provider yet. The provider module, the four guardrail layers, `POST /api/assistant/find-work-order` with its SQL candidate set and search results without a model, the **Find a work order** button in the top bar and its dialog, "None of these? New work order". Acceptance: see the spec, section 11; the check against a real model waits for the provider.
 
 ## Post-MVP backlog (not scheduled)
 
