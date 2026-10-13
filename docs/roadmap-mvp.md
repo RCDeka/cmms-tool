@@ -137,13 +137,20 @@ Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance cri
 - **Phase 23: compliance** — done (D62). Preventive maintenance compliance, regulatory visits late, week schedule kept, contractor scorecard. Acceptance: on-time limits at the Sunday of the deadline week; regulatory visits use their due week; skipped visits counted apart.
 - **Phase 24: responsiveness, assets and people** — done (D63). Time to start and close (median, 90th percentile), staff request service, bad actors, repeat failures, critical assets out of service, workload, estimate accuracy. Acceptance: percentiles, ongoing breakdowns and the 30-day repeat limit match hand-computed values; the "Assets and people" template loads within budget.
 
+## AI assistant (D66)
+
+Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full acceptance criteria). Not started: Phase 25 waits for the provider and data-handling decision (open point 1).
+
+- **Phase 25: guardrails and report formatting.** Provider module, the four guardrail layers, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging without texts, the evaluation set. Acceptance: see the spec, section 11.
+- **Phase 26: finding the work order.** `POST /api/assistant/find-work-order` with its SQL candidate set, the dialog from the list and the asset panel, the text carried into the found work order, "None of these: new work order". Acceptance: see the spec, section 11.
+
 ## Post-MVP backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.
 2. ~~User administration screen~~ → Phase 11.
 3. ~~Work order status history and audit log~~ → Phase 9.
 4. ~~Filters and search on lists; full-text search~~ → Phase 10.
-5. AI assistant endpoints (`format-report`, `find-work-order`) and the detail panel "AI assistant" area.
+5. ~~AI assistant endpoints (`format-report`, `find-work-order`)~~ → Phases 25–26 (D66, specified).
 6. Staff requests, next steps: notify the maintenance team of new comments (new requests now have their dashboard tile, D47), let a requester cancel their own request, room list instead of the free-text location, photos.
 7. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).
 8. ~~Demo data with history (D62)~~ → done (D64).
