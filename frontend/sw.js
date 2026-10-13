@@ -74,6 +74,7 @@ const SHELL_FILES = [
   '/assets/js/table.js',
   '/assets/js/widget-charts.js',
   '/assets/js/widget-order.js',
+  '/assets/js/widget-settings.js',
   '/assets/js/widgets-compliance.js',
   '/assets/js/widgets-flow.js',
   '/assets/js/widgets-people.js',

@@ -331,6 +331,9 @@ Personal dashboards of supervisors and admins (migration `011_dashboards.sql`; `
 
 Index: (`user_id`, `position`). Not in the audit log (personal preferences). A user without dashboards gets "Overview" (every widget) on their first `GET /api/dashboards`.
 
+#### widget_settings (`012`, D65)
+Dashboard widgets switched on or off for supervisors by the administrators: `key` (PK, a key of the widget catalogue, checked by the API), `enabled` (0/1), `updated_by` (FK → users.id, null for a row written by a migration), `updated_at`. No row: the widget is on. A widget switched off is hidden from supervisors (sidebar, dashboards, figures, records, drill-down) and cannot be added by them; it stays stored on their dashboards. Administrators see every widget. Not logged.
+
 Rules: BR-K1 a dashboard is only seen and changed by its owner (404 for others); BR-K2 1 to 20 dashboards per user, names unique ignoring case, the last one cannot be deleted; BR-K3 widget keys known and each at most once; BR-K4 the Work orders (CSV) of a widget lists exactly the records its figures count (one WHERE clause per widget in `services/dashboard-widgets.js`).
 
 ## Business rules

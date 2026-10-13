@@ -7,7 +7,12 @@ import { dateInZone } from '../lib/dates.js';
 import { listFilter } from '../lib/list-filter.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { DASHBOARD_PERIODS, DEFAULT_PERIOD, WIDGET_KEYS } from '../rules/dashboards.js';
+import {
+  DASHBOARD_PERIODS,
+  DEFAULT_PERIOD,
+  WIDGET_KEYS,
+  widgetAvailable,
+} from '../rules/dashboards.js';
 import { CATEGORIES } from '../rules/enums.js';
 
 /** Dashboard filters in the query (K8): sites joined by "|", as in the lists (D45). */
@@ -44,10 +49,11 @@ const filtersOf = (query) => ({
  * @param {object} deps
  * @param {ReturnType<import('../services/dashboard.js').createDashboardService>} deps.dashboard
  * @param {ReturnType<import('../services/dashboard-widgets.js').createDashboardWidgetService>} deps.widgets
+ * @param {ReturnType<import('../services/widget-settings.js').createWidgetSettingsService>} deps.widgetSettings
  * @param {string} deps.timeZone
  * @param {() => Date} deps.now
  */
-export function dashboardRouter({ dashboard, widgets, timeZone, now }) {
+export function dashboardRouter({ dashboard, widgets, widgetSettings, timeZone, now }) {
   const router = Router();
   router.get('/', (req, res) => {
     res.json(dashboard.get(req.user, { now: now(), timeZone }));
@@ -58,10 +64,16 @@ export function dashboardRouter({ dashboard, widgets, timeZone, now }) {
     const instant = now();
     const today = dateInZone(timeZone, instant);
     const { keys, ...query } = req.valid.query;
+    // D65: widgets switched off are left out for supervisors (a list kept on a device may
+    // still name them).
+    const disabled = widgetSettings.disabled();
+    const shown = keys.filter((key) => widgetAvailable(key, req.user.role, disabled));
     res.json({
       today,
       generated_at: instant.toISOString(),
-      widgets: widgets.figures(keys, filtersOf(query), { today, userId: req.user.id, timeZone }),
+      widgets: shown.length
+        ? widgets.figures(shown, filtersOf(query), { today, userId: req.user.id, timeZone })
+        : {},
     });
   });
 
@@ -71,6 +83,7 @@ export function dashboardRouter({ dashboard, widgets, timeZone, now }) {
     validate({ params: keyParams, query: rowsQuery }),
     (req, res) => {
       const { segment, ...query } = req.valid.query;
+      widgetSettings.assertAvailable(req.valid.params.key, req.user);
       res.json(
         widgets.rows(req.valid.params.key, segment, filtersOf(query), {
           today: dateInZone(timeZone, now()),

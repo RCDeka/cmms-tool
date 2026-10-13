@@ -49,10 +49,11 @@ const deleteQuery = z.strictObject({ version: z.coerce.number().int().min(1) });
  * @param {object} deps
  * @param {ReturnType<import('../services/assets.js').createAssetService>} deps.assets
  * @param {ReturnType<import('../services/dashboard-widgets.js').createDashboardWidgetService>} deps.widgets
+ * @param {ReturnType<import('../services/widget-settings.js').createWidgetSettingsService>} deps.widgetSettings
  * @param {string} deps.timeZone
  * @param {() => Date} deps.now
  */
-export function assetsRouter({ assets, widgets, timeZone, now }) {
+export function assetsRouter({ assets, widgets, widgetSettings, timeZone, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
@@ -60,6 +61,8 @@ export function assetsRouter({ assets, widgets, timeZone, now }) {
     if (period !== undefined && drill === undefined) {
       throw new HttpError(400, 'Invalid query', { fields: { period: 'Only with drill' } });
     }
+    // D65: no drill-down into a widget switched off (the widget key comes before the colon).
+    if (drill !== undefined) widgetSettings.assertAvailable(drill.split(':')[0], req.user);
     const extra =
       drill === undefined
         ? undefined

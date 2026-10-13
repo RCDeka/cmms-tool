@@ -6,16 +6,19 @@ import { z } from 'zod';
 import { idParams } from '../lib/pagination.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import { WIDGET_KEYS } from '../rules/dashboards.js';
 
+const keyParams = z.strictObject({ key: z.enum(WIDGET_KEYS) });
 const versionQuery = z.strictObject({ version: z.coerce.number().int().min(1) });
 
 /**
  * /api/dashboards: personal dashboards of supervisors and admins (D59).
  * @param {object} deps
  * @param {ReturnType<import('../services/dashboards.js').createDashboardsService>} deps.dashboards
+ * @param {ReturnType<import('../services/widget-settings.js').createWidgetSettingsService>} deps.widgetSettings
  * @param {() => Date} deps.now
  */
-export function dashboardsRouter({ dashboards, now }) {
+export function dashboardsRouter({ dashboards, widgetSettings, now }) {
   const router = Router();
   router.use(requireRole('SUPERVISOR', 'ADMIN'));
 
@@ -25,6 +28,17 @@ export function dashboardsRouter({ dashboards, now }) {
 
   router.post('/', (req, res) => {
     res.status(201).json(dashboards.create(req.body, req.user, { now: now() }));
+  });
+
+  // Widgets switched on or off for supervisors (D65), administrators only. Declared before
+  // /:id so "widgets" is not taken for an id.
+  const admins = requireRole('ADMIN');
+  router.get('/widgets', admins, (_req, res) => {
+    res.json(widgetSettings.list());
+  });
+
+  router.put('/widgets/:key', admins, validate({ params: keyParams }), (req, res) => {
+    res.json(widgetSettings.update(req.valid.params.key, req.body, req.user, { now: now() }));
   });
 
   // Declared before /:id so "order" is not taken for an id.

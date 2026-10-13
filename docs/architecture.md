@@ -100,6 +100,7 @@ frontend/
     planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures) and
                               the figures of a balancing proposal
     planning-settings.js      planning settings page (administrators) with the capacity preview
+    widget-settings.js        dashboard widgets page (administrators): widgets switched on or off (D65)
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
     schedule.js               week scheduler: week switcher, open weekends, tiles, tray, people × days grid
                               (Phase 19, D52); its URLs and panels
@@ -155,6 +156,7 @@ export const ENTITIES = {
 | `/planning/blocked-weeks` | planner + blocked weeks panel (every maintenance role reads; SUPERVISOR, ADMIN edit) |
 | `/planning/suggestions` | planner + balancing proposal (SUPERVISOR, ADMIN, online only, D53) |
 | `/admin/planning` | planning settings (ADMIN, online only) |
+| `/admin/widgets` | dashboard widgets switched on or off for supervisors (ADMIN, online only, D65) |
 | `/schedule?week=…` | week scheduler (maintenance roles, online only; technicians read only, D52) |
 | `/schedule/work-orders/:id?week=…[&person=N&day=D]` | scheduler + panel scheduling a work order of the tray (from a drop on a person's day) |
 | `/schedule/blocks/:id?week=…` | scheduler + block panel (supervisors and admins edit; the person of the block locks it) |

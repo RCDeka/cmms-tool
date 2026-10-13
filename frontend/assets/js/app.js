@@ -23,6 +23,7 @@ import {
   leaveDashboards,
   loadDashboardNav,
   showDashboards,
+  showWidgetSettings,
 } from './dashboards-page.js';
 import { feedbackUrl, openFeedbackDialog, renderFeedbackLog } from './feedback.js';
 import * as DB from './db.js';
@@ -260,6 +261,10 @@ async function render(route) {
     case 'planningSettings':
       return hasRole('ADMIN')
         ? showPlanningSettings(isCurrent)
+        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+    case 'widgetSettings':
+      return hasRole('ADMIN')
+        ? showWidgetSettings(isCurrent)
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
     case 'feedback':
       return hasRole('ADMIN')

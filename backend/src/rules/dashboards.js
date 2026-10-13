@@ -187,3 +187,30 @@ export function filtersFor(key, filters) {
     categories: used.includes('categories') ? filters.categories : [],
   };
 }
+
+/**
+ * D65: a widget switched off by an administrator is shown to administrators only (they keep
+ * testing it), and hidden from every other role.
+ * @param {string} key
+ * @param {string} role
+ * @param {Set<string>} disabled keys switched off
+ */
+export function widgetAvailable(key, role, disabled) {
+  return role === 'ADMIN' || !disabled.has(key);
+}
+
+/**
+ * D65: switched-off widgets `role` would add to a dashboard (those already on it stay, hidden,
+ * so they come back when switched on again).
+ * @param {{ key: string }[]} before
+ * @param {{ key: string }[]} after
+ * @param {string} role
+ * @param {Set<string>} disabled
+ * @returns {string[]}
+ */
+export function unavailableAdded(before, after, role, disabled) {
+  const had = new Set(before.map((w) => w.key));
+  return after
+    .map((w) => w.key)
+    .filter((key) => !had.has(key) && !widgetAvailable(key, role, disabled));
+}

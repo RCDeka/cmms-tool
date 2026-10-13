@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import * as backend from '../../backend/src/rules/dashboards.js';
 import { csvCell, exportFileName, fileSlug, toCsv } from '../assets/js/export.js';
 import { moveKey, sameOrder } from '../assets/js/widget-order.js';
+import { renderWidgetSettings, settingNote } from '../assets/js/widget-settings.js';
 import {
   DEFAULT_FILTERS,
   PERIODS,
@@ -244,5 +245,40 @@ describe('moveKey', () => {
     expect(sameOrder(['a', 'b'], ['a', 'b'])).toBe(true);
     expect(sameOrder(['a', 'b'], ['b', 'a'])).toBe(false);
     expect(sameOrder(['a'], ['a', 'b'])).toBe(false);
+  });
+});
+
+describe('dashboard widgets page (D65)', () => {
+  const ada = { id: 1, first_name: 'Ada', last_name: 'Admin' };
+  const items = backend.WIDGET_KEYS.map((key) => ({
+    key,
+    enabled: key !== 'by_status',
+    updated_by: key === 'by_status' ? ada : null,
+    updated_at: key === 'by_status' ? '2026-10-12T08:00:00.000Z' : null,
+  }));
+
+  it('says who switched a widget last, and nothing for one never switched', () => {
+    expect(settingNote(items.find((i) => i.key === 'by_status'))).toMatch(
+      /^Switched off by Ada Admin on /,
+    );
+    expect(settingNote(items[0])).toBeNull();
+    expect(settingNote({ ...items[0], updated_at: '2026-10-12T08:00:00.000Z' })).toMatch(
+      /^Switched on on /,
+    );
+  });
+
+  it('shows one checkbox per widget, ticked when on, and reports a change', () => {
+    const container = document.createElement('div');
+    const changes = [];
+    renderWidgetSettings(container, { items, onToggle: (...args) => changes.push(args) });
+    const boxes = [...container.querySelectorAll('input[type="checkbox"]')];
+    expect(boxes).toHaveLength(WIDGETS.length);
+    const byStatus = container.querySelector('[data-focus="setting-by_status"]');
+    expect(byStatus.checked).toBe(false);
+    expect(boxes.filter((b) => !b.checked)).toEqual([byStatus]);
+    expect(container.textContent).toContain(`1 of ${WIDGETS.length} widgets switched off.`);
+    byStatus.checked = true;
+    byStatus.dispatchEvent(new Event('change'));
+    expect(changes).toEqual([['by_status', true]]);
   });
 });

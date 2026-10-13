@@ -19,8 +19,9 @@ import { formatDateTime } from './format.js';
 import { valueLabel } from './labels.js';
 import { announce, confirmDialog, renderPage, setActiveNav, setTitle } from './layout.js';
 import { applyToPage, isOnline } from './network.js';
-import { navigate } from './router.js';
+import { currentRoute, navigate } from './router.js';
 import { attachWidgetDrag, moveKey } from './widget-order.js';
+import { renderWidgetSettings } from './widget-settings.js';
 import {
   DEFAULT_FILTERS,
   PERIODS,
@@ -37,6 +38,7 @@ import {
 
 const tableContainer = document.getElementById('table-container');
 const LIST_CACHE = 'dashboards';
+const DISABLED_CACHE = 'dashboard_widgets_disabled';
 const dataCache = (id) => `dashboard_data_${id}`;
 const numberFormat = new Intl.NumberFormat('en-GB');
 
@@ -50,6 +52,8 @@ let list = null;
  */
 let view = null; // { dashboard, data, today, fetchedAt, fromCache, charts, legends, detach }
 let myWorkRange = 'today';
+/** Widgets switched off by an administrator (D65): hidden from supervisors. */
+let disabledWidgets = new Set();
 /** Sites offered by the site filter (reference data). */
 let knownSites = [];
 /** Saves run one after the other, each with the version the previous one returned. */
@@ -73,6 +77,13 @@ export function initDashboardsPage(hooks) {
 /** True for the roles that have personal dashboards. */
 export const hasDashboards = () => hasRole('SUPERVISOR', 'ADMIN');
 
+/**
+ * Catalogue entry of a widget the user may see, or undefined: administrators see the widgets
+ * switched off too, to keep testing them (D65).
+ */
+const shownDef = (key) =>
+  hasRole('ADMIN') || !disabledWidgets.has(key) ? widgetDef(key) : undefined;
+
 // --- Dashboard list (sidebar) ---------------------------------------------------------------
 
 /** Session start: my dashboards in the sidebar, from the device, then from the server. */
@@ -82,12 +93,15 @@ export async function loadDashboardNav() {
   renderNav();
   if (!hasDashboards()) return;
   list = (await DB.getConfig(LIST_CACHE)) ?? null;
+  disabledWidgets = new Set((await DB.getConfig(DISABLED_CACHE)) ?? []);
   renderNav();
   if (isOnline()) await fetchList().catch(() => {});
 }
 
 async function fetchList() {
-  const { items } = await apiFetch('/dashboards');
+  const { items, disabled_widgets: disabled } = await apiFetch('/dashboards');
+  disabledWidgets = new Set(disabled);
+  await DB.setConfig(DISABLED_CACHE, disabled);
   await storeList(items);
   return items;
 }
@@ -150,12 +164,14 @@ function renderPicker() {
       { class: 'widget-picker-hint' },
       `Tick the widgets to show on “${view.dashboard.name}”.`,
     ),
-    WIDGET_GROUPS.map((group) =>
-      h(
+    WIDGET_GROUPS.map((group) => {
+      const offered = WIDGETS.filter((w) => w.group === group && shownDef(w.key));
+      if (!offered.length) return null;
+      return h(
         'fieldset',
         { class: 'widget-group' },
         h('legend', {}, group),
-        WIDGETS.filter((w) => w.group === group).map((w) =>
+        offered.map((w) =>
           h(
             'label',
             { class: 'widget-option' },
@@ -167,13 +183,63 @@ function renderPicker() {
               onChange: (event) => toggleWidget(w.key, event.target.checked),
             }),
             h('span', {}, w.label),
+            // Administrators only: the widget is switched off for supervisors.
+            disabledWidgets.has(w.key)
+              ? h('span', { class: 'widget-off', title: 'Switched off for supervisors' }, 'Off')
+              : null,
           ),
         ),
-      ),
-    ),
+      );
+    }),
   );
   picker.hidden = false;
   applyToPage(picker);
+}
+
+// --- Dashboard widgets (administrators, D65) ---------------------------------------------
+
+/** `/admin/widgets`: each widget switched on or off for supervisors (online only). */
+export async function showWidgetSettings(isCurrent) {
+  app.leaveRecordViews('widget_settings', 'Dashboard widgets');
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the widgets…'));
+  let items;
+  try {
+    ({ items } = await apiFetch('/dashboards/widgets'));
+  } catch (err) {
+    if (!isCurrent()) return;
+    app.showConsoleError(err, () => app.render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The dashboard widgets need a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  const draw = (focus) => {
+    renderWidgetSettings(tableContainer, { items, onToggle });
+    applyToPage(tableContainer);
+    const target = focus && tableContainer.querySelector(`[data-focus="${focus}"]`);
+    (target || tableContainer.querySelector('.placeholder-title'))?.focus();
+  };
+  async function onToggle(key, enabled) {
+    const label = widgetDef(key).label;
+    try {
+      const item = await apiFetch(`/dashboards/widgets/${key}`, {
+        method: 'PUT',
+        body: { enabled },
+      });
+      items = items.map((i) => (i.key === key ? item : i));
+      // The sidebar of this administrator marks it at once.
+      if (enabled) disabledWidgets.delete(key);
+      else disabledWidgets.add(key);
+      await DB.setConfig(DISABLED_CACHE, [...disabledWidgets]);
+      announce(`${label} switched ${enabled ? 'on' : 'off'} for supervisors.`);
+    } catch (err) {
+      announce(err.status === 0 ? `You are offline: ${label} was not changed.` : err.message);
+    }
+    if (isCurrent()) draw(`setting-${key}`);
+  }
+  draw();
 }
 
 /** Leaving the dashboard page: the checkboxes go, the charts are released. */
@@ -199,7 +265,7 @@ const filterQuery = (filters) => {
   if (filters.categories.length) query.set('category', filters.categories.join(','));
   return query.toString();
 };
-const keysOf = (dashboard) => dashboard.widgets.map((w) => w.key).filter((k) => widgetDef(k));
+const keysOf = (dashboard) => dashboard.widgets.map((w) => w.key).filter((k) => shownDef(k));
 
 /**
  * /dashboard (my first dashboard) and /dashboard/:id.
@@ -318,7 +384,7 @@ function paint(focus = focusKey()) {
 
   const grid = h('ul', { class: 'widget-grid', 'aria-label': `Widgets of ${dashboard.name}` });
   const charts = [];
-  const entries = dashboard.widgets.filter((w) => widgetDef(w.key));
+  const entries = dashboard.widgets.filter((w) => shownDef(w.key));
   entries.forEach((entry) => {
     const { card, charts: drawn, legend } = widgetCard(entry);
     grid.append(card);
@@ -690,7 +756,10 @@ function toggleWidget(key, checked) {
   }
 }
 
-/** Widgets in the order of `keys`; widgets of an unknown key keep their place at the end. */
+/**
+ * Widgets in the order of `keys`; widgets not shown (unknown key, or switched off by an
+ * administrator) keep their place at the end.
+ */
 function orderedWidgets(keys) {
   const byKey = new Map(view.dashboard.widgets.map((w) => [w.key, w]));
   return [

@@ -9,6 +9,7 @@ describe('parseRoute', () => {
     ['/', '', { name: 'root', page: 1 }],
     ['/dashboard', '', { name: 'dashboard', page: 1 }],
     ['/dashboard/7', '', { name: 'dashboard', id: 7, page: 1 }],
+    ['/admin/widgets', '', { name: 'widgetSettings', page: 1 }],
     ['/assets', '', { name: 'list', entity: 'assets', page: 1 }],
     ['/assets', '?page=3', { name: 'list', entity: 'assets', page: 3 }],
     ['/assets/', '?page=3', { name: 'list', entity: 'assets', page: 3 }],
@@ -41,6 +42,7 @@ describe('parseRoute', () => {
     '/dashboard/x',
     '/dashboard/0',
     '/dashboard/1/extra',
+    '/admin/widgets/by_status',
   ])('%s is not found', (path) => {
     expect(parseRoute(path).name).toBe('notFound');
   });

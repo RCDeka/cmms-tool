@@ -14,6 +14,8 @@ import {
   isSameSet,
   sameName,
   templateWidgets,
+  unavailableAdded,
+  widgetAvailable,
   widgetsProblem,
   withFilterDefaults,
 } from '../rules/dashboards.js';
@@ -83,8 +85,11 @@ const toDashboard = (row) => ({
   updated_at: row.updated_at,
 });
 
-/** @param {import('better-sqlite3').Database} db */
-export function createDashboardsService(db) {
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ widgetSettings: ReturnType<import('./widget-settings.js').createWidgetSettingsService> }} deps
+ */
+export function createDashboardsService(db, { widgetSettings }) {
   const mine = db.prepare('SELECT * FROM dashboards WHERE user_id = ? ORDER BY position, id');
   const one = db.prepare('SELECT * FROM dashboards WHERE id = ? AND user_id = ?');
   const insert = db.prepare(
@@ -129,19 +134,32 @@ export function createDashboardsService(db) {
     return toDashboard(one.get(id, user.id));
   };
 
+  /** Widgets of a template the user may see (D65: switched-off ones are left out). */
+  const fromTemplate = (template, user) => {
+    const disabled = widgetSettings.disabled();
+    return templateWidgets(template).filter((w) => widgetAvailable(w.key, user.role, disabled));
+  };
+
   return {
-    /** GET /api/dashboards: mine in order; "Overview" is created for a user without any (K2). */
+    /**
+     * GET /api/dashboards: mine in order, and the widgets switched off (D65); "Overview" is
+     * created for a user without any (K2).
+     */
     list(user, { now }) {
       let rows = mine.all(user.id);
       if (!rows.length) {
         db.transaction(() => {
           if (!mine.all(user.id).length) {
-            add(user, { name: 'Overview', widgets: templateWidgets('OVERVIEW'), filters: {} }, now);
+            add(
+              user,
+              { name: 'Overview', widgets: fromTemplate('OVERVIEW', user), filters: {} },
+              now,
+            );
           }
         }).immediate();
         rows = mine.all(user.id);
       }
-      return { items: rows.map(toDashboard) };
+      return { items: rows.map(toDashboard), disabled_widgets: [...widgetSettings.disabled()] };
     },
 
     /** GET /api/dashboards/:id */
@@ -166,7 +184,7 @@ export function createDashboardsService(db) {
               now,
             );
           }
-          const widgets = templateWidgets(input.template ?? 'EMPTY');
+          const widgets = fromTemplate(input.template ?? 'EMPTY', user);
           return add(user, { name: input.name, widgets, filters: {} }, now);
         })
         .immediate();
@@ -188,6 +206,19 @@ export function createDashboardsService(db) {
             );
           }
           if (changes.name !== undefined) nameTaken(user, changes.name, id);
+          if (changes.widgets) {
+            const added = unavailableAdded(
+              JSON.parse(current.widgets),
+              changes.widgets,
+              user.role,
+              widgetSettings.disabled(),
+            );
+            if (added.length) {
+              throw new HttpError(400, 'Invalid body', {
+                fields: { widgets: `Switched off by an administrator: ${added.join(', ')}` },
+              });
+            }
+          }
           const columns = {
             name: changes.name ?? current.name,
             widgets: changes.widgets ? JSON.stringify(changes.widgets) : current.widgets,

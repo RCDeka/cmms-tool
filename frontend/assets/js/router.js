@@ -63,6 +63,9 @@ export function parseRoute(pathname, search = '') {
   if (first === 'admin' && second === 'planning' && !rest.length) {
     return { name: 'planningSettings', page };
   }
+  if (first === 'admin' && second === 'widgets' && !rest.length) {
+    return { name: 'widgetSettings', page };
+  }
   if (first === 'planning') {
     // Year planner (D48): /planning, /planning/plans/new, /planning/plans/:id?occurrence=N.
     const filters = parsePlanningFilters(query);

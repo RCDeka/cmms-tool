@@ -41,6 +41,7 @@ import { createReferenceDataService } from './services/reference-data.js';
 import { createRequestService } from './services/requests.js';
 import { createScheduleService } from './services/schedule.js';
 import { createUserService } from './services/users.js';
+import { createWidgetSettingsService } from './services/widget-settings.js';
 import { createWorkOrderService } from './services/work-orders.js';
 import { MAINTENANCE_ROLES } from './rules/enums.js';
 
@@ -81,7 +82,8 @@ export function createApp({
   const referenceData = createReferenceDataService(db);
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
-  const dashboards = createDashboardsService(db);
+  const widgetSettings = createWidgetSettingsService(db);
+  const dashboards = createDashboardsService(db, { widgetSettings });
   const widgets = createDashboardWidgetService(db, { workOrders, assets });
   const audit = createAuditService(db);
   const feedback = createFeedbackService(db);
@@ -158,10 +160,13 @@ export function createApp({
   app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
   app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
-  app.use('/api/assets', assetsRouter({ assets, widgets, timeZone: config.timeZone, now }));
+  app.use(
+    '/api/assets',
+    assetsRouter({ assets, widgets, widgetSettings, timeZone: config.timeZone, now }),
+  );
   app.use(
     '/api/work-orders',
-    workOrdersRouter({ workOrders, widgets, timeZone: config.timeZone, now }),
+    workOrdersRouter({ workOrders, widgets, widgetSettings, timeZone: config.timeZone, now }),
   );
   app.use('/api/conflicts', conflictsRouter({ conflicts }));
   app.use('/api/plans', plansRouter({ plans, timeZone: config.timeZone, now }));
@@ -174,9 +179,9 @@ export function createApp({
   app.use('/api/my-week', myWeekRouter({ schedule, timeZone: config.timeZone, now }));
   app.use(
     '/api/dashboard',
-    dashboardRouter({ dashboard, widgets, timeZone: config.timeZone, now }),
+    dashboardRouter({ dashboard, widgets, widgetSettings, timeZone: config.timeZone, now }),
   );
-  app.use('/api/dashboards', dashboardsRouter({ dashboards, now }));
+  app.use('/api/dashboards', dashboardsRouter({ dashboards, widgetSettings, now }));
   app.use('/api', referenceRouter({ referenceData, users }));
   app.use('/api', apiNotFound);
 

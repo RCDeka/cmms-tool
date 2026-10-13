@@ -56,10 +56,11 @@ const statsQuery = z.strictObject({
  * @param {object} deps
  * @param {ReturnType<import('../services/work-orders.js').createWorkOrderService>} deps.workOrders
  * @param {ReturnType<import('../services/dashboard-widgets.js').createDashboardWidgetService>} deps.widgets
+ * @param {ReturnType<import('../services/widget-settings.js').createWidgetSettingsService>} deps.widgetSettings
  * @param {string} deps.timeZone APP_TIMEZONE, for "today"
  * @param {() => Date} deps.now
  */
-export function workOrdersRouter({ workOrders, widgets, timeZone, now }) {
+export function workOrdersRouter({ workOrders, widgets, widgetSettings, timeZone, now }) {
   const router = Router();
 
   router.get('/', validate({ query: listQuery }), (req, res) => {
@@ -67,6 +68,8 @@ export function workOrdersRouter({ workOrders, widgets, timeZone, now }) {
     if (period !== undefined && drill === undefined) {
       throw new HttpError(400, 'Invalid query', { fields: { period: 'Only with drill' } });
     }
+    // D65: no drill-down into a widget switched off (the widget key comes before the colon).
+    if (drill !== undefined) widgetSettings.assertAvailable(drill.split(':')[0], req.user);
     const today = dateInZone(timeZone, now());
     const userId = req.user.id;
     const extra =

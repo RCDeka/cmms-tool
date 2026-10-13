@@ -9,6 +9,8 @@ import {
   isSameSet,
   sameName,
   templateWidgets,
+  unavailableAdded,
+  widgetAvailable,
   widgetsProblem,
   withFilterDefaults,
 } from '../../src/rules/dashboards.js';
@@ -84,5 +86,29 @@ describe('filters', () => {
       categories: ['HVAC'],
     });
     expect(filtersFor('my_work', all)).toEqual({ period: null, sites: [], categories: [] });
+  });
+});
+
+describe('widget availability (D65)', () => {
+  const disabled = new Set(['by_status']);
+
+  it('hides a switched-off widget from every role but administrators', () => {
+    expect(widgetAvailable('by_status', 'ADMIN', disabled)).toBe(true);
+    expect(widgetAvailable('by_status', 'SUPERVISOR', disabled)).toBe(false);
+    expect(widgetAvailable('by_status', 'TECHNICIAN', disabled)).toBe(false);
+    expect(widgetAvailable('by_category', 'SUPERVISOR', disabled)).toBe(true);
+  });
+
+  it('refuses only switched-off widgets newly added by a non-administrator', () => {
+    const w = (...keys) => keys.map((key) => ({ key }));
+    expect(
+      unavailableAdded(w('my_work'), w('my_work', 'by_status'), 'SUPERVISOR', disabled),
+    ).toEqual(['by_status']);
+    // Already on the dashboard: kept (hidden), so a reorder still saves.
+    expect(
+      unavailableAdded(w('by_status'), w('my_work', 'by_status'), 'SUPERVISOR', disabled),
+    ).toEqual([]);
+    expect(unavailableAdded(w(), w('by_status'), 'ADMIN', disabled)).toEqual([]);
+    expect(unavailableAdded(w(), w('by_category'), 'SUPERVISOR', disabled)).toEqual([]);
   });
 });
