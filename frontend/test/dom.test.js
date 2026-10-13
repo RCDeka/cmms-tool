@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it, vi } from 'vitest';
-import { badgeClass, escapeHtml, h, slug } from '../assets/js/dom.js';
+import { badgeClass, escapeHtml, h, pageMessage, slug } from '../assets/js/dom.js';
 
 describe('escapeHtml', () => {
   it('escapes the five HTML-sensitive characters', () => {
@@ -70,5 +70,31 @@ describe('badge naming (brief)', () => {
   it('slugifies any value', () => {
     expect(slug('serial_number')).toBe('serial-number');
     expect(slug('  Odd Value!! ')).toBe('odd-value');
+  });
+});
+
+// M2 (docs/mobile-review.md): the message line of the planner, scheduler and My week.
+describe('pageMessage', () => {
+  it('shows a message with its tone, as text, and hides when empty', () => {
+    const { element, say } = pageMessage();
+    expect(element.getAttribute('role')).toBe('status');
+    expect(element.classList.contains('has-message')).toBe(false);
+    say('<b>Moved</b> to week 43.', 'success');
+    expect(element.classList.contains('has-message')).toBe(true);
+    expect(element.dataset.tone).toBe('success');
+    expect(element.querySelector('.planner-message-text').textContent).toBe(
+      '<b>Moved</b> to week 43.',
+    );
+    expect(element.querySelector('b')).toBeNull();
+    say('');
+    expect(element.classList.contains('has-message')).toBe(false);
+  });
+
+  it('is dismissed with its close button', () => {
+    const { element, say } = pageMessage();
+    say('Could not move the visit.', 'danger');
+    element.querySelector('.planner-message-close').click();
+    expect(element.classList.contains('has-message')).toBe(false);
+    expect(element.querySelector('.planner-message-text').textContent).toBe('');
   });
 });

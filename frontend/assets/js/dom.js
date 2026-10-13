@@ -62,3 +62,34 @@ export function slug(value) {
 export function badgeClass(field, code, tone = 'neutral') {
   return `badge badge-${slug(field)}-${slug(code)} badge-tone-${tone}`;
 }
+
+/**
+ * Message line of the planner, the week scheduler and My week: what was just done, or what
+ * went wrong. Hidden while empty. On small screens it floats at the bottom of the page with a
+ * close button, so it is seen wherever the page is scrolled (M2, layout.css).
+ * @returns {{ element: HTMLElement, say: (text: string, tone?: string) => void }}
+ */
+export function pageMessage() {
+  const text = h('span', { class: 'planner-message-text' });
+  const element = h(
+    'p',
+    { class: 'planner-message', role: 'status' },
+    text,
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'icon-button planner-message-close',
+        'aria-label': 'Dismiss the message',
+        onClick: () => say(''),
+      },
+      h('span', { 'aria-hidden': 'true' }, '×'),
+    ),
+  );
+  function say(message, tone = 'info') {
+    text.textContent = message;
+    element.dataset.tone = tone;
+    element.classList.toggle('has-message', Boolean(message));
+  }
+  return { element, say };
+}

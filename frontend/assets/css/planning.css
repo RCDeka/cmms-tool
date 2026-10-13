@@ -483,8 +483,42 @@
   font-weight: 600;
 }
 
-.planner-message:empty {
+.planner-message:not(.has-message),
+.planner-message-close {
   display: none;
+}
+
+/* Small screens (M2): the page scrolls inside #table-container, often far below the toolbar.
+   The message floats at the bottom of #main-content (its containing block, outside the
+   scrolling area), above the status bar, until dismissed or replaced. */
+@media (max-width: 767px) {
+  .planner-message.has-message {
+    position: absolute;
+    right: var(--space-4);
+    bottom: var(--space-3);
+    left: var(--space-4);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid currentcolor;
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgb(var(--shadow-color) / 20%);
+  }
+
+  .planner-message-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .planner-message.has-message .planner-message-close {
+    display: inline-flex;
+    color: var(--color-text);
+  }
 }
 
 .planner-message[data-tone='danger'] {

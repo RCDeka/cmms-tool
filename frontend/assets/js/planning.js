@@ -7,7 +7,7 @@
 // (plan-panel.js). Needs a connection (P18).
 // Chart rules from the data-viz method: one fixed color per trade (categorical slots 1–6 in
 // trade order, never by rank), a legend, values written in the tooltip and a table view.
-import { badgeClass, h, replaceChildren } from './dom.js';
+import { badgeClass, h, pageMessage, replaceChildren } from './dom.js';
 import { CATEGORIES, PERFORMERS, PLAN_TYPES } from './enums.js';
 import { formatDate, formatWeek } from './format.js';
 import { valueLabel } from './labels.js';
@@ -825,7 +825,7 @@ export function renderPlanner(
   const tooltip = loadTooltip();
   let tiles = tilesSection(data);
   let load = loadRow(data, tooltip);
-  const message = h('p', { class: 'planner-message', role: 'status' });
+  const { element: message, say } = pageMessage();
   const plans = data.groups.reduce((n, g) => n + g.plans.length, 0);
   const range = `${formatWeek(data.from)} to ${formatWeek(data.to)}`;
   replaceChildren(
@@ -887,10 +887,7 @@ export function renderPlanner(
     preview: (figures) => show(figures, true),
     reset: () => show({ figures: data.figures, tiles: data.tiles }, false),
     /** A short message under the toolbar: why a drop was refused, what was moved. */
-    say: (text, tone = 'info') => {
-      message.textContent = text;
-      message.dataset.tone = tone;
-    },
+    say,
   };
 }
 

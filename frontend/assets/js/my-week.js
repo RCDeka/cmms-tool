@@ -7,7 +7,7 @@
 // (P18); changes need a connection.
 import * as DB from './db.js';
 import { storesOf } from './db.js';
-import { h, replaceChildren } from './dom.js';
+import { h, pageMessage, replaceChildren } from './dom.js';
 import { formatDateTime, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { addWeeks } from './planning-rules.js';
@@ -151,7 +151,7 @@ function blockCard(block, day, { onMove, onLock, canChange }) {
  * @returns {{ say: (text: string, tone?: string) => void }}
  */
 export function renderMyWeek(container, { data, savedOffline, canChange, onMove, onLock }) {
-  const message = h('p', { class: 'planner-message', role: 'status' });
+  const { element: message, say } = pageMessage();
   const link = (week, text, label) =>
     h(
       'a',
@@ -233,9 +233,6 @@ export function renderMyWeek(container, { data, savedOffline, canChange, onMove,
     ),
   );
   return {
-    say: (text, tone = 'info') => {
-      message.textContent = text;
-      message.dataset.tone = tone;
-    },
+    say,
   };
 }

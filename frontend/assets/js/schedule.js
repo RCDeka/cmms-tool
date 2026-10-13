@@ -5,7 +5,7 @@
 // open weekends, the tiles, the "to schedule" tray, and the grid of people × days with their
 // blocks of hours. Needs a connection (P18). Drag and keyboard moves are in
 // schedule-editing.js, the side panels in schedule-panel.js.
-import { badgeClass, h, replaceChildren } from './dom.js';
+import { badgeClass, h, pageMessage, replaceChildren } from './dom.js';
 import { formatDate, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { historyButton } from './planning.js';
@@ -595,7 +595,7 @@ export function renderScheduler(
   container,
   { data, canEdit, panel, today, history = null, onWeek, onWeekend },
 ) {
-  const message = h('p', { class: 'planner-message', role: 'status' });
+  const { element: message, say } = pageMessage();
   const people = data.people.length;
   replaceChildren(
     container,
@@ -620,9 +620,6 @@ export function renderScheduler(
     ),
   );
   return {
-    say: (text, tone = 'info') => {
-      message.textContent = text;
-      message.dataset.tone = tone;
-    },
+    say,
   };
 }
