@@ -136,6 +136,31 @@ describe('POST /api/assistant/find-work-order', () => {
     expect(ids.length).toBeLessThanOrEqual(30);
   });
 
+  // Regression: inlined, the asset join gave FTS5 `rowid = NULL` for a work order without an
+  // asset, and that work order came back once per matching asset, filling every place.
+  it('lists each work order once, those without an asset too', async () => {
+    const loose = ctx.db
+      .prepare(
+        `SELECT id, title FROM work_orders
+         WHERE asset_id IS NULL AND status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD') ORDER BY id LIMIT 1`,
+      )
+      .get();
+    await post('technician1', { raw_text: `Air filter replacement, ${loose.title}` }).expect(200);
+    const ids = sentIds(provider.calls[0].input);
+    expect(ids).toContain(loose.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBeGreaterThan(1);
+
+    const search = await post(
+      'technician1',
+      { raw_text: 'Air filter replacement for AHU' },
+      noModel,
+    ).expect(200);
+    const found = search.body.candidates.map((c) => c.work_order.id);
+    expect(new Set(found).size).toBe(found.length);
+    expect(found).toHaveLength(10);
+  });
+
   it('limits the candidates to the site given', async () => {
     await post('supervisor1', {
       raw_text: 'Replaced the filter and checked the fan',

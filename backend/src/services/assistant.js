@@ -29,12 +29,14 @@ export function createAssistantService(db, { workOrders, provider, timeoutMs, lo
   // whose own text or asset matches the text. Ordered by relevance: bm25 of the work order
   // (title words weigh most) plus bm25 of its asset, the user's own work raised by a fifth.
   // bm25 is negative, lower is better; work orders without a match come last.
+  // MATERIALIZED: inlined, the asset join hands FTS5 a `rowid = NULL` constraint for work
+  // orders without an asset, which FTS5 ignores, joining every matching asset to them.
   const withText = db.prepare(`
-    WITH text_hits AS (
+    WITH text_hits AS MATERIALIZED (
       SELECT rowid AS id, bm25(work_orders_fts, 1, 4, 1, 0.5, 1, 1) AS rank
       FROM work_orders_fts WHERE work_orders_fts MATCH @fts
     ),
-    asset_hits AS (
+    asset_hits AS MATERIALIZED (
       SELECT rowid AS id, bm25(assets_fts) AS rank FROM assets_fts WHERE assets_fts MATCH @fts
     )
     SELECT w.id
