@@ -1,5 +1,7 @@
 # CMMS MVP Specification — Reference document for Computer (Perplexity)
 
+> **Historical document.** This is the original brief of the MVP (phases 0–7, complete). It is kept unchanged as the source of the project's intent; the current scope and contract are in `docs/decisions.md` (D73), `docs/roadmap.md` and the implementation documents.
+>
 > English translation of the original French brief (`docs/SPEC_MVP_GMAO.md`, kept in git history at commit `4f07659`). Identifiers are translated with the glossary in `docs/decisions.md`. The content is otherwise unchanged: gaps and code samples are kept as written, and their corrections are listed in `docs/decisions.md`.
 
 ## Context and objective

@@ -554,9 +554,9 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 ### GET /api/my-week
 - Every maintenance role, for themselves. Query `week?` (default the current week). `200 { week, current_week, generated_at, user: UserRef, days: [ScheduleDay + { weekday, blocks: Block[] }], week_total, week_capacity, work_orders: WorkOrder[] }`: appointments first, then the person's own order; the complete work orders of the blocks, so the client can open them offline.
 
-## Future AI endpoints (not in the MVP)
+## Future AI endpoint (not implemented)
 
-`POST /api/assistant/format-report` and `POST /api/assistant/find-work-order` are described in the brief. They are not implemented. The UI only prepares the `.ai-only` mechanism (see `docs/architecture.md`).
+`POST /api/assistant/format-report` is described in the brief and specified in `docs/spec-ai-assistant.md` (Phase 25). It waits for the choice of a model provider. `POST /api/assistant/find-work-order` is implemented (see AI assistant above).
 
 ## Endpoint summary
 

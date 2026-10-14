@@ -1,6 +1,6 @@
 # AI Assistant: Specification
 
-Status: **draft, to be confirmed by the product owner** (2026-10-13; decision D66). Scope: two features of the brief's "AI feature" section, **work report formatting** and **finding the matching work order**, with the guardrails of section 4. Phases 25 and 26 in `docs/roadmap-mvp.md`. **Phase 26 is implemented first** (D67), with the guardrail layers and the provider module; without a model it shows search results. Phase 25 and the first real provider wait for open point 1 (which model provider, and where the data goes). As each phase is implemented, its endpoints and screens move into `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **draft, to be confirmed by the product owner** (2026-10-13; decision D66). Scope: two features of the brief's "AI feature" section, **work report formatting** and **finding the matching work order**, with the guardrails of section 4. Phases 25 and 26 in `docs/roadmap.md`. **Phase 26 is implemented first** (D67), with the guardrail layers and the provider module; without a model it shows search results. Phase 25 and the first real provider wait for open point 1 (which model provider, and where the data goes). As each phase is implemented, its endpoints and screens move into `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 

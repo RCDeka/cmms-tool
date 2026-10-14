@@ -1,6 +1,6 @@
-# MVP Roadmap
+# Roadmap
 
-Phases are sequential. Each phase has an objective, tasks and acceptance criteria. A phase starts only when the previous one meets its acceptance criteria. Order of work inside the project: data model, then API, then frontend (see `AGENTS.md`).
+Phases 0 to 7 built the MVP of the brief; the later phases extend it, and the project is now maintained as a production application (D73). Phases are sequential. Each phase has an objective, tasks and acceptance criteria. A phase starts only when the previous one meets its acceptance criteria. Order of work inside the project: data model, then API, then frontend (see `AGENTS.md`).
 
 ## Phase 0: Project setup, database, seed
 
@@ -144,7 +144,7 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 - **Phase 25: report formatting.** The chosen provider, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging without texts, the evaluation set. Acceptance: see the spec, section 11.
 - **Phase 26: finding the work order** — done first (D67), without a real provider yet. The provider module, the four guardrail layers, `POST /api/assistant/find-work-order` with its SQL candidate set and search results without a model, the **Find a work order** button in the top bar and its dialog, "None of these? New work order". Acceptance: see the spec, section 11; the check against a real model waits for the provider.
 
-## Post-MVP backlog (not scheduled)
+## Backlog (not scheduled)
 
 1. ~~Create assets; delete records~~ → Phase 8.
 2. ~~User administration screen~~ → Phase 11.

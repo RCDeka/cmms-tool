@@ -2,11 +2,11 @@
 
 Instructions for the coding agent implementing this project.
 
-Before writing code, read `docs/decisions.md` (reference hierarchy and deviations from the brief), then the documents relevant to the task: `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md`, `docs/ui-guidelines.md`, `docs/roadmap-mvp.md`. The product brief is `docs/SPEC_MVP_CMMS.md`. If you must deviate from these documents, update them and `docs/decisions.md` in the same commit and state why.
+Before writing code, read `docs/decisions.md` (reference hierarchy and deviations from the brief), then the documents relevant to the task: `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md`, `docs/ui-guidelines.md`, `docs/roadmap.md`. The product brief is `docs/SPEC_MVP_CMMS.md`. If you must deviate from these documents, update them and `docs/decisions.md` in the same commit and state why.
 
 ## Project summary
 
-Tacto: a maintenance management MVP for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, work order creation, staff requests (D46), offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
+Tacto: a maintenance management application for a bank's real estate (head offices, branches, data centers), focused on very fast, local-first browsing of assets and work orders, work order creation, staff requests (D46), offline use, concurrent-edit conflicts with supervisor arbitration, and a dashboard.
 
 Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML + CSS + vanilla JavaScript (ES modules) + IndexedDB (`idb`) + Chart.js on the frontend; Nginx + systemd on a Linux VPS. Keep it simple.
 
@@ -15,12 +15,12 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 1. **Data model first.** The SQL migration must implement `docs/data-model.md` fully (constraints included) before any endpoint is written.
 2. **API second.** Implement and test each endpoint before the frontend uses it.
 3. **Frontend last.** Build UI against the working API; do not mock endpoints that exist.
-4. Work phase by phase following `docs/roadmap-mvp.md`. Do not start a phase until the previous one meets its acceptance criteria.
+4. Work phase by phase following `docs/roadmap.md`. Do not start a phase until the previous one meets its acceptance criteria.
 5. When in doubt, choose the simpler option. No speculative features, no premature abstraction.
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant is specified as a draft (D66, `docs/spec-ai-assistant.md`): finding the work order is implemented without a real model yet (Phase 26, D67); the report formatting (Phase 25) and the first provider wait for the provider decision. See the backlog in `docs/roadmap-mvp.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant is specified as a draft (D66, `docs/spec-ai-assistant.md`): finding the work order is implemented without a real model yet (Phase 26, D67); the report formatting (Phase 25) and the first provider wait for the provider decision. See the backlog in `docs/roadmap.md`.
 
 ## Code conventions
 
@@ -63,7 +63,7 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 - Tool: **Vitest** in both packages; **Supertest** for API tests; **jsdom + fake-indexeddb** for frontend modules.
 - **Unit tests (required)** on pure rules: work order status transitions (every allowed and forbidden pair), permission matrix, version decision, conflict diff, KPI math, pagination and keep-set logic.
 - **API tests**: each test file gets a fresh SQLite database (temporary file, migrated and seeded with a small fixture). Per endpoint: success shape, 400, 401/403, 404, plus the specific rule codes (409 conflict/locked, 422 rule). Do not mock the database in API tests.
-- **Frontend tests**: only critical logic (router parsing, escaping, db/preload/eviction, queue merging and response handling, save-mode decisions). No snapshot tests and no E2E in the MVP.
+- **Frontend tests**: only critical logic (router parsing, escaping, db/preload/eviction, queue merging and response handling, save-mode decisions). No snapshot tests and no E2E tests.
 - Every bug fix includes a regression test.
 - Definition of done: code, migration (if any), tests passing, lint passing, docs updated if behavior or contract changed, phase acceptance criteria checked.
 

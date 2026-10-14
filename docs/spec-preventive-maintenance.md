@@ -301,4 +301,4 @@ P12 to P18 were confirmed by the product owner on 2026-10-08, with the reserve m
 1. A per-person default daily capacity (e.g. a supervisor at 4 h a day) instead of day-by-day capacity overrides: later, if overrides prove tedious.
 2. Several assets per plan (e.g. "all fan coil units of Tower A floor 12" as one visit): kept for later; one plan per asset or per building location for now.
 3. Site-to-site travel times (a table filled once, used to suggest travel blocks and by the assistant): backlog.
-4. Notifications to technicians when their week changes: backlog (no push infrastructure in the MVP).
+4. Notifications to technicians when their week changes: backlog (no push infrastructure yet).

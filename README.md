@@ -1,10 +1,10 @@
 # Tacto
 
-Computerized Maintenance Management System (CMMS) MVP. It focuses on user experience: very fast browsing of assets and work orders from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
+Computerized Maintenance Management System (CMMS). It focuses on user experience: very fast browsing of assets and work orders from a local IndexedDB cache, offline use, conflict detection with supervisor arbitration, and a KPI dashboard.
 
-This MVP is the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin (see `docs/SPEC_MVP_CMMS.md`).
+It started as an MVP (phases 0–7, brief in `docs/SPEC_MVP_CMMS.md`), the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin. The MVP is complete and the project is now maintained as a production application (D73).
 
-> **Status:** MVP complete (phases 0–7). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. Phases 0–6: database and mock data, login and API, the web interface (table + detail split view), local-first browsing with offline mode, and editing: per-role permissions, work order workflow, work order creation (also offline), drafts, both save modes, sync queue, conflict detection and the supervisor console (side-by-side arbitration: version A, version B or field-by-field merge). The dashboard shows KPI tiles, work orders by category over 30 days, recent activity and "my work today", also offline. Phase 7 added the accessibility, performance and security passes, backups and the deployment guide below. Phases 8–20 followed (see `docs/roadmap-mvp.md`): staff requests with a supervisor review, and preventive maintenance: maintenance plans, the daily release of their work orders, a 52-week year planner showing the load against the team's capacity, where visits and whole series are moved by drag and drop or the keyboard, with the figures updated live and undo, and a week scheduler where supervisors give each technician blocks of hours per day (split jobs, travel time, leave, open weekends, locked appointments, carry-over), while technicians read and order their own week under My week, also offline. A balancing assistant proposes visit moves that smooth the year, within each plan's rules, shown before they are accepted. Phases 21–24 gave supervisors and admins personal dashboards: named dashboards built from a catalogue of 26 widgets (flow and backlog, compliance, responsiveness, assets and people), arranged by drag and drop, filtered by period, sites and trades, exported as CSV or JPG, with every figure opening the records it counts.
+> **Status:** phases 0–24 and 26 are built (see `docs/roadmap.md`): the MVP (phases 0–7: assets and work orders, local-first browsing and offline use, editing with conflicts and supervisor arbitration, the dashboard, hardening and deployment files), then asset creation, history and audit log, search and filters, user administration, staff requests, preventive maintenance (year planner, week scheduler, My week, balancing assistant), custom dashboards and the search part of the AI assistant. Deployment files and guide are ready; the HTTPS deployment waits for a VPS. The features are listed below.
 
 ## Tech stack
 
@@ -20,7 +20,7 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 | Tests | Vitest, Supertest, jsdom, fake-indexeddb |
 | Hosting | Linux VPS, Nginx reverse proxy, systemd, Let's Encrypt |
 
-## MVP features
+## Features
 
 - **Assets and work orders**: paginated tables (50 rows), table + detail split view, search, editing with per-role permissions and work order status workflow.
 - **Work order creation**: from the work order list or directly from an asset, including offline (synced later without duplicates).
@@ -34,7 +34,7 @@ This MVP is the first building block of a broader product vision: AI copilot, ad
 - **Staff requests**: bank staff (role `STAFF`) submit requests ("I don't know" is accepted for the kind of problem and the urgency; the location is typed), follow their open requests with a plain-words status and next step, see all past requests, and exchange comments with the maintenance team, who handle each request as a work order. A supervisor or admin reviews each request first (dashboard tile "Staff requests to review"): approve it and assign a technician or supervisor, or reject it with a reason the requester sees.
 - **Roles**: `STAFF`, `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
-Out of scope for the MVP: deleting work orders (they are cancelled), AI features, inventory, attachments (see the backlog in `docs/roadmap-mvp.md`). Preventive maintenance (a 52-week year planner and a weekly scheduler per technician) is specified in `docs/spec-preventive-maintenance.md`: Phases 17–20 are built.
+Out of scope: deleting work orders (they are cancelled), inventory, attachments (see the backlog in `docs/roadmap.md`). The AI assistant (D66) only finds work orders by search until a model provider is chosen. Preventive maintenance (a 52-week year planner and a weekly scheduler per technician) is specified in `docs/spec-preventive-maintenance.md`: Phases 17–20 are built.
 
 ## Run locally
 
@@ -276,13 +276,13 @@ Then go on with step 4: the service starts on the restored database.
 ├── LICENSE                   GNU AGPL v3
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
 ├── docs/
-│   ├── SPEC_MVP_CMMS.md      product brief (English translation of the French original)
+│   ├── SPEC_MVP_CMMS.md      original MVP brief (English translation of the French original)
 │   ├── decisions.md          open questions, glossary FR→EN, deviations from the brief
 │   ├── data-model.md
 │   ├── api-design.md
 │   ├── architecture.md       client/server, IndexedDB, sync, offline, conflicts
 │   ├── ui-guidelines.md      layout, design tokens, accessibility
-│   └── roadmap-mvp.md
+│   └── roadmap.md            phases, acceptance criteria, backlog
 ├── .env.example
 ├── backend/
 │   ├── src/
