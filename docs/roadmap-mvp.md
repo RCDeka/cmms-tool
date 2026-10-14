@@ -155,5 +155,5 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 7. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).
 8. ~~Demo data with history (D62)~~ → done (D64).
 9. ~~Mobile use (review of 2026-10-08, `docs/mobile-review.md`): findings M1 to M17 on current phones~~ → all fixed (M1, M2, then D68); the year planner is for tablets and computers only.
-10. ~~Desktop use (review of 2026-10-14, `docs/desktop-review.md`): findings DT1 to DT16~~ → fixed (D69), except DT2.
-11. **Before the first deployment to users**: make the "Source code" link of the status bar reachable by every user (AGPL section 13, D57; DT2): a public repository, or an archive of the running code served by the app. The repository stays private during development.
+10. ~~Desktop use (review of 2026-10-14, `docs/desktop-review.md`): findings DT1 to DT16~~ → fixed (D69); DT2 once the repository was made public.
+11. ~~Before the first deployment to users: make the "Source code" link of the status bar reachable by every user (AGPL section 13, D57; DT2)~~ → done: the repository is public (2026-10-14).

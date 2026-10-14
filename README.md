@@ -115,7 +115,6 @@ sudo useradd --system --home-dir /var/lib/tacto --shell /usr/sbin/nologin tacto
 sudo install -d -m 750 -o tacto -g tacto /var/backups/tacto
 sudo install -d -m 750 -o root -g tacto /etc/tacto
 
-# The repository is private: use a deploy key or a personal access token.
 sudo git clone https://github.com/RCDeka/cmms-tool.git /opt/tacto
 cd /opt/tacto/backend
 sudo npm ci --omit=dev                           # production dependencies only

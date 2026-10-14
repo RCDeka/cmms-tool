@@ -138,7 +138,7 @@ Type each URL in the address bar (then reload it) with each role that has no acc
 | NAV-22 | any | Open `/does-not-exist` and `/assets/abc` | A "not found" view inside the shell, no blank page. |
 | NAV-23 | any | Tab from the top of a page | "Skip to content" appears first and moves focus to the main area. |
 | NAV-24 | MAINT | Open each sidebar section, then a record in the side panel | The page title is the section's name; the panel heading names the record; from 768 px the title is one line with an ellipsis. |
-| NAV-25 | any | Click "AGPL-3.0" and "Source code" in the status bar | The license and the repository open. **See section 21: the repository must be reachable by users before the production launch (DT2).** |
+| NAV-25 | any | Click "AGPL-3.0" and "Source code" in the status bar, also in a private window not signed in to GitHub | The license and the public repository open (no sign-in, no 404). A deployment of a **modified** version links to its own source instead (README → License). |
 | NAV-26 | MAINT | Open any menu (dashboard ⋯, Dashboard ▾, multi-select filters) and press Escape | The menu closes and focus returns to its button. |
 | NAV-27 | MAINT | Open a record from My week, the dashboard, the scheduler, the conflicts or the audit log, then press "Back" in the panel | Returns to the page it was opened from, and the button is named after it. |
 
@@ -832,7 +832,7 @@ Run the **main flows** below on each line of the matrix: log in; browse a list a
 Found while writing this protocol (2026-10-14). They are not test failures yet, but each would cause trouble in production.
 
 1. ~~**No way to create the first administrator without the demo data.**~~ Fixed by `npm run user:create-admin` (D70), tested by OPS-16. If the demo data is loaded on purpose instead, every demo account shares `SEED_PASSWORD` and must be deactivated or have its password changed.
-2. **"Source code" link (DT2, D57, roadmap backlog item 11).** The repository is private; the AGPL requires the source to be offered to the users of a network service. Make the repository public or serve an archive before real users get access.
+2. ~~**"Source code" link (DT2, D57)**~~ Fixed: the repository is public since 2026-10-14, so the link opens for every user. Tested by NAV-25.
 3. ~~**Server time of the timers**~~ Fixed (D71): the timers run in Paris time, the backup at 01:30 so that it never falls in the hour skipped or repeated by daylight saving. Tested by T-10.
 4. ~~**Off-server backups**~~ Automated (D72): an encrypted restic copy after each nightly backup, read back and compared every night. Before launch: choose the storage, keep the restic password outside the VPS, run OPS-07 and OPS-09. No alert is sent on failure yet: check `systemctl --failed` or add monitoring.
 5. **Tokens stay valid after logout until they expire** (SEC-25, D22): known and accepted by design. Confirm the 8-hour lifetime with the product owner.
