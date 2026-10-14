@@ -4,7 +4,7 @@
 import { createApp } from './app.js';
 import { loadConfig, loadEnvFile } from './config/index.js';
 import { openDb } from './db/connection.js';
-import { runMigrations } from './db/migrate.js';
+import { migrateWithBackup } from './db/upgrade.js';
 
 loadEnvFile();
 let config;
@@ -16,8 +16,13 @@ try {
 }
 
 const db = openDb(config.databasePath);
-// Pending migrations are applied at startup, so a deployment only needs a restart.
-const applied = runMigrations(db);
+// Pending migrations are applied at startup, so a deployment only needs a restart. A backup is
+// written first: rolling back the update restores it.
+const { applied, backup } = await migrateWithBackup(db, {
+  dir: config.backupDir,
+  keepDays: config.backupKeepDays,
+});
+if (backup) console.log(`Backup before the migrations written: ${backup}`);
 if (applied.length) console.log(`Applied migrations: ${applied.join(', ')}`);
 
 const server = createApp({ db, config }).listen(config.port, config.host, () => {

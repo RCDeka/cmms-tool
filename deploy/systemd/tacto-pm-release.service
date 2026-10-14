@@ -18,8 +18,10 @@ WorkingDirectory=/opt/tacto/backend
 EnvironmentFile=/etc/tacto/tacto.env
 ExecStart=/usr/bin/node src/db/cli.js release
 UMask=0077
-# Writes the live database in /var/lib/tacto only.
+# Writes the live database in /var/lib/tacto, and a backup in /var/backups/tacto when the
+# command applies pending migrations (an update not yet followed by a restart).
 StateDirectory=tacto
+ReadWritePaths=/var/backups/tacto
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes

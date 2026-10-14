@@ -76,7 +76,7 @@ Check these on every screen without repeating them in each test; any breach is a
 
 | ID | Steps | Expected |
 |---|---|---|
-| P-01 | `cd backend && npm test` | All tests pass (baseline 2026-10-14: 51 files, 772 tests). |
+| P-01 | `cd backend && npm test` | All tests pass (baseline 2026-10-14: 52 files, 781 tests). |
 | P-02 | `cd frontend && npm test` | All tests pass (baseline: 35 files, 476 tests). |
 | P-03 | `npm run lint` in `backend` and in `frontend` | No error, no Prettier difference. |
 | P-04 | `npm audit --omit=dev` in `backend`; `npm audit` in `frontend` | No high or critical vulnerability in production dependencies. |
@@ -804,12 +804,13 @@ Run the **main flows** below on each line of the matrix: log in; browse a list a
 | OPS-07 | **Restore drill**: on a separate VM, restore the latest **off-server** copy following README → Restore from the off-server copies, using only the password kept outside the VPS; also restore yesterday's local backup on staging | The app starts on each restored database and shows the expected data. |
 | OPS-08 | Backups older than 14 days | Deleted by the next run. |
 | OPS-09 | Off-server copies: `restic snapshots` (README → Operations); stop the network of the VPS or set a wrong key in `/etc/tacto/offsite.env`, then `systemctl start tacto-backup` | One copy per night; with the fault, `tacto-offsite-backup` fails visibly (`systemctl --failed`) while the local backup still exists. Put the settings back. |
-| OPS-10 | Update procedure: deploy the next version with a new migration (README "Update") | Migration runs at start, app works, users keep their session and queued writes. |
+| OPS-10 | Update procedure: install the next release tag with a new migration (README → Operations → Update to a release) | A backup is written into `/var/backups/tacto` before the migration runs at start (named in the log); app works, users keep their session and queued writes. |
 | OPS-11 | Permissions: `ls -l /etc/tacto/tacto.env /var/lib/tacto` | env file `640 root:tacto`; database directory `750 tacto`; code owned by root. |
 | OPS-12 | Login rate limit through Nginx from two different client IPs | Each IP has its own counter (the real client address is used, not Nginx's). |
 | OPS-13 | `journalctl -u tacto` after the campaign | No stack trace other than the ones the tests caused on purpose; no password, token or user text in the logs. |
 | OPS-14 | Disk: database, WAL file and logs after the load test | Sizes noted; journald limits set; free space alert on the VPS. |
 | OPS-15 | Uptime monitoring on `https://<domain>/api/health` | Alert received when the service is stopped. |
+| OPS-17 | Rollback after OPS-10: README → Operations → Roll back, with the backup named in the log | The previous tag runs (`git describe --tags`), the app starts and shows the data as it was before the update. |
 | OPS-16 | On a new empty database: `npm run user:create-admin -- --username qa.admin --first-name QA --last-name Admin`; mistype the second password; then run it correctly; then run it again | Mismatch refused; created, can log in and sees every admin page; the second run is refused because an administrator exists. The password never appears on screen or in `journalctl`. |
 
 ---

@@ -16,6 +16,21 @@ export function listMigrations(dir = MIGRATIONS_DIR) {
 }
 
 /**
+ * Migrations not yet applied to the database (all of them for a new database). Writes nothing.
+ * @param {import('better-sqlite3').Database} db
+ * @returns {string[]}
+ */
+export function pendingMigrations(db, dir = MIGRATIONS_DIR) {
+  const table = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+    .get();
+  const applied = new Set(
+    table ? db.prepare('SELECT name FROM schema_migrations').pluck().all() : [],
+  );
+  return listMigrations(dir).filter((name) => !applied.has(name));
+}
+
+/**
  * Applies pending migrations in order, each in its own transaction, and records them in
  * schema_migrations. Committed migrations are never edited; add a new file instead.
  * Foreign keys are off while migrations run, so a table can be rebuilt (SQLite's way to change
@@ -29,8 +44,7 @@ export function runMigrations(db, dir = MIGRATIONS_DIR) {
     applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   ) STRICT`);
 
-  const applied = new Set(db.prepare('SELECT name FROM schema_migrations').pluck().all());
-  const pending = listMigrations(dir).filter((name) => !applied.has(name));
+  const pending = pendingMigrations(db, dir);
   const record = db.prepare('INSERT INTO schema_migrations (name) VALUES (?)');
 
   if (!pending.length) return pending;

@@ -21,8 +21,10 @@ RestartSec=5
 StateDirectory=tacto
 StateDirectoryMode=0750
 UMask=0077
+# Backup written before pending migrations are applied at start.
+ReadWritePaths=/var/backups/tacto
 
-# Sandboxing: the service can only write its own state directory.
+# Sandboxing: the service can only write its own state directory and the backups.
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes

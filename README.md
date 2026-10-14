@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS). It focuses on user experience
 
 It started as an MVP (phases 0–7, brief in `docs/SPEC_MVP_CMMS.md`), the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin. The MVP is complete and the project is now maintained as a production application (D73).
 
-> **Status:** phases 0–24, 26 and 27 are built (see `docs/roadmap.md`): the MVP (phases 0–7: assets and work orders, local-first browsing and offline use, editing with conflicts and supervisor arbitration, the dashboard, hardening and deployment files), then asset creation, history and audit log, search and filters, user administration, staff requests, preventive maintenance (year planner, week scheduler, My week, balancing assistant), custom dashboards, the search part of the AI assistant and continuous integration. Deployment files and guide are ready; the HTTPS deployment waits for a VPS. The features are listed below.
+> **Status:** phases 0–24 and 26–28 are built (see `docs/roadmap.md`): the MVP (phases 0–7: assets and work orders, local-first browsing and offline use, editing with conflicts and supervisor arbitration, the dashboard, hardening and deployment files), then asset creation, history and audit log, search and filters, user administration, staff requests, preventive maintenance (year planner, week scheduler, My week, balancing assistant), custom dashboards, the search part of the AI assistant, continuous integration, and releases with a backup before each update's migrations (`CHANGELOG.md`). Deployment files and guide are ready; the HTTPS deployment waits for a VPS. The features are listed below.
 
 ## Tech stack
 
@@ -118,7 +118,10 @@ sudo install -d -m 750 -o tacto -g tacto /var/backups/tacto
 sudo install -d -m 750 -o root -g tacto /etc/tacto
 
 sudo git clone https://github.com/RCDeka/cmms-tool.git /opt/tacto
-cd /opt/tacto/backend
+cd /opt/tacto
+sudo git checkout "$(sudo git tag --list 'v*' --sort=-v:refname | head -n 1)"   # the latest release, not main
+sudo git describe --tags                         # e.g. v1.0.0
+cd backend
 sudo npm ci --omit=dev                           # production dependencies only
 node -e "require('better-sqlite3'); require('argon2'); console.log('native modules OK')"
 # If that check fails: sudo npm rebuild better-sqlite3 argon2
@@ -240,7 +243,8 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Task | Command |
 |---|---|
 | Logs | `journalctl -u tacto -f` |
-| Update to the latest version | `cd /opt/tacto && sudo git pull && cd backend && sudo npm ci --omit=dev && sudo systemctl restart tacto` (new migrations run at start) |
+| Release running | `sudo git -C /opt/tacto describe --tags` |
+| Update to a release, roll back | see below |
 | Backup now | `sudo systemctl start tacto-backup && ls /var/backups/tacto` |
 | Next scheduled backups | `systemctl list-timers tacto-backup` |
 | Last off-server copy | `journalctl -u tacto-offsite-backup -n 3` (a failure shows in `systemctl --failed`) |
@@ -250,6 +254,46 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Change the time zone | edit `APP_TIMEZONE` in `/etc/tacto/tacto.env`, run the `ZONE=…` and `sed` lines of step 4 again (with the old zone in place of `Europe/Paris`), then `sudo systemctl daemon-reload && sudo systemctl restart tacto` |
 
 Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`) on the VPS. Each one is then copied off the server, encrypted, with restic (`tacto-offsite-backup`, D72): 14 daily, 8 weekly and 12 monthly copies.
+
+**Update to a release.** The server runs a release tag (`v1.0.0`, …), never `main`. Read the release's entry in `CHANGELOG.md` first. Pending migrations are applied when the service starts, and a backup is written into `/var/backups/tacto` just before (the log names it); without migrations, no backup is written.
+
+```bash
+cd /opt/tacto
+sudo git fetch --tags
+sudo git describe --tags                              # the release running now: note it for a rollback
+sudo git tag --list 'v*' --sort=-v:refname | head -n 3       # the latest releases
+NEW=v1.1.0                                            # the release to install
+sudo git diff --stat HEAD "$NEW" -- deploy/           # deployment files changed by the release
+sudo git checkout "$NEW"
+cd backend && sudo npm ci --omit=dev
+# Only if the diff above listed files in deploy/systemd: copy those units again.
+#   sudo cp /opt/tacto/deploy/systemd/<unit> /etc/systemd/system/ && sudo systemctl daemon-reload
+# (a timer copied again needs the sed line of step 4 again, for its time zone)
+sudo systemctl restart tacto
+sudo journalctl -u tacto -n 5 --no-pager              # "Backup before the migrations written: …" when the release has migrations
+curl -s http://127.0.0.1:3000/api/health              # {"status":"ok",…}
+```
+
+Files in `deploy/nginx` changed by the release: copy them as in step 6, then `sudo nginx -t && sudo systemctl reload nginx`. Browsers get the new frontend at their next page load (the service worker asks the network first).
+
+**Roll back** to the previous release, when the new one misbehaves. If the update applied migrations, the database no longer matches the old code: restore the backup written just before them. Changes made by users since the update are then lost; without migrations, keep the database and only change the code.
+
+```bash
+OLD=v1.0.0                                            # the release noted before the update
+sudo journalctl -u tacto -u tacto-pm-release --no-pager | grep 'Backup before the migrations' | tail -n 1   # the backup to restore, if any
+sudo systemctl stop tacto
+cd /opt/tacto && sudo git checkout "$OLD"
+cd backend && sudo npm ci --omit=dev
+# Units copied again during the update: copy the old ones back, then sudo systemctl daemon-reload.
+# Only if the update applied migrations (file name from the journal line above):
+sudo -u tacto cp /var/backups/tacto/cmms-2026-10-20T08-15-00Z.sqlite /var/lib/tacto/cmms.sqlite
+sudo rm -f /var/lib/tacto/cmms.sqlite-wal /var/lib/tacto/cmms.sqlite-shm
+sudo systemctl start tacto
+sudo git -C /opt/tacto describe --tags                # the old release
+curl -s http://127.0.0.1:3000/api/health
+```
+
+Users' browsers may hold changes saved offline against the newer release; they are sent again and checked like any other change (a conflict if the record changed).
 
 **Restore:**
 
@@ -276,6 +320,7 @@ Then go on with step 4: the service starts on the restored database.
 .
 ├── README.md
 ├── LICENSE                   GNU AGPL v3
+├── CHANGELOG.md              one entry per release (tag vX.Y.Z)
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
 ├── .github/workflows/ci.yml  continuous integration: lint and tests of both packages
 ├── docs/
@@ -290,7 +335,7 @@ Then go on with step 4: the service starts on the restored database.
 ├── backend/
 │   ├── src/
 │   │   ├── config/           env loading and validation
-│   │   ├── db/               connection, migrations/, seed/
+│   │   ├── db/               connection, migrations/ (backup first when some are pending), seed/, backups
 │   │   ├── middleware/       auth, roles, validation, errors
 │   │   ├── routes/           one router per resource
 │   │   ├── services/         SQL and transactions

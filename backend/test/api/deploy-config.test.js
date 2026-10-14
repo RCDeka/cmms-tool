@@ -53,6 +53,17 @@ describe('deploy/systemd', () => {
   });
 });
 
+describe('backup before migrations (Phase 28)', () => {
+  it.each([
+    'deploy/systemd/tacto.service',
+    'deploy/systemd/tacto-backup.service',
+    'deploy/systemd/tacto-pm-release.service',
+  ])('%s can write BACKUP_DIR', (unit) => {
+    const backupDir = /^BACKUP_DIR=(.+)$/m.exec(read('deploy/tacto.env.example'))[1];
+    expect(read(unit)).toMatch(new RegExp(`^ReadWritePaths=${backupDir}$`, 'm'));
+  });
+});
+
 describe('off-server backups (D72)', () => {
   it('start after a successful backup and run the script of deploy/', () => {
     expect(read('deploy/systemd/tacto-backup.service')).toMatch(

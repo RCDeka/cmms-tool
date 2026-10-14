@@ -14,8 +14,8 @@ import { createWorkOrderService } from '../services/work-orders.js';
 import { backupDatabase } from './backup.js';
 import { openDb } from './connection.js';
 import { createFirstAdmin } from './first-admin.js';
-import { runMigrations } from './migrate.js';
 import { seedDatabase } from './seed/index.js';
+import { migrateWithBackup } from './upgrade.js';
 
 const USAGE = `Usage: node src/db/cli.js <command> [options]
   migrate | seed [--with-conflicts] | reset [--with-conflicts] [--force] | backup | feedback | release
@@ -94,6 +94,17 @@ async function main() {
   loadEnvFile();
   const config = loadConfig();
 
+  // Every command migrates as the server does, with a backup first: after an update, the daily
+  // release or a migrate by hand may run before the service restarts.
+  const migrate = async (db) => {
+    const { applied, backup } = await migrateWithBackup(db, {
+      dir: config.backupDir,
+      keepDays: config.backupKeepDays,
+    });
+    if (backup) console.error(`Backup before the migrations written: ${backup}`);
+    return applied;
+  };
+
   if (command === 'backup') {
     if (!fs.existsSync(config.databasePath))
       throw new Error(`No database at ${config.databasePath}`);
@@ -115,7 +126,7 @@ async function main() {
   if (command === 'feedback') {
     const db = openDb(config.databasePath);
     try {
-      runMigrations(db);
+      await migrate(db);
       process.stdout.write(feedbackMarkdown(createFeedbackService(db).openItems()));
     } finally {
       db.close();
@@ -127,7 +138,7 @@ async function main() {
   if (command === 'release') {
     const db = openDb(config.databasePath);
     try {
-      runMigrations(db);
+      await migrate(db);
       const planning = createPlanningService(db, { workOrders: createWorkOrderService(db) });
       const { released } = planning.release({ now: new Date(), timeZone: config.timeZone });
       console.log(`Released ${released} preventive work order${released === 1 ? '' : 's'}.`);
@@ -147,7 +158,7 @@ async function main() {
     };
     const db = openDb(config.databasePath);
     try {
-      runMigrations(db);
+      await migrate(db);
       const user = await createFirstAdmin(db, { ...input, password: await readPassword() });
       console.log(`Administrator ${user.username} created: log in and add the other accounts.`);
     } finally {
@@ -170,7 +181,7 @@ async function main() {
 
   const db = openDb(config.databasePath);
   try {
-    const applied = runMigrations(db);
+    const applied = await migrate(db);
     console.log(
       applied.length ? `Applied migrations: ${applied.join(', ')}` : 'Schema is up to date.',
     );
