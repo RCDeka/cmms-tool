@@ -52,8 +52,7 @@ describe('POST /api/assets', () => {
       ...minimal,
       code: ' cta-lyon-01 ',
       status: 'UNDER_MAINTENANCE',
-      building: 'Main building',
-      floor: 'R',
+      exact_location: 'Roof',
       maintenance_contract: true,
       commissioned_on: '2024-03-01',
       comment: 'Installed during the 2024 works',
@@ -62,7 +61,7 @@ describe('POST /api/assets', () => {
       code: 'CTA-LYON-01',
       status: 'UNDER_MAINTENANCE',
       maintenance_contract: true,
-      floor: 'R',
+      exact_location: 'Roof',
     });
     // Typed codes do not disturb the automatic numbering.
     expect((await send('post', 'admin', '/api/assets', minimal).expect(201)).body.item.code).toBe(

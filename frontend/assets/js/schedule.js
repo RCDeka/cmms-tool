@@ -112,7 +112,7 @@ export function blockView(block, person) {
     block.kind === 'WORK'
       ? `${wo.number} · ${wo.title}`
       : valueLabel('allocation_kind', block.kind);
-  const where = wo ? [wo.site, wo.building].filter(Boolean).join(' · ') : null;
+  const where = wo ? [wo.site, wo.place].filter(Boolean).join(' · ') : null;
   const helper = wo && person && wo.assignee_id !== null && wo.assignee_id !== person.id;
   const parts = [
     title,
@@ -194,7 +194,7 @@ function priorityBadge(priority) {
 }
 
 function trayCard(item, { canEdit, selected, week }) {
-  const where = [item.site, item.building].filter(Boolean).join(' · ');
+  const where = [item.site, item.place].filter(Boolean).join(' · ');
   const left = leftText(item);
   const done = item.needed_hours !== null && item.hours_left === 0;
   return h(

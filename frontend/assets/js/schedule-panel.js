@@ -197,7 +197,7 @@ export function renderItemPanel(
       )
     : null;
 
-  const where = [item.site, item.building].filter(Boolean).join(' · ');
+  const where = [item.site, item.place].filter(Boolean).join(' · ');
   replaceChildren(
     container,
     panelHeader(`Schedule ${item.number}`, onClose),

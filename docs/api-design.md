@@ -35,8 +35,10 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `GET /users` | no | no | yes | yes |
 | `GET /audit-log` | no | no | yes, without user accounts | yes |
 | `/admin/users` (user administration) | no | no | no | yes |
-| `GET /rooms?site=` (active rooms of a site, D81) | yes | yes | yes | yes |
-| `/admin/rooms` (the room list: list, create, change, take out of use; D81) | no | no | yes | yes |
+| `GET /locations` (the location tree, D82; staff: the places in use, without codes) | yes | yes | yes | yes |
+| `/admin/locations` (create, read, change, move, take out of use a place; D82) | no | no | yes, not sites (BR-LOC6) | yes |
+| `GET /admin/level-types` | no | no | yes | yes |
+| `POST /admin/level-types`, `PUT /admin/level-types/:id` (BR-LT1) | no | no | no | yes |
 | `POST /auth/change-password` (own password) | yes | yes | yes | yes |
 | `POST /feedback` (suggest an improvement) | yes | yes | yes | yes |
 | `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
@@ -53,8 +55,9 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/api/conflicts`, `/api/dashboard`, `/api/dashboards`, `/api/audit-log`, `/api/plans`, `/api/plan-occurrences`, `/api/planning`, `/api/schedule`, `/api/my-week` and `/api/assistant` (403), whatever the method (D46).
 
 Editable fields:
-- **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
-- **Work orders**: every column except `id`, `number`, `client_id`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`, the review fields, `plan_id` and `room_id` (set by the requester, D81).
+- **Assets**: every column except `id`, `code`, `place`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
+- **Work orders**: every column except `id`, `number`, `client_id`, `place`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`, the review fields and `plan_id`.
+- `place` is the path of `location_id`, set by the server with `site` (BR-LOC7). `location_id` is a versioned field like the others: a change made offline from an older version becomes a conflict (D82).
 
 Sending a field the role may not edit → 403 with `details.fields`.
 
@@ -63,14 +66,14 @@ Sending a field the role may not edit → 403 with `details.fields`.
 ```
 User        { id, last_name, first_name, username, role, site, specialty, power_user, is_active }
 UserRef     { id, last_name, first_name }
-Asset       { id, code, name, site, building, floor, category, subcategory, criticality,
+Asset       { id, code, name, site, location_id, place, category, subcategory, criticality,
               status, brand, model, serial_number, commissioned_on, last_serviced_on,
               supplier, maintenance_contract, responsible_technician, exact_location,
               comment, version, has_conflict, updated_by: UserRef|null,
               created_at, updated_at }
 WorkOrder   { id, number, type, status, priority, title, description,
               asset_id, asset: { id, code, name, site, status } | null,
-              site, location, category,
+              site, location_id, place, location, category,
               assignee_id, assignee: UserRef|null,
               supervisor_id, supervisor: UserRef|null,
               created_on, due_on, started_on, closed_on,
@@ -78,17 +81,17 @@ WorkOrder   { id, number, type, status, priority, title, description,
               client_id, created_by: UserRef,
               review_status, reviewed_by: UserRef|null, reviewed_at, review_note,
               plan_id, plan: { id, code, title } | null, planned_week,
-              room_id, room: RoomRef|null,
               version, has_conflict, updated_by: UserRef|null, created_at, updated_at }
 Page<T>     { total, page, pages, items: T[] }
-Room        { id, site, building, floor, name, is_active, created_at, updated_at }
-RoomRef     { id, building, floor, name }
-Request     { id, number, status, priority, title, description, site, location, room: RoomRef|null, category,
+Location    { id, parent_id, site_id, level_type_id, name, code, is_active, version, created_at, updated_at }
+              (GET /admin/locations/:id and the writes add site and place: where it is, as records store it)
+LevelType   { id, name, token, offered_to_staff, is_active, version, created_at, updated_at }
+Request     { id, number, status, priority, title, description, site, location_id, place, location, category,
               created_on, due_on, started_on, closed_on, work_report, client_id,
               review_status, review_note, reviewed_at, assignee: UserRef|null, comment_count, last_comment_at, created_at, updated_at }
 Comment     { id, work_order_id, body, user: UserRef, user_role, created_at }
 Plan        { id, code, title, description, type, category, asset_id,
-              asset: { id, code, name } | null, site, building, location, estimated_hours,
+              asset: { id, code, name } | null, site, location_id, place, location, estimated_hours,
               frequency_weeks, anchor_week, end_week, schedule_mode, tolerance_weeks,
               season_from_week, season_to_week, performed_by, supplier, is_active, version,
               created_by: UserRef, updated_by: UserRef|null, created_at, updated_at,
@@ -100,11 +103,11 @@ Occurrence  { id, due_week, week, status, skip_reason,
 BlockedWeek { id, week, site | null, reason, created_by: UserRef, created_at }
 Block       { id, kind, work_order_id, technician_id, day, hours, locked_start, locked_by: UserRef|null,
               position, note, version, updated_at,
-              work_order: { id, number, title, site, building, location, status, priority,
+              work_order: { id, number, title, site, place, location, status, priority,
                             category, type, estimated_hours, assignee_id } | null }
 ScheduleDay { day, capacity, total, override: { hours, reason, note } | null, sites: string[],
               warnings: ('OVER_CAPACITY' | 'ABSENT' | 'WEEKEND_CLOSED' | 'SEVERAL_SITES')[] }
-TrayItem    { id, number, title, type, status, priority, category, site, building, location, due_on,
+TrayItem    { id, number, title, type, status, priority, category, site, place, location, due_on,
               planned_week, plan_id, group: 'PLANNED' | 'CARRIED_OVER' | 'NOT_PLANNED', carried_from,
               estimated_hours, needed_hours, scheduled_hours, week_hours, hours_left,
               assignee: UserRef|null, version }
@@ -145,16 +148,17 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### Search and filters (D38)
 - `q`: full-text search (SQLite FTS5). Each word is a required prefix (`chil lyon` finds records containing a word starting with "chil" **and** one starting with "lyon"), case and accents are ignored (`defense` finds "Défense"), search syntax typed by users is treated as plain words. A `q` without any letter or digit matches nothing. Max 100 characters.
-- Indexed text: assets → code, name, site, building, subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report, location. Database triggers keep the indexes in sync.
+- Indexed text: assets → code, name, site, place (the path below the site, D82), subcategory, brand, model, serial number, supplier, exact location, comment; work orders → number, title, description, site, work report, location, place. Database triggers keep the indexes in sync.
 - Every enum filter, `site` and `assignee_id` take one value or several (D45): `status=OPEN,ON_HOLD`, `assignee_id=4,5`. Values of one filter are alternatives (OR); different filters combine with `q` and each other (AND). `site` values are separated by `|` instead of `,` because site names can contain commas. An invalid value, or more than 50 values, → 400.
+- `location` (D82, BR-LOC10): places of the tree, comma-separated ids (at most 20): each one matches the records at that place or anywhere below it (`location=6` lists Tower A, its floors and its rooms).
 - Filters combine with `q`, with each other (AND), with `sort` and with pagination: `total` and `pages` count the matching records.
 
 ### GET /api/assets
-- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`), and the filters `q?`, `site?`, `category?`, `status?`, `criticality?` (several values allowed).
+- Query: `page`, `size`, `sort` (`code`|`name`|`site`|`category`|`criticality`|`status`|`updated_at`, default `code`), `order` (default `asc`), and the filters `q?`, `site?`, `location?`, `category?`, `status?`, `criticality?` (several values allowed).
 - `200 Page<Asset>`
 
 ### GET /api/assets/search
-- Query: the asset filters (`q?`, `site?`, `category?`, `status?`, `criticality?`), `limit` (default 50, max 200).
+- Query: the asset filters (`q?`, `site?`, `location?`, `category?`, `status?`, `criticality?`), `limit` (default 50, max 200).
 - `200 { "items": Asset[], "total": number }` (`total` = number of matches before `limit`), ordered by `code`.
 - Declared before `/:id` in the router.
 
@@ -165,9 +169,10 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### POST /api/assets (added, D34)
 - Roles: SUPERVISOR, ADMIN. Online only in the interface.
-- Body: `{ "code"?: string, "name": string, "site": string, "category": Category, "criticality": Criticality, "status"?: AssetStatus, ...any other editable asset field }` (BR-A4). Unknown or server-set fields (`id`, `version`, …) → 400.
-- `201 { "created": true, "item": Asset }`
-- Errors: 400; 403; 409 code already used (`details: { rule: "BR-A1", fields: { code } }`).
+- Body: `{ "code"?: string, "name": string, "location_id": number, "category": Category, "criticality": Criticality, "status"?: AssetStatus, ...any other editable asset field }` (BR-A4). Instead of `location_id`, `site` alone puts the asset on the site itself (BR-LOC7). Unknown or server-set fields (`id`, `place`, `version`, …) → 400.
+- `201 { "created": true, "item": Asset }`: `site` and `place` set by the server.
+- Errors: 400 (no place: `details.fields.location_id`); 403; 409 code already used (`details: { rule: "BR-A1", fields: { code } }`); 422 `BR-LOC5` (place unknown or out of use), `BR-LOC7` (unknown site, or a site other than the place's).
+- `PUT /api/assets/:id` takes `location_id` (and `site`) under the same rules; when the place changes, the asset's open work orders and its plans follow (BR-LOC8).
 
 ### DELETE /api/assets/:id?version=N (added, D35)
 - Roles: SUPERVISOR, ADMIN. `version` (required) is the version the user saw.
@@ -220,10 +225,10 @@ Every authenticated request also answers 401 when the account was deactivated (B
 
 ### POST /api/work-orders
 - Roles: TECHNICIAN, SUPERVISOR, ADMIN (rules BR-W9 to BR-W13). Staff members use `POST /api/requests`.
-- Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "site"?: string, "location"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or `site` is required.
+- Body: `{ "client_id": uuid, "title": string, "type": WorkOrderType, "priority"?: WorkOrderPriority, "description"?: string, "asset_id"?: number, "location_id"?: number, "site"?: string, "location"?: string, "category"?: Category, "assignee_id"?: number, "supervisor_id"?: number, "due_on"?: date, "estimated_hours"?: number, "edited_at"?: ISO }`. `asset_id` or a place (`location_id`, or `site` alone) is required; with an asset, the place is the asset's (BR-LOC8).
 - `201 { "created": true, "item": WorkOrder }`
 - `200 { "created": false, "item": WorkOrder }` when `client_id` was already used (replay, BR-W11).
-- Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+`site`; 403 technician assigning someone else; 422 rule violated: unknown asset or site different from the asset's (BR-W2), assignee or supervisor not eligible (BR-W3), `due_on` before `created_on` (BR-W8), `edited_at` out of range (BR-W9).
+- Errors: 400 invalid body or missing `client_id`/`title`/`type`/`asset_id`+place; 403 technician assigning someone else; 422 rule violated: unknown asset or site different from the asset's (BR-W2), place different from the asset's (BR-LOC8), place unknown or out of use (BR-LOC5), unknown site (BR-LOC7), assignee or supervisor not eligible (BR-W3), `due_on` before `created_on` (BR-W8), `edited_at` out of range (BR-W9).
 
 ### GET /api/work-orders/:id
 - `200 WorkOrder` (with the linked asset). Errors: 404.
@@ -258,11 +263,11 @@ All routes: role STAFF (403 otherwise). A request is a work order the user creat
 - `200 Page<Request>`: the user's requests, newest first.
 
 ### POST /api/requests
-- Body: `{ "client_id": uuid, "title": string, "site": string, "room_id"?: id | null, "location"?: string, "description"?: string, "category"?: Category | null, "priority"?: WorkOrderPriority, "edited_at"?: ISO }`. Leaving out `category` or `priority` is the form's "I don't know".
+- Body: `{ "client_id": uuid, "title": string, "site": string, "location_id"?: id | null, "location"?: string, "description"?: string, "category"?: Category | null, "priority"?: WorkOrderPriority, "edited_at"?: ISO }`. Leaving out `category` or `priority` is the form's "I don't know".
 - `201 { "created": true, "item": Request }`; `200 { "created": false, "item": Request }` when the `client_id` was already used (BR-W11).
 - The work order gets `type = CORRECTIVE`, `status = OPEN`, `review_status = PENDING` (D47), no assignee, supervisor or asset.
-- A room (`room_id`) or a `location` in words is required, or both: with a room, `location` holds the details ("desk 12-21") (BR-R1, D81).
-- Errors: 400 invalid body (missing `title` or `site`, neither `room_id` nor `location` (`details.fields.location`); any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9); 422 `BR-RM4` the room is unknown, out of use or on another site.
+- A place of the list (`location_id`: a place of the site whose level type is offered to staff, BR-LOC9) or a `location` in words is required, or both: with a place, `location` holds the details ("desk 12-21") (BR-R1, D81, D82). Without one, the request is on the site itself.
+- Errors: 400 invalid body (missing `title` or `site`, neither `location_id` nor `location` (`details.fields.location`); any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9); 422 `BR-LOC5` the place is unknown or out of use, `BR-LOC9` it is on another site or of a type not offered to staff, `BR-LOC7` the site is unknown.
 
 ### GET /api/requests/:id
 - `200 { ...Request, "status_history": [{ "status", "at" }], "comments": [Comment] }`. `status_history` lists the creation (`OPEN`), the review (`APPROVED` or `REJECTED`) and each status change, oldest first (BR-R5).
@@ -313,7 +318,7 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 ## Reference data and users (added)
 
 ### GET /api/reference-data
-- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...], "assistant": boolean }`. `sites` comes from the data; the other lists are the enum codes. `assistant` is true when a model is configured for the AI assistant (`AI_PROVIDER`, D66).
+- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...], "assistant": boolean }`. `sites` lists the sites of the location tree (D82), in use or not, by name; the other lists are the enum codes. `assistant` is true when a model is configured for the AI assistant (`AI_PROVIDER`, D66).
 
 ### GET /api/users
 - Roles: SUPERVISOR, ADMIN. Returns the users that can be assigned to a work order (for dropdowns).
@@ -377,28 +382,31 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 ### POST /api/admin/users/:id/password
 - Body: `{ "password": string }` (at least 10 characters). `204`; the user's sessions end (BR-U8). Errors: 400; 404.
 
-## Rooms (added, D81)
+## Locations (added, D82)
 
-Rules BR-RM1 to BR-RM4 in `docs/data-model.md`.
+Rules BR-LOC1 to BR-LOC10 and BR-LT1 in `docs/data-model.md`; specification in `docs/spec-locations.md`.
 
-### GET /api/rooms
-- Every role. Query: `site` (required, 400 without).
-- `200 { "items": [RoomRef] }`: the active rooms of the site, by building, floor (`B2`, `B1`, `L0`, `L1` … `L12`, then other names) and name. Not paginated: one site's rooms.
+### GET /api/locations
+- Every role. `200 { "level_types": LevelType[], "items": Location[] }`: the whole tree, each place after its parent, siblings by name in natural order with the floors from the deepest basement up (`B2`, `B1`, `L0`, `L1` … `L12`). Not paginated: the forms cache it to work offline (D82).
+- Staff get the places in use only, without `code` and `version`, and the level types in use as `{ id, name, offered_to_staff }` (BR-LOC9).
 
-### GET /api/admin/rooms
-- SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `q?` (part of the name, building or floor), `site?`, `is_active?` (`true` | `false`).
-- `200 Page<Room>`: by site, building, floor and name.
+### POST /api/admin/locations
+- SUPERVISOR, ADMIN. Body: `{ "parent_id": id | null, "level_type_id"?: id, "name": string (1–100, without "›"), "code"?: string | null (capitals and digits, 1–10; stored in capitals) }`. `parent_id: null` creates a site (ADMIN only, 403 otherwise; `level_type_id` left out or the site type); a place needs its `level_type_id`.
+- `201 { "created": true, "item": Location + { site, place } }`. Errors: 400; 403; 409 `BR-LOC2` (name or code of a sibling, `details.fields.name` or `code`); 422 `BR-LOC1` (unknown parent or type, site type below a site), `BR-LT1` (type out of use), `BR-LOC3` (9th level), `BR-LOC5` (parent out of use).
 
-### POST /api/admin/rooms
-- Body: `{ site, building, floor, name }` (all required).
-- `201 { "created": true, "item": Room }`. Errors: 400; 409 `BR-RM1` (same building, floor and name on the site, whatever the case; `details.fields.name`).
+### GET /api/admin/locations/:id
+- SUPERVISOR, ADMIN. `200 Location + { site, place }`. Errors: 400, 404.
 
-### GET /api/admin/rooms/:id
-- `200 Room`. Errors: 404.
+### PUT /api/admin/locations/:id
+- SUPERVISOR, ADMIN (a site: ADMIN, 403 otherwise, BR-LOC6). Body: `{ "version": number, "name"?, "level_type_id"?, "code"?, "parent_id"? (a move), "is_active"? }`.
+- `200 { "updated": boolean, "item": Location + { site, place } }` (`updated: false` when nothing changed). A move or a rename rewrites the `place` of the records of the subtree, without their version or date (BR-LOC4); taking a place out of use takes its subtree with it (BR-LOC5).
+- Errors: 400; 403; 404; 409 `BR-V1` (changed since the user opened it), `BR-LOC2`, `BR-LOC6` (a site's name, once records name it); 422 `BR-LOC1`, `BR-LOC3`, `BR-LOC4` (another site, its own subtree, a site), `BR-LOC5` (back in use under a place out of use), `BR-LT1`.
 
-### PUT /api/admin/rooms/:id
-- Body: any of `building`, `floor`, `name`, `is_active` (the site cannot change: unknown field, 400, BR-RM2).
-- `200 { "updated": boolean, "item": Room }`. Errors: 400; 404; 409 `BR-RM1`.
+### GET /api/admin/level-types, POST /api/admin/level-types, PUT /api/admin/level-types/:id
+- `GET` (SUPERVISOR, ADMIN) → `200 { "items": LevelType[] }`, out of use included.
+- `POST` (ADMIN): `{ "name": 1–50, "token": [A-Z][A-Z0-9_]{0,19} (stored in capitals), "offered_to_staff"?: boolean }` → `201 { "created": true, "item": LevelType }`.
+- `PUT` (ADMIN): `{ "version", "name"?, "token"?, "offered_to_staff"?, "is_active"? }` → `200 { "updated": boolean, "item": LevelType }`. The site type (id 1) changes its name only (422 `BR-LT1`).
+- Errors: 400; 403; 404; 409 `BR-LT1` (name or token used), `BR-V1`.
 
 ## Dashboard (added)
 
@@ -463,14 +471,14 @@ SUPERVISOR and ADMIN (technicians and staff: 403). A dashboard of another user a
 Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs/data-model.md`. Weeks are ISO weeks `YYYY-Www`; a week that does not exist (`2027-W53`) → 400. The balancing assistant (Phase 20) and the week scheduler and My week (Phase 19) follow.
 
 ### GET /api/plans
-- Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, building, location or supplier), `site?` (`|`-separated), `building?` (`|`), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
+- Query: `page`, `size`, `sort` (`code`|`title`|`site`|`category`, default `code`), `order` (default `asc`), and the filters `q?` (each word in the code, title, site, place, location or supplier), `site?` (`|`-separated), `location?` (places, with everything below them, BR-LOC10), `category?`, `type?` (`PREVENTIVE`|`REGULATORY`), `performed_by?` (`INTERNAL`|`CONTRACTOR`), `active?` (`true`|`false`; all when left out).
 - `200 Page<Plan>`; `next_week` is the first visit from the current week on (skipped ones excluded).
 
 ### POST /api/plans
 - Roles: SUPERVISOR, ADMIN.
-- Body: `{ "title", "type", "estimated_hours", "frequency_weeks", "anchor_week", "asset_id"?, "site"?, "building"?, "category"?, "location"?, "description"?, "end_week"?, "schedule_mode"?, "tolerance_weeks"?, "season_from_week"?, "season_to_week"?, "performed_by"?, "supplier"? }`. `asset_id` or `site` is required; `category` is required without an asset (it defaults to the asset's); `tolerance_weeks` defaults to `min(8, floor(frequency_weeks / 4))`.
+- Body: `{ "title", "type", "estimated_hours", "frequency_weeks", "anchor_week", "asset_id"?, "location_id"?, "site"?, "category"?, "location"?, "description"?, "end_week"?, "schedule_mode"?, "tolerance_weeks"?, "season_from_week"?, "season_to_week"?, "performed_by"?, "supplier"? }`. `asset_id` or a place (`location_id`, or `site` alone) is required; with an asset, the place is the asset's (BR-LOC8); `category` is required without an asset (it defaults to the asset's); `tolerance_weeks` defaults to `min(8, floor(frequency_weeks / 4))`.
 - `201 { "created": true, "item": Plan + { occurrences: Occurrence[] } }`: the code is automatic (`PM-0063`) and the visits are stored up to the horizon (BR-P1). `occurrences` lists the next 8 visits from the current week.
-- Errors: 400 (unknown field, `estimated_hours` not in half hours, end before the anchor, half a season, contractor without `supplier`, neither asset nor site); 403; 422 `BR-P9` (unknown asset, or a site or building other than the asset's).
+- Errors: 400 (unknown field, `estimated_hours` not in half hours, end before the anchor, half a season, contractor without `supplier`, neither asset nor place: `details.fields.location_id`); 403; 422 `BR-P9` (unknown asset, or a site other than the asset's), `BR-LOC8` (a place other than the asset's), `BR-LOC5`, `BR-LOC7`.
 
 ### GET /api/plans/:id, PUT /api/plans/:id
 - `GET` → `200 Plan + { occurrences }` (next 8 visits). Errors: 400 malformed id, 404.
@@ -492,7 +500,7 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 - `DELETE` (SUPERVISOR, ADMIN) → `204`. Errors: 403; 404.
 
 ### GET /api/planning/timeline
-- Query: `from?` (first week, default the current week) **or** `year?` (calendar year: weeks 1 to 52 or 53 of that year; both → 400), `weeks?` (1–53, default 52; ignored with `year`), `group_by?` (`site` default, `building`, `category`), and the plan filters `q?`, `site?`, `building?`, `category?`, `type?`, `performed_by?`. The range must start between 104 weeks before and 52 weeks after the current week (400 otherwise). Only active plans are shown.
+- Query: `from?` (first week, default the current week) **or** `year?` (calendar year: weeks 1 to 52 or 53 of that year; both → 400), `weeks?` (1–53, default 52; ignored with `year`), `group_by?` (`site` default, `area`: the plan's first place under its site, a building or a data center hall, D82; `category`), and the plan filters `q?`, `site?`, `location?`, `category?`, `type?`, `performed_by?`. The range must start between 104 weeks before and 52 weeks after the current week (400 otherwise). Only active plans are shown.
 - Runs the release first (BR-P6), so the chips show every work order due.
 - `200`:
   ```
@@ -509,8 +517,8 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
                "site_spread": { average, peak },
                "contractor_visits": { total, peak, peak_week } },
     "blocked_weeks": [{ id, week, site | null, reason }],
-    "groups": [{ "key", "site"? , "building"?, "category"?, "hours": [per week, internal only],
-                 "plans": [{ id, code, title, type, category, site, building, estimated_hours,
+    "groups": [{ "key", "site"? , "area"? (null: the site itself), "category"?, "hours": [per week, internal only],
+                 "plans": [{ id, code, title, type, category, site, location_id, place, estimated_hours,
                              frequency_weeks, anchor_week, end_week, tolerance_weeks,
                              season_from_week, season_to_week, schedule_mode, performed_by,
                              supplier, version, warnings, occurrences: Occurrence[] }] }] }
@@ -518,7 +526,7 @@ Maintenance roles (staff: 403). Rules BR-P1 to BR-P9 and BR-Y1 to BR-Y4 in `docs
 - `load` is null without capacity (e.g. a trade nobody has as specialty). Errors: 400.
 
 ### POST /api/planning/suggestions (Phase 20, D53)
-- Roles: SUPERVISOR, ADMIN. Body: the timeline's range and filters, as JSON: `{ "from"?: week, "year"?: number, "weeks"?: 1–53, "q"?, "site"? (`|`-separated), "building"?, "category"?, "type"?, "performed_by"? }` (`from` and `year` together → 400; anything else, `group_by` included → 400). Runs the release first, like the timeline. Rules BR-B1 to BR-B4.
+- Roles: SUPERVISOR, ADMIN. Body: the timeline's range and filters, as JSON: `{ "from"?: week, "year"?: number, "weeks"?: 1–53, "q"?, "site"? (`|`-separated), "location"?, "category"?, "type"?, "performed_by"? }` (`from` and `year` together → 400; anything else, `group_by` included → 400). Runs the release first, like the timeline. Rules BR-B1 to BR-B4.
 - `200`:
   ```
   { "from", "to", "current_week",
@@ -603,8 +611,8 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict`, `PUT /api/work-orders/:id/review`, `GET/POST /api/work-orders/:id/comments` |
 | Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments`, `POST /api/requests/:id/cancel` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
-| Reference | `GET /api/reference-data`, `GET /api/users`, `GET /api/rooms` |
-| Rooms | `GET/POST /api/admin/rooms`, `GET/PUT /api/admin/rooms/:id` |
+| Reference | `GET /api/reference-data`, `GET /api/users`, `GET /api/locations` |
+| Locations | `POST /api/admin/locations`, `GET/PUT /api/admin/locations/:id`, `GET/POST /api/admin/level-types`, `PUT /api/admin/level-types/:id` |
 | Dashboard | `GET /api/dashboard`, `GET/POST /api/dashboards`, `GET/PUT/DELETE /api/dashboards/:id`, `PUT /api/dashboards/order`, `GET /api/dashboard/widgets`, `GET /api/dashboard/widgets/:key/rows` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
 | Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/suggestions`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |

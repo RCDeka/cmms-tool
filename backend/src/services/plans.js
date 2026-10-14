@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
 import { weekOfDate } from '../lib/iso-week.js';
-import { addInFilter } from '../lib/list-filter.js';
+import { addInFilter, addPlaceFilter } from '../lib/list-filter.js';
 import { orderByClause, pageOffset, pageResponse } from '../lib/pagination.js';
 import { fieldErrors } from '../middleware/validate.js';
 import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
@@ -51,7 +51,8 @@ const COLUMNS = [
   'category',
   'asset_id',
   'site',
-  'building',
+  'location_id',
+  'place',
   'location',
   'estimated_hours',
   'frequency_weeks',
@@ -94,10 +95,11 @@ const likeTerm = (word) => `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 /**
  * WHERE clause of the plan filters, shared by the list and the year planner. `q`: each word
- * must appear in the code, title, site, building, location or supplier.
+ * must appear in the code, title, site, place, location or supplier. `location`: places with
+ * everything below them (BR-LOC10).
  * @returns {{ clause: string, params: object }}
  */
-export function planFilters({ q, site, building, category, type, performed_by: by, active }) {
+export function planFilters({ q, site, location, category, type, performed_by: by, active }) {
   const where = [];
   const params = {};
   (q ?? '')
@@ -106,14 +108,14 @@ export function planFilters({ q, site, building, category, type, performed_by: b
     .slice(0, 10)
     .forEach((word, i) => {
       where.push(
-        `(${['code', 'title', 'site', 'building', 'location', 'supplier']
+        `(${['code', 'title', 'site', 'place', 'location', 'supplier']
           .map((c) => `p.${c} LIKE @q${i} ESCAPE '\\'`)
           .join(' OR ')})`,
       );
       params[`q${i}`] = likeTerm(word);
     });
   addInFilter(where, params, 'p.site', 'site', site);
-  addInFilter(where, params, 'p.building', 'building', building);
+  addPlaceFilter(where, params, 'p.location_id', 'location', location);
   addInFilter(where, params, 'p.category', 'category', category);
   addInFilter(where, params, 'p.type', 'type', type);
   addInFilter(where, params, 'p.performed_by', 'by', by);
@@ -124,12 +126,18 @@ export function planFilters({ q, site, building, category, type, performed_by: b
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
-const ruleError = (message, fields) => new HttpError(422, message, { rule: 'BR-P9', fields });
+const ruleError = (message, fields, rule = 'BR-P9') =>
+  new HttpError(422, message, { rule, fields });
 
-/** @param {import('better-sqlite3').Database} db */
-export function createPlanService(db) {
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ locations: ReturnType<import('./locations.js').createLocationService> }} deps
+ */
+export function createPlanService(db, { locations }) {
   const settingsStmt = db.prepare('SELECT * FROM planning_settings WHERE id = 1');
-  const assetById = db.prepare('SELECT id, site, building, category FROM assets WHERE id = ?');
+  const assetById = db.prepare(
+    'SELECT id, site, location_id, place, category FROM assets WHERE id = ?',
+  );
   const byId = db.prepare(`${SELECT} WHERE p.id = @id`);
   const highestCode = db
     .prepare(
@@ -183,30 +191,42 @@ export function createPlanService(db) {
   }
 
   /**
-   * BR-P9: with an asset, the site and building are the asset's (sending others → 422), and
-   * the trade defaults to the asset's. Returns the derived values.
+   * BR-P9, BR-LOC8: with an asset, the place (and so the site) is the asset's (sending others
+   * → 422), and the trade defaults to the asset's. Without one, the place sent, or the site
+   * alone (BR-LOC5, BR-LOC7). Returns the derived values.
+   * @param {object} plan the plan as it will be
+   * @param {object} sent fields sent by the client
+   * @param {object | null} current the stored row (null at creation)
    */
-  function assetValues(plan, sent) {
-    if (plan.asset_id === null || plan.asset_id === undefined) return {};
+  function placeValues(plan, sent, current = null) {
+    if (plan.asset_id === null || plan.asset_id === undefined) {
+      return locations.derive(sent, current) ?? {};
+    }
     const asset = assetById.get(plan.asset_id);
     if (!asset) throw ruleError('This asset does not exist.', { asset_id: 'Unknown asset' });
-    for (const field of ['site', 'building']) {
-      if (field in sent && (sent[field] ?? null) !== asset[field]) {
-        throw ruleError(`The ${field} must be the asset's ${field}.`, {
-          [field]: `The asset is in ${asset[field] ?? 'no building'}`,
-        });
-      }
+    if ('site' in sent && sent.site !== asset.site) {
+      throw ruleError("The site must be the asset's site.", {
+        site: `The asset is on ${asset.site}`,
+      });
+    }
+    if ('location_id' in sent && sent.location_id !== asset.location_id) {
+      throw ruleError(
+        "The place must be the asset's place.",
+        { location_id: `The asset is in ${asset.place || asset.site}` },
+        'BR-LOC8',
+      );
     }
     return {
       site: asset.site,
-      building: asset.building,
+      location_id: asset.location_id,
+      place: asset.place,
       ...(!plan.category && { category: asset.category }),
     };
   }
 
   function checkPlan(plan) {
     const missing = {};
-    if (!plan.site) missing.site = 'Choose an asset or a site';
+    if (!plan.site) missing.location_id = 'Choose an asset or a place';
     if (!plan.category) missing.category = 'Required without an asset';
     const problems = { ...missing, ...planProblems(plan) };
     if (Object.keys(problems).length)
@@ -250,7 +270,8 @@ export function createPlanService(db) {
             description: null,
             asset_id: null,
             site: null,
-            building: null,
+            location_id: null,
+            place: null,
             location: null,
             category: null,
             end_week: null,
@@ -263,7 +284,7 @@ export function createPlanService(db) {
             ...input,
             is_active: true,
           };
-          Object.assign(plan, assetValues(plan, input));
+          Object.assign(plan, placeValues(plan, input));
           checkPlan(plan);
           plan.code = nextPlanCode(highestCode.get());
           const values = { ...plan, is_active: 1, created_by: user.id, updated_by: user.id };
@@ -325,7 +346,7 @@ export function createPlanService(db) {
           }
           const before = toApiValues(current);
           const after = { ...before, ...changes };
-          Object.assign(changes, assetValues(after, changes));
+          Object.assign(changes, placeValues(after, changes, current));
           checkPlan({ ...after, ...changes });
           const logged = diffChanges(before, changes);
           if (!Object.keys(logged).length) return false;

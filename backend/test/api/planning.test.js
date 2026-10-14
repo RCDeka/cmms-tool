@@ -76,7 +76,8 @@ describe('POST /api/plans', () => {
     expect(plan).toMatchObject({
       code: 'PM-0063', // after the 62 seeded plans
       site: asset.site,
-      building: asset.building,
+      location_id: asset.location_id, // the asset's place (BR-LOC8)
+      place: asset.place,
       category: 'HVAC', // the asset's trade
       tolerance_weeks: 3,
       schedule_mode: 'FIXED',
@@ -135,7 +136,12 @@ describe('POST /api/plans', () => {
         anchor_week: '2027-W01',
       })
       .expect(201);
-    expect(res.body.item).toMatchObject({ asset: null, building: null, tolerance_weeks: 6 });
+    expect(res.body.item).toMatchObject({
+      asset: null,
+      site: 'Lyon Part-Dieu Branch',
+      place: '', // the site itself (BR-LOC7)
+      tolerance_weeks: 6,
+    });
   });
 
   it.each([
@@ -148,7 +154,7 @@ describe('POST /api/plans', () => {
     [{ end_week: '2026-W45' }, 'end_week'],
     [{ season_from_week: 14 }, 'season_to_week'],
     [{ performed_by: 'CONTRACTOR' }, 'supplier'],
-    [{ asset_id: undefined, site: undefined, category: 'HVAC' }, 'site'],
+    [{ asset_id: undefined, site: undefined, category: 'HVAC' }, 'location_id'],
     [{ asset_id: undefined, site: 'Lyon Part-Dieu Branch' }, 'category'],
   ])('refuses %o (400 on %s)', async (change, field) => {
     const res = await as('supervisor1').post('/api/plans', quarterly(change)).expect(400);
@@ -407,14 +413,18 @@ describe('GET /api/planning/timeline', () => {
     expect(lyon.capacity.weekly).toBe(24.5);
   });
 
-  it('groups by building or trade, and shows a calendar year', async () => {
-    const byBuilding = (await as('technician1').get('/api/planning/timeline?group_by=building'))
-      .body;
+  it('groups by area or trade, and shows a calendar year', async () => {
+    const byArea = (await as('technician1').get('/api/planning/timeline?group_by=area')).body;
     expect(
-      byBuilding.groups.some(
-        (g) => g.site === 'Paris La Défense Headquarters' && g.building === 'Tower A',
-      ),
+      byArea.groups.some((g) => g.site === 'Paris La Défense Headquarters' && g.area === 'Tower A'),
     ).toBe(true);
+    // The first place under the site, whatever its depth below (D82).
+    expect(
+      byArea.groups
+        .find((g) => g.area === 'Tower A')
+        .plans.every((p) => p.place.startsWith('Tower A › ')),
+    ).toBe(true);
+    await as('technician1').get('/api/planning/timeline?group_by=building').expect(400);
     const byTrade = (await as('technician1').get('/api/planning/timeline?group_by=category')).body;
     expect(byTrade.groups.map((g) => g.category)).toContain('HVAC');
     const year = (await as('technician1').get('/api/planning/timeline?year=2027')).body;

@@ -59,21 +59,21 @@ describe('GET /api/conflicts/:id', () => {
   it('returns both versions, the current record and the divergent fields', async () => {
     const id = await assetConflict(
       61,
-      { comment: 'Version A', floor: 'L9' },
-      { comment: 'Version B', floor: 'L9', status: 'UNDER_MAINTENANCE' },
+      { comment: 'Version A', exact_location: 'Roof' },
+      { comment: 'Version B', exact_location: 'Roof', status: 'UNDER_MAINTENANCE' },
       'supervisor2',
     );
     const res = await ctx.getAs('supervisor1', `/api/conflicts/${id}`).expect(200);
     expect(res.body.version_a).toMatchObject({
       comment: 'Version A',
-      floor: 'L9',
+      exact_location: 'Roof',
       status: 'IN_SERVICE',
     });
     expect(res.body.version_a).not.toHaveProperty('code');
     expect(typeof res.body.version_a.maintenance_contract).toBe('boolean');
     expect(res.body.version_b).toEqual({
       comment: 'Version B',
-      floor: 'L9',
+      exact_location: 'Roof',
       status: 'UNDER_MAINTENANCE',
     });
     expect(res.body.divergent_fields).toEqual(['comment', 'status']);

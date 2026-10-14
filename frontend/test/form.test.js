@@ -3,9 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildCreateForm, buildEditForm, sameValue } from '../assets/js/form.js';
+import { TREE } from './fixtures/places.js';
 
 const refs = {
-  sites: ['Lyon Part-Dieu Branch', 'Saclay Data Center'],
+  sites: ['Lyon Part-Dieu Branch', 'Paris HQ'],
+  places: TREE,
   users: [
     { id: 2, first_name: 'Julien', last_name: 'Bernard', role: 'SUPERVISOR' },
     { id: 4, first_name: 'Karim', last_name: 'Benali', role: 'TECHNICIAN' },
@@ -15,7 +17,9 @@ const asset = {
   id: 42,
   code: 'AST-0042',
   name: 'Chiller',
-  site: 'Saclay Data Center',
+  site: 'Paris HQ',
+  location_id: 25,
+  place: 'Tower A › B1 › Plant room B1',
   category: 'HVAC',
 };
 const ctx = (extra = {}) => ({
@@ -218,11 +222,17 @@ describe('buildCreateForm', () => {
     'type',
     'priority',
     'asset_id',
-    'site',
+    'location_id',
     'category',
     'description',
     'due_on',
   ];
+  /** Chooses `value` in the list of the place picker at `level`. */
+  const choose = (level, value) => {
+    const list = host.querySelectorAll('.place-picker-fields select')[level];
+    list.value = String(value);
+    list.dispatchEvent(new Event('change', { bubbles: true }));
+  };
 
   it('starts with defaults and returns only filled values', () => {
     const form = buildCreateForm({
@@ -234,19 +244,23 @@ describe('buildCreateForm', () => {
     });
     host.append(form.form);
     type($('#f-title'), 'Noise in plant room');
-    type($('#f-site'), 'Lyon Part-Dieu Branch');
+    // The place, level by level from the site (D82).
+    choose(0, 1);
+    expect(form.getValues().values.location_id).toBe(1);
+    choose(1, 10);
+    choose(2, 13);
     expect(form.getValues()).toEqual({
       values: {
         title: 'Noise in plant room',
         type: 'CORRECTIVE',
         priority: 'NORMAL',
-        site: 'Lyon Part-Dieu Branch',
+        location_id: 13,
       },
       invalid: [],
     });
   });
 
-  it('resolves an asset code, takes its site and locks the site', async () => {
+  it('resolves an asset code, takes its place and locks the place', async () => {
     const form = buildCreateForm({
       fields,
       values: {},
@@ -257,11 +271,12 @@ describe('buildCreateForm', () => {
     host.append(form.form);
     type($('#f-asset_id'), 'ast-0042');
     await vi.waitFor(() =>
-      expect($('#f-asset_id-hint').textContent).toBe('AST-0042 — Chiller (Saclay Data Center)'),
+      expect($('#f-asset_id-hint').textContent).toBe('AST-0042 — Chiller (Paris HQ)'),
     );
-    expect($('#f-site').value).toBe('Saclay Data Center');
-    expect($('#f-site').disabled).toBe(true);
-    expect(form.getValues().values).toMatchObject({ asset_id: 42, site: 'Saclay Data Center' });
+    const lists = [...host.querySelectorAll('.place-picker-fields select')];
+    expect(lists.map((l) => l.value)).toEqual(['2', '20', '24', '25']);
+    expect(lists.every((l) => l.disabled)).toBe(true);
+    expect(form.getValues().values).toMatchObject({ asset_id: 42, location_id: 25 });
 
     type($('#f-asset_id'), 'AST-9999');
     await vi.waitFor(() => expect($('#f-asset_id-hint').textContent).toBe('Unknown asset code'));
@@ -294,14 +309,14 @@ describe('asset creation form', () => {
   const fields = [
     'code',
     'name',
-    'site',
+    'location_id',
     'category',
     'criticality',
     'status',
     'maintenance_contract',
   ];
 
-  it('offers known sites as suggestions but accepts a new one', () => {
+  it('asks for a place of the tree, found by searching its path (D82)', () => {
     const form = buildCreateForm({
       entity: 'assets',
       fields,
@@ -312,10 +327,25 @@ describe('asset creation form', () => {
       onlineOnly: true,
     });
     host.append(form.form);
-    expect($('#f-site').tagName).toBe('INPUT');
-    expect([...$('#f-site-options').options].map((o) => o.value)).toEqual(refs.sites);
-    type($('#f-site'), 'Nantes Branch');
-    expect(form.getValues().values.site).toBe('Nantes Branch');
+    expect(host.querySelector('label[for="f-location_id"] .required')).not.toBeNull();
+    expect([...$('#f-location_id').options].map((o) => o.textContent)).toEqual([
+      '— Choose —',
+      'Lyon Part-Dieu Branch',
+      'Paris HQ',
+    ]);
+    type($('#f-location_id-search'), 'tower 12.1');
+    const found = [...host.querySelectorAll('.place-picker-result')];
+    expect(found.map((b) => b.textContent)).toEqual([
+      'Paris HQ › Tower A › L12 › Meeting room 12.10',
+    ]);
+    found[0].click();
+    expect(form.getValues().values.location_id).toBe(23);
+    expect([...host.querySelectorAll('.place-picker-fields select')].map((l) => l.value)).toEqual([
+      '2',
+      '20',
+      '21',
+      '23',
+    ]);
   });
 
   it('starts required lists on "— Choose —" and keeps the default status', () => {

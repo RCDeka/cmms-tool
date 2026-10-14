@@ -15,7 +15,8 @@ import { setSplitView } from './layout.js';
 import { isBlocked as isBlockedFor } from './planning-rules.js';
 
 /** Group keys of the rows, in switch order. */
-export const GROUP_BY = ['site', 'building', 'category'];
+// `area`: the first place under the site, a building or a data center hall (D82).
+export const GROUP_BY = ['site', 'area', 'category'];
 
 /** Filters of the planner in the URL; `from` (a week) or `year` set the range. */
 const FILTER_KEYS = ['from', 'year', 'group', 'site', 'category', 'type', 'performed_by', 'q'];
@@ -96,10 +97,10 @@ export const formatHours = (hours) => `${numberFormat.format(hours)} h`;
 /** 'Week 43' for a column header tooltip and labels. Pure. */
 const weekNumber = (week) => Number(week.slice(6));
 
-/** Label of a timeline group (site, "site · building" or trade). Pure. */
+/** Label of a timeline group (site, "site · area" or trade). Pure. */
 export function groupTitle(group) {
   if (group.category) return valueLabel('category', group.category);
-  if ('building' in group) return `${group.site} · ${group.building ?? 'No building'}`;
+  if ('area' in group) return `${group.site} · ${group.area ?? 'The site itself'}`;
   return group.site;
 }
 
@@ -262,8 +263,10 @@ export const PLANNING_FIELD_LABELS = {
   category: 'Trade',
   asset_id: 'Asset',
   site: 'Site',
+  // Before D82; kept for the history of older plans.
   building: 'Building',
-  location: 'Location',
+  place: 'Place',
+  location: 'Exact location',
   estimated_hours: 'Hours per visit',
   frequency_weeks: 'Every (weeks)',
   anchor_week: 'First visit',
@@ -368,7 +371,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
     id: 'plan-filter-q',
     type: 'search',
     value: filters.q ?? '',
-    placeholder: 'Code, title, building…',
+    placeholder: 'Code, title, place…',
     onInput: (e) => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => set('q', e.target.value.trim()), 350);

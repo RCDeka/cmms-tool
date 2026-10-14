@@ -196,8 +196,9 @@ Expected status codes (200/201/204 = allowed; a 400 or 422 caused by a deliberat
 | API-27 | `PUT /schedule/day-order` for TE1's own day / for TE2's day | 403 | allowed / 403 | allowed | allowed |
 | API-28 | `POST /assistant/find-work-order` | 403 | allowed | allowed | allowed |
 | API-29 | ST: every method on every path under `/assets`, `/work-orders`, `/conflicts`, `/dashboard`, `/dashboards`, `/audit-log`, `/plans`, `/plan-occurrences`, `/planning`, `/schedule`, `/my-week`, `/assistant` | 403 | | | |
-| API-49 | `GET /rooms?site=…` (D81) | 200 | 200 | 200 | 200 |
-| API-50 | `GET /admin/rooms`, `POST /admin/rooms`, `PUT /admin/rooms/:id` (D81) | 403 | 403 | allowed | allowed |
+| API-49 | `GET /locations` (D82) | 200 (places in use, no codes) | 200 | 200 | 200 |
+| API-50 | `GET/PUT /admin/locations/:id`, `POST /admin/locations` (a place, not a site), `GET /admin/level-types` (D82) | 403 | 403 | allowed | allowed |
+| API-51 | `POST /admin/locations` with `parent_id: null` (a site), `PUT` on a site, `POST /admin/level-types`, `PUT /admin/level-types/:id` (D82) | 403 | 403 | 403 | allowed |
 
 ### 3.2 Field-level and record-level permissions
 
@@ -269,15 +270,31 @@ Expected status codes (200/201/204 = allowed; a 400 or 422 caused by a deliberat
 | AS-12 | SU, AD | Edit every editable field, including the maintenance contract box and dates | Saved; blank optional text stored as empty (not a space); invalid date refused on the field. |
 | AS-13 | SU, AD | New asset without a code | Created with the next automatic code (`AST-0501`…), opens in the panel. |
 | AS-14 | SU, AD | New asset with code `ast-test-1` | Stored as `AST-TEST-1`. With a code already used: error on the code field. With `#$%`: format error. |
-| AS-15 | SU, AD | New asset on a new site `Nantes, Annex B` (comma in the name) | Created; the site appears in the suggestions, in the asset site filter and works as a filter value; the work order site list now offers it. |
-| AS-16 | SU, AD | Missing name, site, trade or criticality | Field errors, nothing created. |
+| AS-15 | SU, AD | New asset: type "tower b l3" in **Find a place** and choose "Paris La Défense Headquarters › Tower B › L3", or go down Site → Building → Floor | The lists follow the path; the asset is created with its site and place ("Tower B › L3"); it is listed by the site filter and by `?location=` of its building (D82). |
+| AS-16 | SU, AD | Missing name, place, trade or criticality | Field errors, nothing created. |
 | AS-17 | SU, AD | Delete the asset created in AS-13 | Confirmation, then gone from the list; its history stays readable in the audit log. |
 | AS-18 | SU, AD | Delete an asset that has work orders | Refused with the reason (set it Out of service instead). |
 | AS-19 | SU + AD | Both open the same new asset; AD edits it; SU then deletes it | Refused: changed since. |
 | AS-20 | TE | Look for New asset and Delete | Not shown. |
 | AS-21 | SU | Offline: New asset and Delete | Disabled with the "needs a connection" tooltip; the creation form keeps a draft. |
 | AS-22 | MAINT | Open the History section of an asset | Creation and each change with author, date and from → to; a change just made appears at the top. Offline: a message that history needs a connection. |
-| AS-23 | MAINT | "New work order" in an asset panel | Creation form with the asset filled in, site and trade from the asset. |
+| AS-23 | MAINT | "New work order" in an asset panel | Creation form with the asset filled in, place (disabled) and trade from the asset. |
+
+
+### 5.1 Places (D82)
+
+| ID | Who | Steps | Expected |
+|---|---|---|---|
+| PL-01 | SU, AD | Open Places | The 5 sites open, their buildings below; ▸ unfolds a building (floors B2, B1, L0, L1 … L30, in that order), ▾ folds it; each place shows its type and code. |
+| PL-02 | SU, AD | Search "meeting 12.0" | The matching rooms as paths ("Paris La Défense Headquarters › Tower A › L12 › Meeting room 12.01"…); a click opens the panel with the branch open in the tree. |
+| PL-03 | SU, AD | Move Tower A › L12 into Tower B (Inside), renamed "L12 (A)", code emptied | Saved; the requests and work orders of its rooms show "Tower B › L12 (A) › …" once their lists reload, keep their version (no conflict for an offline edit made before), and are found by searching "L12 (A)". |
+| PL-04 | SU, AD | Inside: pick a place of another site (URL edit or API), or a room of its own branch | Not offered in the list; through the API refused (422 `BR-LOC4`). |
+| PL-05 | SU, AD | Untick "In use" on Tower B › L8 | Its rooms go out of use with it, leave the request form and the pickers; the records naming them keep them. Ticking a room back while L8 is out of use is refused. |
+| PL-06 | SU | Open a site's panel; try `+ New site` (URL) | Fields disabled, "Only administrators change sites."; `/admin/locations/new` without parent: access denied. |
+| PL-07 | AD | + New site "Nantes Branch", code NTE; rename it; rename Lyon Part-Dieu Branch | Created and renamed; it appears in the site filters and pickers. Renaming Lyon is refused: records name it (`BR-LOC6`). |
+| PL-08 | AD | Level types: add "Technical room" (token TECH_ROOM, not offered to staff); add a place of that type; take Floor out of use | The type is offered for new places; staff are not offered the technical room; with Floor out of use, a new floor is refused while the existing ones keep their type. |
+| PL-09 | SU | Edit an asset's place to Lyon › Main building › L1 | Saved with site Lyon; its open work orders and its plans follow it (site and place), its closed ones stay; its history shows "Place: … → Main building › L1". |
+| PL-10 | SU + SU2 | Both offline, change the place of the same work order without asset; reconnect | One saved, the other becomes a conflict on Place, shown as paths in the console; choosing B moves it. |
 
 ---
 
@@ -368,7 +385,7 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-16 | Open a request waiting for review, then an approved one not started | Both offer "Cancel this request"; an in-progress, on-hold or finished request does not. |
 | R-17 | Cancel this request → Keep it; then Cancel the request | Nothing changes; then the page shows "Cancelled by you", the history ends with "Cancelled by you", and the request moves to All my requests. SU: the "Staff requests to review" count goes down; the work order shows the review status Withdrawn and user1 in its history. |
 | R-18 | Have TE start an approved request while ST has its page open, then click Cancel this request | Refused with a sentence asking to add a comment; nothing changes. |
-| R-19 | New request at the headquarters: Building Tower A, Floor L12, Room Meeting room 12.02, send without words; then a second one with "Not in the list" (D81) | Building, floor, room offered in order (L2 before L12); with the room, "Where exactly?" loses its star and the request is sent; the card shows "Tower A, L12, Meeting room 12.02". "Not in the list" fills "Tower A, L12, " in "Where exactly?", which is required again. On a phone the three lists are stacked. |
+| R-19 | New request at the headquarters: Building Tower A, Floor L12, Room Meeting room 12.02, send without words; then a second one with "Not in the list" (D81, D82) | Building, floor, room offered in order (L2 before L12), each list named after its level; with the room, "Where exactly?" loses its star and the request is sent; the card shows "Tower A › L12 › Meeting room 12.02". "Not in the list" fills "Tower A, L12, " in "Where exactly?", which is required again. On a phone the lists are stacked. Offline (DevTools), the lists still work: they come from the device. |
 
 ### 7.2 Review by the maintenance team
 
@@ -386,8 +403,8 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-29 | SU | History of the reviewed request | One entry for the review with the decision. |
 | R-30 | ST, then SU and TE1 | ST comments on a request approved for TE1; SU and TE1 open the dashboard | SU, AD: tile "Requests waiting for a reply" (attention style; in Overview, or ticked in the sidebar for an Overview created before D80) opens `/work-orders?awaiting_reply=true`, which lists the request. TE1: tile "Requests waiting for my reply" opens `/work-orders?mine=true&awaiting_reply=true`; TE2's count does not change. |
 | R-31 | SU | Open that request | Under the comments: "The requester is waiting for a reply." After SU sends a comment, the notice goes away and both tiles go down by one (D80). |
-| R-32 | SU, AD (TE, ST) | Sidebar → Rooms; filter on Lyon Part-Dieu Branch; New room "Training room" on Main building, L1; create it again as "TRAINING ROOM" | Rooms page with 333 rooms; the new room is listed and offered to staff in R-19's form for Lyon; the second creation is refused (already in the list). TE and ST: no Rooms link, `/admin/rooms` says access denied (D81). |
-| R-33 | SU | Untick "In use" on Meeting room 12.02, then open the request of R-19 as SU | The room is no longer offered in the request form; the request still shows it, read-only in the work order panel (Room row). |
+| R-32 | SU, AD (TE, ST) | Sidebar → Places; open Lyon Part-Dieu Branch › Main building › L1; **+ Add a place inside**: "Training room", type Room; create it again as "TRAINING ROOM" | Places page with 414 places; the new room is in the tree and offered to staff in R-19's form for Lyon; the second creation is refused (already used here). TE and ST: no Places link, `/admin/locations` says access denied (D82). |
+| R-33 | SU | Untick "In use" on Meeting room 12.02, then open the request of R-19 as SU | The room is no longer offered in the request form; the request still shows it (Place row). |
 
 ---
 
@@ -525,8 +542,8 @@ Charts and lists: Work orders by category · Work orders by status · My work ·
 | ID | Who | Steps | Expected |
 |---|---|---|---|
 | PM-01 | MAINT | Open Year planner | 52 (or 53) weeks from the current week, grouped by site; load strip, tiles (workload, trade balance, peak week, site spread, contractor visits); the release runs first. |
-| PM-02 | MAINT | Group by building, by trade; filter by site, trade, type, done by, search; Previous / Next year; `year=2027` | Grid and figures follow; filters in the URL. |
-| PM-03 | SU, AD | New plan: quarterly (13 weeks) on an asset, 2 h | Code `PM-00NN`, site and building from the asset; 4 visits a year on the timeline. |
+| PM-02 | MAINT | Group by area, by trade; filter by site, trade, type, done by, search; Previous / Next year; `year=2027` | Grid and figures follow (Area groups: "Paris La Défense Headquarters · Tower A"…); filters in the URL. |
+| PM-03 | SU, AD | New plan: quarterly (13 weeks) on an asset, 2 h | Code `PM-00NN`, site and place from the asset; 4 visits a year on the timeline. |
 | PM-04 | SU, AD | New plan without an asset: site + trade required; contractor without supplier; end week before the anchor; 2.25 h; season with only one end | Each refused with the reason. |
 | PM-05 | SU, AD | Plan of 5 h | Flagged "will be split" (long visit). |
 | PM-06 | SU, AD | Contractor plan | Visits shown, the load does not change; contractor visits counted in their tile. |

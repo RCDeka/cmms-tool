@@ -110,11 +110,13 @@ export function insertPastWork(db, { today, now }) {
   };
 
   const insertWorkOrder = db.prepare(`INSERT INTO work_orders
-    (number, type, status, priority, title, description, asset_id, site, location, category,
+    (number, type, status, priority, title, description, asset_id, site, location_id, place,
+     location, category,
      assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
      actual_hours, work_report, plan_id, planned_week, created_by, updated_by, created_at,
      updated_at)
-    VALUES (@number, @type, @status, 'NORMAL', @title, @description, @asset_id, @site, NULL,
+    VALUES (@number, @type, @status, 'NORMAL', @title, @description, @asset_id, @site,
+     @location_id, @place, NULL,
      @category, @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on,
      @estimated_hours, @actual_hours, @work_report, @plan_id, @planned_week, @created_by,
      @updated_by, @created_at, @updated_at)`);
@@ -199,6 +201,8 @@ export function insertPastWork(db, { today, now }) {
         description: plan.description,
         asset_id: plan.asset_id,
         site: plan.site,
+        location_id: plan.location_id,
+        place: plan.place,
         category: plan.category,
         assignee_id: worker?.id ?? null,
         supervisor_id: supervisor,

@@ -6,7 +6,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { NOW, TEST_CONFIG } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 /**
  * Responsiveness, asset and people widgets (Phase 24) on a hand-made dataset, values computed
@@ -44,6 +44,7 @@ let token;
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   const user = db.prepare(
@@ -55,9 +56,13 @@ beforeAll(async () => {
   user.run(5, 'tech2', hash, 'Tom', 'Two', 'TECHNICIAN', 'Lyon');
   user.run(6, 'staff', hash, 'Stan', 'Staff', 'STAFF', 'Paris');
 
-  const asset = db.prepare(
-    "INSERT INTO assets (id, code, name, site, category, criticality, status) VALUES (?, ?, 'A', ?, ?, ?, ?)",
+  // The site last: it also gives the place (D82).
+  const insertAsset = db.prepare(
+    `INSERT INTO assets (id, code, name, site, location_id, category, criticality, status)
+     SELECT ?, ?, 'A', s.name, s.id, ?, ?, ? FROM locations s
+     WHERE s.parent_id IS NULL AND s.name = ?`,
   );
+  const asset = { run: (id, code, site, ...rest) => insertAsset.run(id, code, ...rest, site) };
   asset.run(1, 'AST-0001', 'Paris', 'HVAC', 'CRITICAL', 'IN_SERVICE');
   asset.run(2, 'AST-0002', 'Paris', 'HVAC', 'LOW', 'IN_SERVICE');
   asset.run(3, 'AST-0003', 'Lyon', 'ELECTRICAL', 'HIGH', 'BROKEN_DOWN');
@@ -65,10 +70,11 @@ beforeAll(async () => {
   asset.run(5, 'AST-0005', 'Paris', 'HVAC', 'LOW', 'IN_SERVICE');
 
   const wo = db.prepare(`INSERT INTO work_orders
-    (id, number, type, status, priority, title, asset_id, site, category, assignee_id,
+    (id, number, type, status, priority, title, asset_id, site, location_id, category, assignee_id,
      created_on, closed_on, estimated_hours, actual_hours, work_report, review_status,
      reviewed_at, created_by, created_at, updated_at)
-    VALUES (@id, @number, @type, @status, @priority, 'Job', @asset, @site, @category, @assignee,
+    VALUES (@id, @number, @type, @status, @priority, 'Job', @asset, @site, ${SITE_ID('@site')},
+     @category, @assignee,
      @created_on, @closed, @est, @act, @report, @review, @reviewed_at, @created_by, @created_at,
      @created_at)`);
   const sites = { 1: 'Paris', 2: 'Paris', 3: 'Lyon', 4: 'Lyon', 5: 'Paris' };
@@ -269,9 +275,10 @@ describe('request_service', () => {
   it('counts a request withdrawn before its review, but not as reviewed (D79)', async () => {
     ctx.db
       .prepare(
-        `INSERT INTO work_orders (id, number, type, status, priority, title, site, created_on,
-           review_status, created_by, created_at, updated_at)
+        `INSERT INTO work_orders (id, number, type, status, priority, title, site, location_id,
+           created_on, review_status, created_by, created_at, updated_at)
          VALUES (99, 'WO-2026-00099', 'CORRECTIVE', 'CANCELLED', 'NORMAL', 'Job', 'Paris',
+           ${SITE_ID("'Paris'")},
            '2026-10-02', 'WITHDRAWN', 6, '2026-10-02T08:00:00.000Z', '2026-10-02T09:00:00.000Z')`,
       )
       .run();

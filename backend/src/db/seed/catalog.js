@@ -9,40 +9,56 @@ const floors = (from, to) => {
   return out;
 };
 
+/**
+ * Place code of a floor (D82): `01` for the first basement, `10` for the ground floor, `11` for
+ * L1 and so on, so the codes sort like the floors.
+ */
+export const floorCode = (floor) =>
+  floor.startsWith('B') ? floor.slice(1).padStart(2, '0') : String(10 + Number(floor.slice(1)));
+
+/**
+ * The demo sites with their buildings and floors (the location tree, D82). Codes on the sites,
+ * and on the buildings and floors of the headquarters and the data center.
+ */
 export const SITES = [
   {
     name: 'Paris La Défense Headquarters',
+    code: 'PAR',
     weight: 40,
     isDataCenter: false,
     buildings: [
-      { name: 'Tower A', floors: floors(-2, 30) },
-      { name: 'Tower B', floors: floors(-1, 18) },
+      { name: 'Tower A', code: '1', floors: floors(-2, 30) },
+      { name: 'Tower B', code: '2', floors: floors(-1, 18) },
     ],
   },
   {
     name: 'Saclay Data Center',
+    code: 'SAC',
     weight: 25,
     isDataCenter: true,
     buildings: [
-      { name: 'Hall DC1', floors: floors(0, 1) },
-      { name: 'Hall DC2', floors: floors(0, 1) },
-      { name: 'Utility building', floors: floors(-1, 0) },
+      { name: 'Hall DC1', code: '1', floors: floors(0, 1) },
+      { name: 'Hall DC2', code: '2', floors: floors(0, 1) },
+      { name: 'Utility building', code: '3', floors: floors(-1, 0) },
     ],
   },
   {
     name: 'Lyon Part-Dieu Branch',
+    code: 'LYS',
     weight: 12,
     isDataCenter: false,
     buildings: [{ name: 'Main building', floors: floors(-1, 2) }],
   },
   {
     name: 'Marseille Prado Branch',
+    code: 'MRS',
     weight: 12,
     isDataCenter: false,
     buildings: [{ name: 'Main building', floors: floors(0, 1) }],
   },
   {
     name: 'Lille Grand Place Branch',
+    code: 'LIL',
     weight: 11,
     isDataCenter: false,
     buildings: [{ name: 'Main building', floors: floors(-1, 1) }],
@@ -409,7 +425,7 @@ const DATA_CENTER_ROOMS = {
 };
 
 /**
- * The room list of the mock dataset (D81): `{ site, building, floor, name }`. Office towers
+ * The rooms of the mock dataset (D81, places of type Room since D82): `{ site, building, floor, name }`. Office towers
  * have rooms on every office floor; technical floors (basements) have none, so staff
  * describe those places in words.
  */

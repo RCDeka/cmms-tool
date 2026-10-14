@@ -8,6 +8,7 @@ import { ENTITIES } from './entities.js';
 import { ENUMS } from './enums.js';
 import { isEmpty, renderValue } from './format.js';
 import { valueLabel } from './labels.js';
+import { placeIndex, placePicker } from './places.js';
 import { statusOptions } from './rules.js';
 
 const MULTILINE = new Set(['description', 'comment', 'work_report']);
@@ -22,7 +23,7 @@ function defForApiField(entity, apiField) {
 
 /** Fields marked * (the API refuses them empty). */
 const REQUIRED_FIELDS = {
-  assets: ['name', 'site', 'category', 'criticality', 'status'],
+  assets: ['name', 'location_id', 'category', 'criticality', 'status'],
   work_orders: ['title', 'type'],
 };
 
@@ -73,31 +74,22 @@ function buildControl(entity, apiField, value, ctx) {
       write: (v) => (el.value = v ?? ''),
     };
   }
-  if (apiField === 'site' && entity === 'assets') {
-    // Assets may be on a new site: free text, with the known sites as suggestions.
-    const listId = `${id}-options`;
-    const el = h('input', {
-      ...common,
-      type: 'text',
-      maxlength: 200,
-      list: listId,
-      autocomplete: 'off',
+  if (def.type === 'place') {
+    // The location tree from the cache (D82): it works offline.
+    const picker = placePicker({
+      id,
+      index: placeIndex(ctx.refs.places),
+      onChange: () => ctx.onChange?.(),
     });
-    el.value = value ?? '';
+    picker.set(value ?? null);
     return {
-      el: h(
-        'div',
-        {},
-        el,
-        h(
-          'datalist',
-          { id: listId },
-          (ctx.refs.sites ?? []).map((s) => h('option', { value: s })),
-        ),
-      ),
-      input: el,
-      read: () => textValue(el.value),
-      write: (v) => (el.value = v ?? ''),
+      el: picker.element,
+      get input() {
+        return picker.input;
+      },
+      read: () => picker.value(),
+      write: (v) => picker.set(v ?? null),
+      setDisabled: (disabled) => picker.setDisabled(disabled),
     };
   }
   if (apiField === 'site') {
@@ -286,6 +278,8 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
   for (const field of fieldOrder) {
     const def = cfg.fields[field];
     const apiField = def.editField ?? field;
+    // The site follows the place (BR-LOC7): the place picker starts with it.
+    if (apiField === 'site' && editable.includes('location_id')) continue;
     if (editable.includes(apiField)) {
       const control = buildControl(
         entity,
@@ -294,14 +288,14 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
         ctx,
       );
       controls.set(apiField, control);
-      control.input.addEventListener('input', () => {
+      control.el.addEventListener('input', () => {
         // The user is fixing this field: its error message no longer applies.
         control.input.removeAttribute('aria-invalid');
         const error = control.input.closest('.form-control')?.querySelector('.field-error');
         if (error) error.textContent = '';
         ctx.onChange?.();
       });
-      control.input.addEventListener('change', () => ctx.onChange?.());
+      control.el.addEventListener('change', () => ctx.onChange?.());
       const required =
         REQUIRED_FIELDS[entity].includes(apiField) ||
         (entity === 'work_orders' && apiField === 'site' && ctx.mode !== 'create');
@@ -334,14 +328,14 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
       );
     }
   }
-  // The site follows the asset (BR-W2): disabled while an asset is chosen.
-  const site = controls.get('site');
-  if (site && controls.has('asset_id')) {
+  // The place follows the asset (BR-W2, BR-LOC8): disabled while an asset is chosen.
+  const place = controls.get('location_id');
+  if (place && controls.has('asset_id')) {
     ctx.onAsset = (asset) => {
-      if (asset) site.write(asset.site);
-      site.input.disabled = Boolean(asset) || controls.get('asset_id').read() !== null;
+      if (asset?.location_id) place.write(asset.location_id);
+      place.setDisabled(Boolean(asset) || controls.get('asset_id').read() !== null);
     };
-    site.input.disabled = values.asset_id !== null && values.asset_id !== undefined;
+    place.setDisabled(values.asset_id !== null && values.asset_id !== undefined);
   }
   return { rows, controls };
 }
@@ -440,9 +434,7 @@ export function buildEditForm({
 export const ASSET_CREATION_ORDER = [
   'code',
   'name',
-  'site',
-  'building',
-  'floor',
+  'place',
   'exact_location',
   'category',
   'subcategory',
@@ -463,7 +455,7 @@ const CREATION_ORDER = [
   'type',
   'priority',
   'asset',
-  'site',
+  'place',
   'location',
   'category',
   'description',
@@ -477,7 +469,7 @@ const CREATION = {
   work_orders: {
     order: CREATION_ORDER,
     defaults: { type: 'CORRECTIVE', priority: 'NORMAL' },
-    help: 'Fields marked * are required. Choose an asset, or a site if the work is not about one asset.',
+    help: 'Fields marked * are required. Choose an asset, or a place if the work is not about one asset.',
   },
   assets: {
     order: ASSET_CREATION_ORDER,

@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Locations and Asset Codes: Specification
 
-Status: **specified and confirmed** (product owner discussion, 2026-10-14; decision D82; backlog item 15). Section 3 holds the product owner's choices. Section 12 lists the smaller choices made while writing, all confirmed by the product owner on the same day. Phases 32 and 33 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **specified and confirmed** (product owner discussion, 2026-10-14; decision D82; backlog item 15). Section 3 holds the product owner's choices. Section 12 lists the smaller choices made while writing, all confirmed by the product owner on the same day. **Phase 32 is implemented** (2026-10-14): its tables, endpoints and screens are in `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which prevail over this file; D83 lists where it completes or departs from it (the rules are named BR-LOC1 to BR-LOC10, as BR-L1 to BR-L4 belong to the audit log). Phases 32 and 33 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 
@@ -60,7 +60,7 @@ The type `SITE` (id 1, name "Site") exists from the migration. Its name can chan
 | Column | Type | Null | Constraints / default | Notes |
 |---|---|---|---|---|
 | id | INTEGER | no | PK | |
-| parent_id | INTEGER | yes | FK → locations.id | NULL for a site (BR-L1) |
+| parent_id | INTEGER | yes | FK → locations.id | NULL for a site (BR-LOC1) |
 | site_id | INTEGER | no | FK → locations.id | its site (itself for a site); kept by the server, so a subtree is one indexed query |
 | level_type_id | INTEGER | no | FK → level_types.id | `SITE` exactly when `parent_id` is NULL |
 | name | TEXT | no | 1–100 | "Tower A", "B1", "Meeting room 12.02" |
@@ -71,7 +71,7 @@ The type `SITE` (id 1, name "Site") exists from the migration. Its name can chan
 Indexes: `parent_id`, `site_id`. Name unique among the siblings whatever the case, and among the sites (`coalesce(parent_id, 0)`, `lower(name)`). Code unique among the siblings when set. Places are listed by name in **natural order** (`L2` before `L10`), with the floor rule of D81 kept for every level: `B<n>` from the deepest up, then `L<n>`, then other names.
 
 ### Changed tables
-- **assets**: `location_id` (NOT NULL, FK) and `asset_type_id` (nullable, FK) are added. `building`, `floor` and `subcategory` are removed. `exact_location` stays: the details below the place ("north wall"). `site` stays, set by the server (BR-L7). `category` must equal the type's trade when a type is set (BR-AT2).
+- **assets**: `location_id` (NOT NULL, FK) and `asset_type_id` (nullable, FK) are added. `building`, `floor` and `subcategory` are removed. `exact_location` stays: the details below the place ("north wall"). `site` stays, set by the server (BR-LOC7). `category` must equal the type's trade when a type is set (BR-AT2).
 - **work_orders**: `location_id` (NOT NULL, FK) is added, and `room_id` is removed. `location` stays: the details ("desk 12-21"). `site` stays, set by the server.
 - **maintenance_plans**: `location_id` (NOT NULL, FK) is added, and `building` is removed. `location` stays as the details. `site` stays, set by the server.
 - **rooms**: dropped once its rows are copied into `locations` (section 9).
@@ -96,16 +96,16 @@ One row (`id = 1`), edited by admins: `default_pattern` (default **`AST-{SEQ:4}`
 ## 5. Rules
 
 ### Places
-- BR-L1: A place without a parent is a site, and a site has no parent. A place other than a site never has the type `SITE`.
-- BR-L2: Siblings cannot share a name whatever the case, and neither can two sites (409). Siblings cannot share a code (409).
-- BR-L3: A branch has at most **8 levels**, the site included (422).
-- BR-L4: A place may move under another place **of the same site**, never into its own subtree (422). The records pointing to it or below it follow without being written: their path changes, but their codes do not. A site cannot move.
-- BR-L5: Places are never deleted. Taking a place out of use takes its whole subtree with it. A place comes back into use only under a place in use. Records keep a place out of use, but a new record or a changed `location_id` may only name a place in use (422).
-- BR-L6: Only admins create sites, rename them or take them out of use. A site is renamed only while no record (asset, work order, plan, user, blocked week, dashboard filter) names it (409), because `site` is copied into those rows.
-- BR-L7: The server sets a record's `site` to the name of its place's site. A body may still send `site` alone, which means the site itself as the place (`location_id` = the site's id). Sending a `site` that differs from the place's site → 422.
-- BR-L8: With an asset, a work order's or a plan's place **is the asset's place**, set by the server (as `site` is today: BR-W2, BR-P9). Sending another one → 422. The details text stays free. When the asset moves, its open work orders and its plans follow it in the same transaction.
-- BR-L9: A staff request's place is a place in use of its site whose level type is offered to staff, or the site itself with the place in words (the words are then required, as in D81) (422 otherwise). Staff read the places in use of every site, without codes.
-- BR-L10: A list filter on a place (`location=<id>`) matches the place and everything below it.
+- BR-LOC1: A place without a parent is a site, and a site has no parent. A place other than a site never has the type `SITE`.
+- BR-LOC2: Siblings cannot share a name whatever the case, and neither can two sites (409). Siblings cannot share a code (409).
+- BR-LOC3: A branch has at most **8 levels**, the site included (422).
+- BR-LOC4: A place may move under another place **of the same site**, never into its own subtree (422). The records pointing to it or below it follow without being written: their path changes, but their codes do not. A site cannot move.
+- BR-LOC5: Places are never deleted. Taking a place out of use takes its whole subtree with it. A place comes back into use only under a place in use. Records keep a place out of use, but a new record or a changed `location_id` may only name a place in use (422).
+- BR-LOC6: Only admins create sites, rename them or take them out of use. A site is renamed only while no record (asset, work order, plan, user, blocked week, dashboard filter) names it (409), because `site` is copied into those rows.
+- BR-LOC7: The server sets a record's `site` to the name of its place's site. A body may still send `site` alone, which means the site itself as the place (`location_id` = the site's id). Sending a `site` that differs from the place's site → 422.
+- BR-LOC8: With an asset, a work order's or a plan's place **is the asset's place**, set by the server (as `site` is today: BR-W2, BR-P9). Sending another one → 422. The details text stays free. When the asset moves, its open work orders and its plans follow it in the same transaction.
+- BR-LOC9: A staff request's place is a place in use of its site whose level type is offered to staff, or the site itself with the place in words (the words are then required, as in D81) (422 otherwise). Staff read the places in use of every site, without codes.
+- BR-LOC10: A list filter on a place (`location=<id>`) matches the place and everything below it.
 
 ### Level types
 - BR-LT1: Only admins write level types. A token used by a code pattern cannot change (422). A type in use by places can be taken out of use: those places keep it, and new places cannot take it.
@@ -128,7 +128,7 @@ One row (`id = 1`), edited by admins: `default_pattern` (default **`AST-{SEQ:4}`
 | Endpoint | Roles | Purpose |
 |---|---|---|
 | `GET /api/locations` | every role | The whole tree as a flat list `[{ id, parent_id, site_id, level_type_id, name, code, is_active }]` with the level types. Not paginated, and cached on the device (section 7). Staff get the places in use, without `code`. Replaces `GET /api/rooms`. |
-| `POST /api/admin/locations`, `GET/PUT /api/admin/locations/:id` | SUPERVISOR, ADMIN (sites: ADMIN, BR-L6) | Create, read and change a place: name, type, code, parent (move, BR-L4), in use. Replaces `/api/admin/rooms`. |
+| `POST /api/admin/locations`, `GET/PUT /api/admin/locations/:id` | SUPERVISOR, ADMIN (sites: ADMIN, BR-LOC6) | Create, read and change a place: name, type, code, parent (move, BR-LOC4), in use. Replaces `/api/admin/rooms`. |
 | `GET/POST /api/admin/level-types`, `PUT /api/admin/level-types/:id` | ADMIN (read: SUPERVISOR too) | Level types. |
 | `GET /api/asset-types` | ADMIN, SUPERVISOR, TECHNICIAN | Asset types for the forms and filters. |
 | `POST /api/admin/asset-types`, `PUT /api/admin/asset-types/:id` | ADMIN | Asset types, abbreviation and own pattern. |
@@ -136,7 +136,7 @@ One row (`id = 1`), edited by admins: `default_pattern` (default **`AST-{SEQ:4}`
 | `GET /api/assets/next-code?location_id=&asset_type_id=` | SUPERVISOR, ADMIN | `{ code, pattern, empty_tokens: ["FLOOR"] }`: the proposal and the tokens that gave nothing, so the form can say "no floor code". |
 | `PUT /api/admin/assets/:id/code` | ADMIN | Recode (BR-C6). Body `{ code, version }`. |
 
-Changed shapes: `Asset`, `WorkOrder`, `Plan` and the list rows carry `location_id` and **`place`**, the path below the site joined with " › " ("Tower A › B1 › Plant room 2"), so a list renders without the tree. Assets also carry `asset_type: { id, name, abbreviation } | null` instead of `subcategory`. The `building` filter of the plans, the planner and the balancing assistant becomes `location` (BR-L10). The planner's `group_by=building` becomes `group_by=area`: the place's first level under the site, whatever its type (a building, a data center hall).
+Changed shapes: `Asset`, `WorkOrder`, `Plan` and the list rows carry `location_id` and **`place`**, the path below the site joined with " › " ("Tower A › B1 › Plant room 2"), so a list renders without the tree. Assets also carry `asset_type: { id, name, abbreviation } | null` instead of `subcategory`. The `building` filter of the plans, the planner and the balancing assistant becomes `location` (BR-LOC10). The planner's `group_by=building` becomes `group_by=area`: the place's first level under the site, whatever its type (a building, a data center hall).
 
 Search: the full-text index of assets, work orders and plans gets the place path in place of `building`, kept up to date when a place is renamed or moved (the rows of its subtree are reindexed in the same transaction).
 
@@ -200,11 +200,11 @@ The import names a place by its **path** ("Paris La Défense HQ/Tower A/B1/Plant
 
 ## 12. Further choices (confirmed by the product owner, 2026-10-14)
 
-1. **Asset place on work orders and plans** (BR-L8): with an asset, the work order's place is the asset's, and only the details are free. The alternative is to let a work order name another place of the same site, for a problem near the asset rather than on it.
-2. **Renaming a site** (BR-L6) is refused once records name it, because `site` is copied into them. The alternative is a rename by an admin that rewrites every copy (records, users, blocked weeks, dashboard filters) in one transaction.
-3. **At most 8 levels** (BR-L3).
+1. **Asset place on work orders and plans** (BR-LOC8): with an asset, the work order's place is the asset's, and only the details are free. The alternative is to let a work order name another place of the same site, for a problem near the asset rather than on it.
+2. **Renaming a site** (BR-LOC6) is refused once records name it, because `site` is copied into them. The alternative is a rename by an admin that rewrites every copy (records, users, blocked weeks, dashboard filters) in one transaction.
+3. **At most 8 levels** (BR-LOC3).
 4. **Codes not reused** (BR-C3): a code given up by a recode is never proposed again. It can still be typed by hand.
 5. **`group_by=area`** in the year planner: the first level under the site stands for "building".
 6. **Order of places**: by name in natural order with the floor rule, with no manual ordering.
-7. **Only admins create sites** (BR-L6), while supervisors create every other place.
+7. **Only admins create sites** (BR-LOC6), while supervisors create every other place.
 8. **A work order's place is editable** by the team, offline included (versioned, conflicts), unlike the read-only room of D81.

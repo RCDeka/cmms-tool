@@ -13,24 +13,30 @@ const toAssetRef = (a) => ({
   code: a.code,
   name: a.name,
   site: a.site,
+  location_id: a.location_id,
+  place: a.place,
   category: a.category,
   status: a.status,
 });
 
 /**
- * Sites and users for the form dropdowns: from the server when online (and cached), else from
- * the cache. Technicians and staff cannot list users (403): they only get themselves.
+ * Sites, places and users for the forms: from the server when online (and cached), else from
+ * the cache. Technicians and staff cannot list users (403): they only get themselves. The
+ * location tree (D82) is cached whole, so the place pickers work offline.
  * @param {{ id: number, first_name: string, last_name: string, role: string }} user
- * @returns {Promise<{ sites: string[], users: object[] }>}
+ * @returns {Promise<{ sites: string[], users: object[], places: object | null }>}
  */
 export async function loadRefs(user) {
   let reference = await DB.getConfig('reference_data');
   let users = await DB.getConfig('assignable_users');
+  let places = await DB.getConfig('locations');
   const canListUsers = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (isOnline()) {
     try {
       reference = await apiFetch('/reference-data');
       await DB.setConfig('reference_data', reference);
+      places = await apiFetch('/locations');
+      await DB.setConfig('locations', places);
       if (canListUsers) {
         users = await apiFetch('/users');
         await DB.setConfig('assignable_users', users);
@@ -41,6 +47,7 @@ export async function loadRefs(user) {
   }
   return {
     sites: reference?.sites ?? [],
+    places: places ?? null,
     users: canListUsers
       ? (users ?? [])
       : [{ id: user.id, first_name: user.first_name, last_name: user.last_name, role: user.role }],

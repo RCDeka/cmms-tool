@@ -19,23 +19,6 @@ export function userRef(row, alias) {
     : { id, last_name: row[`${alias}__last_name`], first_name: row[`${alias}__first_name`] };
 }
 
-/** SELECT list for a room reference joined as `alias` (D81). */
-export const roomRefColumns = (alias) =>
-  `${alias}.id AS ${alias}__id, ${alias}.building AS ${alias}__building, ${alias}.floor AS ${alias}__floor, ${alias}.name AS ${alias}__name`;
-
-/** `{ id, building, floor, name }` or null when the record names no room. */
-export function roomRef(row, alias) {
-  const id = row[`${alias}__id`];
-  return id === null || id === undefined
-    ? null
-    : {
-        id,
-        building: row[`${alias}__building`],
-        floor: row[`${alias}__floor`],
-        name: row[`${alias}__name`],
-      };
-}
-
 /** Public user shape. Never includes password_hash. */
 export function toUser(row) {
   return {

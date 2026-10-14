@@ -18,6 +18,8 @@ let db;
 beforeEach(() => {
   ctx = createTestDb();
   db = ctx.db;
+  // The site the helpers below put their records on (location 1).
+  insert('locations', place({ id: 1, site_id: 1, level_type_id: 1, name: 'Test site' }));
 });
 afterEach(() => ctx.cleanup());
 
@@ -47,9 +49,12 @@ function copyDemoData(target, source) {
   target.pragma('foreign_keys = OFF');
   target.prepare('ATTACH DATABASE ? AS demo').run(source);
   for (const table of tables) {
+    // The columns both schemas have (an older one may have columns since removed).
+    const theirs = new Set(target.pragma(`demo.table_info(${table})`).map((c) => c.name));
     const columns = target
       .pragma(`table_info(${table})`)
       .map((c) => c.name)
+      .filter((c) => theirs.has(c))
       .join(', ');
     // Rows the migrations created (settings) are replaced by the demo ones.
     target.exec(
@@ -58,6 +63,25 @@ function copyDemoData(target, source) {
   }
   target.exec('DETACH DATABASE demo');
   target.pragma('foreign_keys = ON');
+}
+
+const place = (o = {}) => ({
+  parent_id: null,
+  created_at: '2026-10-14T08:00:00.000Z',
+  updated_at: '2026-10-14T08:00:00.000Z',
+  ...o,
+});
+/** Inserts `row` into `table` of `target`, an older schema, with the columns it has. */
+function insertInto(target, table, row) {
+  const known = new Set(target.pragma(`table_info(${table})`).map((c) => c.name));
+  const cols = Object.keys(row).filter((c) => known.has(c));
+  return Number(
+    target
+      .prepare(
+        `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map((c) => '@' + c).join(', ')})`,
+      )
+      .run(Object.fromEntries(cols.map((c) => [c, row[c]]))).lastInsertRowid,
+  );
 }
 
 let userSeq = 0;
@@ -74,6 +98,7 @@ const asset = (o = {}) => ({
   code: `AST-T${++assetSeq}`,
   name: 'Test asset',
   site: 'Test site',
+  location_id: 1,
   category: 'HVAC',
   criticality: 'LOW',
   status: 'IN_SERVICE',
@@ -87,6 +112,7 @@ const workOrder = (createdBy, o = {}) => ({
   priority: 'NORMAL',
   title: 'Test',
   site: 'Test site',
+  location_id: 1,
   created_on: '2026-10-01',
   created_by: createdBy,
   ...o,
@@ -98,6 +124,7 @@ const plan = (createdBy, o = {}) => ({
   type: 'PREVENTIVE',
   category: 'HVAC',
   site: 'Test site',
+  location_id: 1,
   estimated_hours: 2,
   frequency_weeks: 13,
   anchor_week: '2026-W42',
@@ -172,16 +199,7 @@ describe('migrations', () => {
       }
       const legacy = openDb(path.join(dir, 'legacy.sqlite'));
       runMigrations(legacy, dir);
-      const ins = (table, row) => {
-        const cols = Object.keys(row);
-        return Number(
-          legacy
-            .prepare(
-              `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map((c) => '@' + c).join(', ')})`,
-            )
-            .run(row).lastInsertRowid,
-        );
-      };
+      const ins = (table, row) => insertInto(legacy, table, row);
       const staff = ins('users', user({ role: 'STAFF' }));
       const tech = ins('users', user());
       const waiting = ins('work_orders', workOrder(staff));
@@ -245,8 +263,9 @@ describe('migrations', () => {
       }
       const legacy = openDb(path.join(dir, 'legacy.sqlite'));
       runMigrations(legacy, dir);
-      // Today's seed needs later tables (rooms, D81): seed the current schema, then copy the
-      // columns the old schema has.
+      // Today's seed needs later tables (locations, D82): seed the current schema, then copy
+      // the columns the old schema has.
+      db.prepare('DELETE FROM locations').run();
       await seedDatabase(db, { password: TEST_PASSWORD, today: '2026-10-14' });
       copyDemoData(legacy, db.name);
       const state = () => ({
@@ -286,6 +305,151 @@ describe('migrations', () => {
           .pluck()
           .all(),
       ).toEqual([id]);
+      legacy.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('moves the sites, buildings, floors and rooms into the location tree in 015 (D82)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-014-'));
+    try {
+      for (const name of listMigrations().filter((n) => n < '015')) {
+        fs.copyFileSync(path.join(MIGRATIONS, name), path.join(dir, name));
+      }
+      const legacy = openDb(path.join(dir, 'legacy.sqlite'));
+      runMigrations(legacy, dir);
+      const ins = (table, row) => insertInto(legacy, table, row);
+      const stamp = '2026-10-01T08:00:00.000Z';
+      const room = (o) => ({
+        site: 'Paris HQ',
+        building: 'Tower A',
+        floor: 'L12',
+        created_at: stamp,
+        updated_at: stamp,
+        ...o,
+      });
+      const tech = ins('users', user({ site: 'paris HQ' }));
+      const meeting = ins('rooms', room({ name: 'Meeting 12.01' }));
+      const kitchen = ins('rooms', room({ name: 'Kitchen', is_active: 0 }));
+      ins('rooms', room({ building: 'Tower B', floor: 'L3', name: 'Office' }));
+      const a = [
+        ins('assets', asset({ site: 'Paris HQ', building: 'Tower A', floor: 'L12' })),
+        ins(
+          'assets',
+          asset({
+            site: 'Paris HQ',
+            building: 'tower a',
+            floor: 'B1',
+            exact_location: 'North wall',
+          }),
+        ),
+        ins('assets', asset({ site: 'Paris HQ', building: ' ', floor: null })),
+        ins('assets', asset({ site: 'Lyon', building: null, floor: 'L0' })),
+        ins('assets', asset({ site: 'Lyon', building: 'Annex', floor: null })),
+      ];
+      const w = [
+        ins('work_orders', workOrder(tech, { site: 'Paris HQ', asset_id: a[1] })),
+        ins(
+          'work_orders',
+          workOrder(tech, { site: 'Paris HQ', room_id: meeting, location: 'desk 4' }),
+        ),
+        ins('work_orders', workOrder(tech, { site: 'Lyon', location: 'Garage door' })),
+        ins('work_orders', workOrder(tech, { site: 'Paris HQ', room_id: kitchen, title: 'Sink' })),
+      ];
+      const p = [
+        ins(
+          'maintenance_plans',
+          plan(tech, { site: 'Paris HQ', building: 'Tower A', asset_id: a[0] }),
+        ),
+        ins('maintenance_plans', plan(tech, { site: 'Lyon', building: 'Annex' })),
+        ins('maintenance_plans', plan(tech, { site: 'Saclay DC' })),
+      ];
+      ins('blocked_weeks', {
+        week: '2026-W52',
+        site: 'Marseille',
+        reason: 'Closed',
+        created_by: tech,
+        created_at: stamp,
+      });
+      ins(
+        'conflicts',
+        conflict(tech, {
+          entity_id: a[0],
+          server_snapshot: JSON.stringify({ name: 'X', building: 'Tower A', floor: 'L12' }),
+          client_changes: JSON.stringify({ name: 'Y', building: 'Tower B' }),
+        }),
+      );
+      fs.copyFileSync(
+        path.join(MIGRATIONS, '015_locations.sql'),
+        path.join(dir, '015_locations.sql'),
+      );
+      expect(runMigrations(legacy, dir)).toEqual(['015_locations.sql']);
+      expect(legacy.pragma('foreign_key_check')).toEqual([]);
+
+      const q = (sql, ...args) => legacy.prepare(sql).all(...args);
+      expect(q('SELECT id, name FROM locations WHERE parent_id IS NULL ORDER BY id')).toEqual([
+        { id: 1, name: 'Lyon' },
+        { id: 2, name: 'Marseille' },
+        { id: 3, name: 'Paris HQ' },
+        { id: 4, name: 'Saclay DC' },
+      ]);
+      const placeOf = (table, ids) =>
+        ids.map((id) => q(`SELECT site, place FROM ${table} WHERE id = ?`, id)[0]);
+      expect(placeOf('assets', a)).toEqual([
+        { site: 'Paris HQ', place: 'Tower A › L12' },
+        { site: 'Paris HQ', place: 'Tower A › B1' },
+        { site: 'Paris HQ', place: '' },
+        { site: 'Lyon', place: 'L0' },
+        { site: 'Lyon', place: 'Annex' },
+      ]);
+      expect(placeOf('work_orders', w)).toEqual([
+        { site: 'Paris HQ', place: 'Tower A › B1' },
+        { site: 'Paris HQ', place: 'Tower A › L12 › Meeting 12.01' },
+        { site: 'Lyon', place: '' },
+        { site: 'Paris HQ', place: 'Tower A › L12 › Kitchen' },
+      ]);
+      expect(placeOf('maintenance_plans', p)).toEqual([
+        { site: 'Paris HQ', place: 'Tower A › L12' },
+        { site: 'Lyon', place: 'Annex' },
+        { site: 'Saclay DC', place: '' },
+      ]);
+      // Each record points to the place its path names, with its type; rooms keep their state.
+      expect(
+        q(
+          `SELECT l.name, t.token, l.is_active, l.site_id FROM work_orders w
+           JOIN locations l ON l.id = w.location_id JOIN level_types t ON t.id = l.level_type_id
+           WHERE w.id IN (?, ?) ORDER BY w.id`,
+          w[1],
+          w[3],
+        ),
+      ).toEqual([
+        { name: 'Meeting 12.01', token: 'ROOM', is_active: 1, site_id: 3 },
+        { name: 'Kitchen', token: 'ROOM', is_active: 0, site_id: 3 },
+      ]);
+      expect(
+        q('SELECT name FROM locations WHERE level_type_id = 2 ORDER BY id').map((r) => r.name),
+      ).toEqual(['Annex', 'Tower A', 'Tower B']);
+      expect(q('SELECT exact_location FROM assets WHERE id = ?', a[1])[0].exact_location).toBe(
+        'North wall',
+      );
+      expect(q('SELECT location FROM work_orders WHERE id = ?', w[1])[0].location).toBe('desk 4');
+      expect(q('SELECT site FROM users WHERE id = ?', tech)[0].site).toBe('Paris HQ');
+      expect(q("SELECT name FROM sqlite_master WHERE name = 'rooms'")).toEqual([]);
+      const columns = (table) => legacy.pragma(`table_info(${table})`).map((c) => c.name);
+      expect(columns('assets')).not.toContain('building');
+      expect(columns('work_orders')).not.toContain('room_id');
+      expect(columns('maintenance_plans')).not.toContain('building');
+      const c = q('SELECT server_snapshot, client_changes FROM conflicts')[0];
+      expect(JSON.parse(c.server_snapshot)).toEqual({ name: 'X' });
+      expect(JSON.parse(c.client_changes)).toEqual({ name: 'Y' });
+      // The search finds the paths, and follows later changes.
+      const found = (table, word) =>
+        legacy.prepare(`SELECT rowid FROM ${table} WHERE ${table} MATCH ?`).pluck().all(word);
+      expect(found('assets_fts', 'tower')).toEqual([a[0], a[1]]);
+      expect(found('work_orders_fts', 'kitchen')).toEqual([w[3]]);
+      legacy.prepare("UPDATE work_orders SET place = 'Hangar' WHERE id = ?").run(w[2]);
+      expect(found('work_orders_fts', 'hangar')).toEqual([w[2]]);
       legacy.close();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -698,27 +862,73 @@ describe('integrity rules', () => {
     expect(() => insert('schedule_weeks', { ...week, week: 'W42' })).toThrow(/CHECK/);
   });
 
-  it('keeps rooms unique per floor, whatever the case, and work orders on known rooms (D81)', () => {
-    const room = (o = {}) => ({
-      site: 'Test site',
-      building: 'Tower A',
-      floor: 'L12',
-      name: 'Meeting room 12.01',
+  it('keeps places in one tree per site, unique among siblings (D82, BR-LOC1, BR-LOC2)', () => {
+    const building = insert(
+      'locations',
+      place({ parent_id: 1, site_id: 1, level_type_id: 2, name: 'Tower A', code: '2' }),
+    );
+    const floor = (o) => place({ parent_id: building, site_id: 1, level_type_id: 3, ...o });
+    insert('locations', floor({ name: 'L12', code: '12' }));
+    expect(() => insert('locations', floor({ name: 'l12' }))).toThrow(/UNIQUE/);
+    expect(() => insert('locations', floor({ name: 'L13', code: '12' }))).toThrow(/UNIQUE/);
+    insert('locations', floor({ name: 'L13' }));
+    insert('locations', floor({ name: 'L14' })); // several places without a code
+    insert('locations', place({ parent_id: 1, site_id: 1, level_type_id: 2, name: 'L12' }));
+    expect(() =>
+      insert('locations', place({ id: 50, site_id: 50, level_type_id: 1, name: 'TEST SITE' })),
+    ).toThrow(/UNIQUE/);
+    insert('locations', place({ id: 51, site_id: 51, level_type_id: 1, name: 'Other site' }));
+    for (const broken of [
+      { level_type_id: 1 }, // a site under a place
+      { parent_id: null, site_id: 52 }, // a root that is not a site
+      { name: ' ' },
+      { name: 'A › B' },
+      { code: 'ab' },
+      { code: 'A-1' },
+      { code: '12345678901' },
+      { is_active: 2 },
+    ]) {
+      expect(() => insert('locations', floor({ name: 'L20', ...broken }))).toThrow(/CHECK/);
+    }
+    expect(() =>
+      insert('locations', place({ id: 60, site_id: 1, level_type_id: 1, name: 'S' })),
+    ).toThrow(/CHECK/);
+    expect(() => insert('locations', floor({ name: 'L21', level_type_id: 99 }))).toThrow(
+      /FOREIGN KEY/,
+    );
+    const u = insert('users', user());
+    expect(() => insert('work_orders', workOrder(u, { location_id: 9999 }))).toThrow(/FOREIGN KEY/);
+    expect(() => insert('assets', asset({ location_id: null }))).toThrow(/NOT NULL/);
+  });
+
+  it('keeps level types named once, with the site type always there (D82)', () => {
+    const type = (o) => ({
       created_at: '2026-10-14T08:00:00.000Z',
       updated_at: '2026-10-14T08:00:00.000Z',
       ...o,
     });
-    const id = insert('rooms', room());
-    expect(() => insert('rooms', room({ name: 'MEETING ROOM 12.01' }))).toThrow(/UNIQUE/);
-    expect(() => insert('rooms', room({ building: 'tower a' }))).toThrow(/UNIQUE/);
-    insert('rooms', room({ floor: 'L13' }));
-    insert('rooms', room({ site: 'Other site' }));
-    for (const blank of [{ name: ' ' }, { building: '' }, { floor: '' }, { is_active: 2 }]) {
-      expect(() => insert('rooms', room({ name: 'Other', ...blank }))).toThrow(/CHECK/);
+    expect(db.prepare('SELECT token FROM level_types ORDER BY id').pluck().all()).toEqual([
+      'SITE',
+      'BUILDING',
+      'FLOOR',
+      'ROOM',
+    ]);
+    insert('level_types', type({ name: 'Technical room', token: 'TECH_ROOM' }));
+    expect(() => insert('level_types', type({ name: 'technical ROOM', token: 'TR' }))).toThrow(
+      /UNIQUE/,
+    );
+    expect(() => insert('level_types', type({ name: 'Zone', token: 'TECH_ROOM' }))).toThrow(
+      /UNIQUE/,
+    );
+    for (const token of ['zone', '1ZONE', 'ZO-NE', 'Z'.repeat(21)]) {
+      expect(() => insert('level_types', type({ name: 'Zone', token }))).toThrow(/CHECK/);
     }
-    const u = insert('users', user());
-    insert('work_orders', workOrder(u, { room_id: id }));
-    expect(() => insert('work_orders', workOrder(u, { room_id: 9999 }))).toThrow(/FOREIGN KEY/);
+    expect(() => db.prepare('UPDATE level_types SET is_active = 0 WHERE id = 1').run()).toThrow(
+      /CHECK/,
+    );
+    expect(() => db.prepare("UPDATE level_types SET token = 'SITES' WHERE id = 1").run()).toThrow(
+      /CHECK/,
+    );
   });
 
   it('keeps one row of planning settings with bounded values (P16)', () => {

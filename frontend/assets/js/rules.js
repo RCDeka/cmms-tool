@@ -18,8 +18,7 @@ export const TRANSITIONS = {
 const ASSET_FIELDS = [
   'name',
   'site',
-  'building',
-  'floor',
+  'location_id',
   'category',
   'subcategory',
   'criticality',
@@ -43,6 +42,7 @@ const WORK_ORDER_FIELDS = [
   'description',
   'asset_id',
   'site',
+  'location_id',
   'location',
   'category',
   'assignee_id',
@@ -78,7 +78,7 @@ export const CREATION_FIELDS = {
     'type',
     'priority',
     'asset_id',
-    'site',
+    'location_id',
     'location',
     'category',
     'description',
@@ -90,7 +90,7 @@ export const CREATION_FIELDS = {
     'type',
     'priority',
     'asset_id',
-    'site',
+    'location_id',
     'location',
     'category',
     'description',
@@ -106,9 +106,7 @@ CREATION_FIELDS.ADMIN = CREATION_FIELDS.SUPERVISOR;
 export const ASSET_CREATION_FIELDS = [
   'code',
   'name',
-  'site',
-  'building',
-  'floor',
+  'location_id',
   'exact_location',
   'category',
   'subcategory',
@@ -192,9 +190,10 @@ export function checkBeforeSave(entity, record, changes) {
 /** Checks of the asset creation form, before asking the server. */
 export function checkBeforeCreateAsset(values) {
   const errors = {};
-  for (const field of ['name', 'site', 'category', 'criticality']) {
+  for (const field of ['name', 'category', 'criticality']) {
     if (!String(values[field] ?? '').trim()) errors[field] = 'Required';
   }
+  if (!values.location_id) errors.location_id = 'Required';
   if (values.code && !/^[A-Z0-9][A-Z0-9-]{1,49}$/.test(values.code.trim().toUpperCase())) {
     errors.code = 'Capitals, digits and hyphens only, 2 to 50 characters';
   }
@@ -206,6 +205,8 @@ export function checkBeforeCreate(values) {
   const errors = {};
   if (!String(values.title ?? '').trim()) errors.title = 'Required';
   if (!values.type) errors.type = 'Required';
-  if (!values.asset_id && !values.site) errors.site = 'Choose an asset or a site';
+  if (!values.asset_id && !values.location_id) {
+    errors.location_id = 'Choose an asset or a place';
+  }
   return errors;
 }

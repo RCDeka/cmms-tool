@@ -8,6 +8,7 @@ import { h, replaceChildren } from './dom.js';
 import { CATEGORIES, PERFORMERS, PLAN_TYPES, SCHEDULE_MODES } from './enums.js';
 import { formatDateTime, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { placeIndex, placeOf, placePicker } from './places.js';
 import { formatHours, formatLoad, occurrenceBadge, planWarningText } from './planning.js';
 import { allowedWeeks, moveBlocker } from './planning-rules.js';
 
@@ -44,8 +45,8 @@ export function planBody(raw, { editing, assetId }) {
     type: raw.type,
     category: raw.category || null,
     asset_id: assetId,
-    site: assetId ? undefined : text(raw.site) || null,
-    building: assetId ? undefined : text(raw.building) || null,
+    // Without an asset, the place chosen (D82); with one, the asset's (BR-LOC8).
+    location_id: assetId ? undefined : (raw.location_id ?? null),
     location: text(raw.location) || null,
     estimated_hours: number(raw.estimated_hours),
     frequency_weeks: number(raw.frequency_weeks),
@@ -74,7 +75,7 @@ export function planBody(raw, { editing, assetId }) {
 export function checkPlanForm(body, { hasAssetCode }) {
   const errors = {};
   if (!body.title) errors.title = 'Required';
-  if (!hasAssetCode && !body.site) errors.site = 'Choose an asset or a site';
+  if (!hasAssetCode && !body.location_id) errors.location_id = 'Choose an asset or a place';
   if (!hasAssetCode && !body.category) errors.category = 'Required without an asset';
   if (
     !(body.estimated_hours > 0) ||
@@ -351,8 +352,8 @@ export function renderPlanPanel(
           : null,
       ),
       field('Site', plan.site),
-      field('Building', plan.building),
-      field('Location', plan.location),
+      field('Place', plan.place),
+      field('Exact location', plan.location),
       field('Hours per visit', [formatHours(plan.estimated_hours), warning ? ` ⚠ ${warning}` : '']),
       field('Frequency', frequencyText(plan.frequency_weeks)),
       field('First visit', formatWeek(plan.anchor_week)),
@@ -410,12 +411,12 @@ export function renderPlanPanel(
 /**
  * Plan form in the side panel: creation (`plan` null) or edition.
  * @param {HTMLElement} container
- * @param {{ plan: object | null, sites: string[], onClose: () => void,
+ * @param {{ plan: object | null, sites: string[], places: object | null, onClose: () => void,
  *   onSubmit: (values: object, form: HTMLFormElement, assetCode: string) => void }} options
  */
 export function renderPlanForm(
   container,
-  { plan, sites, defaultWeek, onClose, onSubmit, pickAsset },
+  { plan, sites, places, defaultWeek, onClose, onSubmit, pickAsset },
 ) {
   const editing = Boolean(plan);
   const input = (name, attrs = {}) =>
@@ -441,7 +442,7 @@ export function renderPlanForm(
   // The chosen asset in words, so the user sees what the code stands for.
   const describe = (asset) =>
     asset
-      ? `${asset.code} — ${asset.name}, ${[asset.site, asset.building].filter(Boolean).join(' · ')}`
+      ? `${asset.code} — ${asset.name}, ${[asset.site, asset.place].filter(Boolean).join(' · ')}`
       : '';
   const assetName = h(
     'p',
@@ -457,7 +458,8 @@ export function renderPlanForm(
       type: 'button',
       class: 'button button-secondary online-only',
       onClick: async () => {
-        const site = form.elements.site.value.trim();
+        const chosen = place.value();
+        const site = chosen ? placeOf(index, chosen).site : '';
         const asset = await pickAsset({
           ...(form.elements.category.value && { category: form.elements.category.value }),
           ...(sites.includes(site) && { site }),
@@ -465,9 +467,8 @@ export function renderPlanForm(
         if (!asset) return;
         assetCode.value = asset.code;
         assetName.textContent = describe(asset);
-        // The site and building follow the asset (BR-P9): clear the typed ones.
-        form.elements.site.value = '';
-        form.elements.building.value = '';
+        // The place follows the asset (BR-P9, BR-LOC8): clear the chosen one.
+        place.set(null);
         assetCode.setAttribute('aria-invalid', 'false');
         assetCode.focus();
       },
@@ -484,11 +485,10 @@ export function renderPlanForm(
   performer.addEventListener('change', () => {
     supplierRow.hidden = performer.value !== 'CONTRACTOR';
   });
-  const siteList = h(
-    'datalist',
-    { id: 'p-site-list' },
-    sites.map((s) => h('option', { value: s })),
-  );
+  // Without an asset, a place of the cached tree (D82).
+  const index = placeIndex(places);
+  const place = placePicker({ id: 'p-location_id', index });
+  place.set(plan && !plan.asset ? plan.location_id : null);
   const frequencyList = h(
     'datalist',
     { id: 'p-frequency-list' },
@@ -499,7 +499,7 @@ export function renderPlanForm(
     : null;
 
   const assetRow = formRow('p-asset_code', 'Asset code', assetCode, {
-    hint: 'Type a code or browse the assets. The site, building and trade then follow the asset.',
+    hint: 'Type a code or browse the assets. The place and trade then follow the asset.',
   });
   const pick = h('div', { class: 'asset-pick' });
   assetCode.before(pick);
@@ -514,6 +514,7 @@ export function renderPlanForm(
       onSubmit: (event) => {
         event.preventDefault();
         const raw = Object.fromEntries(new FormData(form));
+        raw.location_id = place.value();
         if (active) raw.is_active = active.checked;
         onSubmit(raw, form, assetCode.value.trim());
       },
@@ -537,10 +538,18 @@ export function renderPlanForm(
       },
     ),
     assetRow,
-    formRow('p-site', 'Site', input('site', { list: 'p-site-list', maxlength: '200' }), {
-      hint: 'Without an asset.',
-    }),
-    formRow('p-building', 'Building', input('building', { maxlength: '100' })),
+    h(
+      'div',
+      { class: 'form-row' },
+      h('label', { for: 'p-location_id' }, 'Place'),
+      h(
+        'div',
+        { class: 'form-control' },
+        place.element,
+        h('p', { class: 'field-hint' }, 'Without an asset: the site, or a place in it.'),
+        h('p', { id: 'p-location_id-error', class: 'field-error' }),
+      ),
+    ),
     formRow(
       'p-category',
       'Trade',
@@ -550,7 +559,7 @@ export function renderPlanForm(
         { empty: "The asset's trade" },
       ),
     ),
-    formRow('p-location', 'Location', input('location', { maxlength: '200' })),
+    formRow('p-location', 'Exact location', input('location', { maxlength: '200' })),
     formRow(
       'p-estimated_hours',
       'Hours per visit',
@@ -639,7 +648,6 @@ export function renderPlanForm(
           hint: 'An inactive plan keeps its history and creates no more visits.',
         })
       : null,
-    siteList,
     frequencyList,
     h(
       'div',

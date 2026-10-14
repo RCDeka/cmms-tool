@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { TEMPLATES, WIDGET_KEYS } from '../../src/rules/dashboards.js';
 import { NOW, TEST_CONFIG, expectNoSecrets } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 // Widgets switched on or off by the administrators (D65). Its own database: switching a
 // widget off changes what every other dashboard test would see.
@@ -17,6 +17,7 @@ const tokens = {};
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   const user = db.prepare(
@@ -27,7 +28,8 @@ beforeAll(async () => {
   user.run(3, 'sup2', hash, 'Sue', 'Sup', 'SUPERVISOR');
   user.run(4, 'tech1', hash, 'Tia', 'Tech', 'TECHNICIAN');
   db.prepare(
-    "INSERT INTO assets (id, code, name, site, category, criticality, status) VALUES (1, 'AST-0001', 'A', 'Paris', 'HVAC', 'LOW', 'BROKEN_DOWN')",
+    `INSERT INTO assets (id, code, name, site, location_id, category, criticality, status)
+     VALUES (1, 'AST-0001', 'A', 'Paris', ${SITE_ID("'Paris'")}, 'HVAC', 'LOW', 'BROKEN_DOWN')`,
   ).run();
 
   app = createApp({

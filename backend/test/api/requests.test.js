@@ -42,6 +42,8 @@ const REQUEST_KEYS = [
   'title',
   'description',
   'site',
+  'location_id',
+  'place',
   'location',
   'category',
   'created_on',
@@ -56,7 +58,6 @@ const REQUEST_KEYS = [
   'created_at',
   'updated_at',
   'assignee',
-  'room',
   'comment_count',
   'last_comment_at',
 ].sort();
@@ -221,7 +222,7 @@ describe('POST /api/requests', () => {
     // The maintenance team sees it as a work order, location included.
     const wo = await get('supervisor1', `/api/work-orders/${row.id}`).expect(200);
     expect(wo.body).toMatchObject({ location: body.location, created_by: { id: userId('user1') } });
-    // Logged like any creation (BR-L1).
+    // Logged like any creation (BR-LOC1).
     expect(
       one(
         "SELECT count(*) FROM audit_log WHERE entity_type = 'work_orders' AND entity_id = ? AND action = 'CREATE'",

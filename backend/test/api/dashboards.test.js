@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { MAX_DASHBOARDS, TEMPLATES } from '../../src/rules/dashboards.js';
 import { NOW, TEST_CONFIG, expectNoSecrets } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 /**
  * Hand-made dataset, values computed by hand. Today is 2026-10-04 (Europe/Paris); the
@@ -31,6 +31,7 @@ const tokens = {};
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   const user = db.prepare(
@@ -42,17 +43,22 @@ beforeAll(async () => {
   user.run(4, 'tech1', hash, 'Tia', 'Tech', 'TECHNICIAN');
   user.run(6, 'staff', hash, 'Stan', 'Staff', 'STAFF');
 
+  // The site and its place (D82) from one parameter.
   const asset = db.prepare(
-    "INSERT INTO assets (id, code, name, site, category, criticality, status) VALUES (?, ?, 'A', ?, ?, 'LOW', ?)",
+    `INSERT INTO assets (id, code, name, site, location_id, category, criticality, status)
+     SELECT v.column1, v.column2, 'A', v.column3, ${SITE_ID('v.column3')}, v.column4, 'LOW', v.column5
+     FROM (VALUES (?, ?, ?, ?, ?)) v`,
   );
   asset.run(1, 'AST-0001', 'Paris', 'HVAC', 'BROKEN_DOWN');
   asset.run(2, 'AST-0002', 'Lyon', 'ELECTRICAL', 'BROKEN_DOWN');
   asset.run(3, 'AST-0003', 'Paris', 'HVAC', 'IN_SERVICE');
 
   const wo = db.prepare(`INSERT INTO work_orders
-    (id, number, type, status, priority, title, site, category, assignee_id, created_on, due_on,
-     started_on, closed_on, work_report, review_status, created_by, created_at, updated_at)
-    VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, @site, @category, @assignee,
+    (id, number, type, status, priority, title, site, location_id, category, assignee_id,
+     created_on, due_on, started_on, closed_on, work_report, review_status, created_by, created_at,
+     updated_at)
+    VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, @site, ${SITE_ID('@site')},
+     @category, @assignee,
      @created_on, @due_on, @started_on, @closed_on, @report, @review, 2, @at, @at)`);
   const rows = [
     [1, 'OPEN', 'Paris', 'HVAC', 2, '2026-10-01', '2026-10-03', null, null, 'NORMAL', null],

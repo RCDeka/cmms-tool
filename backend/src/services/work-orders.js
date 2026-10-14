@@ -19,9 +19,9 @@ import {
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
-import { roomRef, roomRefColumns, toBool, userRef, userRefColumns } from './mappers.js';
+import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
-import { addInFilter } from '../lib/list-filter.js';
+import { addInFilter, addPlaceFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { followWorkOrder } from './occurrences.js';
 import { releasedWeekBlocker } from '../rules/planning.js';
@@ -36,6 +36,7 @@ const createSchema = z.strictObject({
   description: WORK_ORDER_FIELDS.description.optional(),
   asset_id: WORK_ORDER_FIELDS.asset_id.optional(),
   site: WORK_ORDER_FIELDS.site.optional(),
+  location_id: WORK_ORDER_FIELDS.location_id.optional(),
   location: WORK_ORDER_FIELDS.location.optional(),
   category: WORK_ORDER_FIELDS.category.optional(),
   assignee_id: WORK_ORDER_FIELDS.assignee_id.optional(),
@@ -77,6 +78,8 @@ const FIELDS = [
   'description',
   'asset_id',
   'site',
+  'location_id',
+  'place',
   'location',
   'category',
   'assignee_id',
@@ -96,7 +99,6 @@ const FIELDS = [
   'review_note',
   'plan_id',
   'planned_week',
-  'room_id',
   'created_at',
   'updated_at',
 ];
@@ -104,7 +106,7 @@ const FIELDS = [
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
     a.id AS a__id, a.code AS a__code, a.name AS a__name, a.site AS a__site, a.status AS a__status,
     ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')},
-    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title, ${roomRefColumns('rm')}
+    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title
   FROM work_orders w
   LEFT JOIN assets a ON a.id = w.asset_id
   LEFT JOIN users asg ON asg.id = w.assignee_id
@@ -112,8 +114,7 @@ const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
   LEFT JOIN users cb ON cb.id = w.created_by
   LEFT JOIN users ub ON ub.id = w.updated_by
   LEFT JOIN users rv ON rv.id = w.reviewed_by
-  LEFT JOIN maintenance_plans pl ON pl.id = w.plan_id
-  LEFT JOIN rooms rm ON rm.id = w.room_id`;
+  LEFT JOIN maintenance_plans pl ON pl.id = w.plan_id`;
 
 /** Whitelisted sort keys (docs/api-design.md → GET /api/work-orders). */
 export const WORK_ORDER_SORTS = {
@@ -162,7 +163,6 @@ export function toWorkOrder(row) {
   wo.reviewed_by = userRef(row, 'rv');
   wo.plan =
     row.plan_id === null ? null : { id: row.plan_id, code: row.pl__code, title: row.pl__title };
-  wo.room = roomRef(row, 'rm');
   return wo;
 }
 
@@ -180,6 +180,7 @@ export function workOrderFilters(
     type,
     category,
     site,
+    location,
     assignee_id: assigneeId,
     mine,
     overdue,
@@ -203,6 +204,7 @@ export function workOrderFilters(
   addInFilter(where, params, 'w.type', 'type', type);
   addInFilter(where, params, 'w.category', 'category', category);
   addInFilter(where, params, 'w.site', 'site', site);
+  addPlaceFilter(where, params, 'w.location_id', 'location', location);
   addInFilter(where, params, 'w.assignee_id', 'assignee', assigneeId);
   if (mine) {
     where.push('w.assignee_id = @me');
@@ -230,8 +232,11 @@ function countsFor(values, rows, key) {
   return values.map((v) => ({ [key]: v, count: byValue.get(v) ?? 0 }));
 }
 
-/** @param {import('better-sqlite3').Database} db */
-export function createWorkOrderService(db) {
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ locations: ReturnType<import('./locations.js').createLocationService> }} deps
+ */
+export function createWorkOrderService(db, { locations }) {
   const byId = db.prepare(`${SELECT} WHERE w.id = ?`);
   const getById = (id) => {
     const row = byId.get(id);
@@ -241,7 +246,9 @@ export function createWorkOrderService(db) {
   const openAssigned = db.prepare(
     `${SELECT} WHERE w.assignee_id = ? AND w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')`,
   );
-  const assetById = db.prepare('SELECT id, site, category FROM assets WHERE id = ?');
+  const assetById = db.prepare(
+    'SELECT id, site, location_id, place, category FROM assets WHERE id = ?',
+  );
   const visitOf = db.prepare('SELECT * FROM plan_occurrences WHERE work_order_id = ?');
   const planOf = db.prepare('SELECT * FROM maintenance_plans WHERE id = ?');
   // Only active people can be assigned or supervise (BR-W3, BR-U7).
@@ -261,20 +268,29 @@ export function createWorkOrderService(db) {
     .pluck();
 
   /**
-   * BR-W2 (site follows the asset) and BR-W3 (eligible people) on the record as it will be.
+   * BR-W2 and BR-LOC8 (the place follows the asset), BR-LOC5 and BR-LOC7 (the place, its site and
+   * path) and BR-W3 (eligible people) on the record as it will be.
    * @param {object} after record after the change
    * @param {object} sent fields sent by the client
-   * @returns {object} fields to add to the change (the asset's site)
+   * @param {object | null} current the stored row (null at creation)
+   * @returns {object} fields to add to the change (the place's columns)
    */
-  function checkReferences(after, sent) {
-    const derived = {};
+  function checkReferences(after, sent, current = null) {
+    let derived = {};
     if (after.asset_id !== null && after.asset_id !== undefined) {
       const asset = assetById.get(after.asset_id);
       if (!asset) throw ruleError({ rule: 'BR-W2', message: 'This asset does not exist.' });
       if ('site' in sent && sent.site !== asset.site) {
         throw ruleError({ rule: 'BR-W2', message: "The site must be the asset's site." });
       }
-      if (after.site !== asset.site) derived.site = asset.site;
+      if ('location_id' in sent && sent.location_id !== asset.location_id) {
+        throw ruleError({ rule: 'BR-LOC8', message: "The place must be the asset's place." });
+      }
+      if (after.location_id !== asset.location_id || after.place !== asset.place) {
+        derived = { location_id: asset.location_id, site: asset.site, place: asset.place };
+      }
+    } else {
+      derived = locations.derive(sent, current) ?? {};
     }
     if ('assignee_id' in sent && sent.assignee_id !== null) {
       if (!['TECHNICIAN', 'SUPERVISOR'].includes(roleOf.get(sent.assignee_id))) {
@@ -314,7 +330,7 @@ export function createWorkOrderService(db) {
       const blocker = occurrence && releasedWeekBlocker(plan, occurrence, changes.planned_week);
       if (blocker) throw ruleError(blocker);
     }
-    const derived = checkReferences({ ...current, ...workflow.changes }, changes);
+    const derived = checkReferences({ ...current, ...workflow.changes }, changes, current);
     return { ...workflow.changes, ...derived };
   }
   const groupBy = (expression) =>
@@ -333,7 +349,6 @@ export function createWorkOrderService(db) {
       client_id: null,
       plan_id: null,
       planned_week: null,
-      room_id: null,
       ...row,
       number: nextWorkOrderNumber(year, highestNumber.get(year)),
     };
@@ -342,13 +357,13 @@ export function createWorkOrderService(db) {
         .prepare(
           `INSERT INTO work_orders
             (number, client_id, type, status, priority, title, description, asset_id, site,
-             location, category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
-             created_by, updated_by, review_status, plan_id, planned_week, room_id, created_at,
-             updated_at)
+             location_id, place, location, category, assignee_id, supervisor_id, created_on,
+             due_on, estimated_hours, created_by, updated_by, review_status, plan_id,
+             planned_week, created_at, updated_at)
            VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
-             @asset_id, @site, @location, @category, @assignee_id, @supervisor_id, @created_on,
-             @due_on, @estimated_hours, @created_by, @updated_by, @review_status, @plan_id,
-             @planned_week, @room_id, @stamp, @stamp)`,
+             @asset_id, @site, @location_id, @place, @location, @category, @assignee_id,
+             @supervisor_id, @created_on, @due_on, @estimated_hours, @created_by, @updated_by,
+             @review_status, @plan_id, @planned_week, @stamp, @stamp)`,
         )
         .run({ ...values, stamp }).lastInsertRowid,
     );
@@ -455,13 +470,16 @@ export function createWorkOrderService(db) {
      * work order instead of creating a second one (BR-W11, D26).
      * @returns {{ created: boolean, item: object }}
      */
-    create(body, user, { now, timeZone }, { reviewStatus = null, roomId = null } = {}) {
+    create(body, user, { now, timeZone }, { reviewStatus = null, place = null } = {}) {
       const parsed = createSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
       const input = parsed.data;
-      if ((input.asset_id === undefined || input.asset_id === null) && !input.site) {
-        const message = 'An asset or a site is required';
-        throw new HttpError(400, 'Invalid body', { fields: { asset_id: message, site: message } });
+      const hasAsset = input.asset_id !== undefined && input.asset_id !== null;
+      if (!hasAsset && !input.site && input.location_id === undefined && !place) {
+        const message = 'An asset or a place is required';
+        throw new HttpError(400, 'Invalid body', {
+          fields: { asset_id: message, location_id: message, site: message },
+        });
       }
       const notAllowed = forbiddenCreationFields(user, input);
       if (notAllowed.length) {
@@ -483,6 +501,8 @@ export function createWorkOrderService(db) {
             description: null,
             asset_id: null,
             site: null,
+            location_id: null,
+            place: null,
             location: null,
             category: null,
             assignee_id: user.role === 'TECHNICIAN' ? user.id : null,
@@ -495,10 +515,11 @@ export function createWorkOrderService(db) {
             created_by: user.id,
             updated_by: user.id,
             review_status: reviewStatus,
-            room_id: roomId,
+            // A staff request's place, already checked (BR-LOC9).
+            ...place,
           };
           if (user.role === 'TECHNICIAN') row.assignee_id = user.id;
-          Object.assign(row, checkReferences(row, fields));
+          Object.assign(row, checkReferences(row, place ? {} : fields));
           if (row.asset_id !== null && !('category' in fields)) {
             row.category = assetById.get(row.asset_id).category;
           }

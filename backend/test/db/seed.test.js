@@ -48,6 +48,7 @@ describe('seedDatabase', () => {
       pastWorkOrders: 113,
       pastBlocks: 59,
       requests: 7,
+      places: 414,
       rooms: 333,
       plans: 62,
       allocations: 68,
@@ -56,12 +57,60 @@ describe('seedDatabase', () => {
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
   });
 
-  it('gives a room to the staff requests sent from a listed room (D81)', () => {
+  it('gives a room to the staff requests sent from a listed room (D81, D82)', () => {
     expect(
-      count(`SELECT count(*) FROM work_orders w JOIN rooms r ON r.id = w.room_id
-             WHERE r.site = w.site AND w.review_status IS NOT NULL`),
+      count(`SELECT count(*) FROM work_orders w JOIN locations l ON l.id = w.location_id
+             JOIN locations s ON s.id = l.site_id
+             WHERE l.level_type_id = 4 AND s.name = w.site AND w.review_status IS NOT NULL`),
     ).toBe(6);
-    expect(count('SELECT count(*) FROM work_orders WHERE room_id IS NOT NULL')).toBe(6);
+    expect(
+      count(
+        'SELECT count(*) FROM work_orders w JOIN locations l ON l.id = w.location_id WHERE l.level_type_id = 4',
+      ),
+    ).toBe(6);
+  });
+
+  it('builds the location tree: 5 sites, their buildings, floors and rooms, with codes (D82)', () => {
+    expect(all('SELECT level_type_id, count(*) AS n FROM locations GROUP BY 1')).toEqual([
+      { level_type_id: 1, n: 5 },
+      { level_type_id: 2, n: 8 },
+      { level_type_id: 3, n: 68 },
+      { level_type_id: 4, n: 333 },
+    ]);
+    expect(
+      all(`SELECT b.code AS building, f.code AS floor FROM locations f JOIN locations b ON b.id = f.parent_id
+           WHERE b.name = 'Tower B' AND f.name IN ('B1', 'L0', 'L12') ORDER BY f.id`),
+    ).toEqual([
+      { building: '2', floor: '01' },
+      { building: '2', floor: '10' },
+      { building: '2', floor: '22' },
+    ]);
+    expect(count('SELECT count(*) FROM locations WHERE parent_id IS NULL AND code IS NULL')).toBe(
+      0,
+    );
+    // Every record stores its site and the path below it, as the services do.
+    for (const table of ['assets', 'work_orders', 'maintenance_plans']) {
+      expect(
+        count(`WITH RECURSIVE p (id, site, place) AS (
+                 SELECT id, name, '' FROM locations WHERE parent_id IS NULL
+                 UNION ALL
+                 SELECT l.id, p.site, CASE WHEN p.place = '' THEN l.name ELSE p.place || ' › ' || l.name END
+                 FROM locations l JOIN p ON l.parent_id = p.id)
+               SELECT count(*) FROM ${table} r JOIN p ON p.id = r.location_id
+               WHERE r.site <> p.site OR r.place <> p.place`),
+      ).toBe(0);
+    }
+    // Assets are on floors; work orders on an asset are at its place (BR-LOC8).
+    expect(
+      count(
+        'SELECT count(*) FROM assets a JOIN locations l ON l.id = a.location_id WHERE l.level_type_id <> 3',
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        'SELECT count(*) FROM work_orders w JOIN assets a ON a.id = w.asset_id WHERE w.location_id <> a.location_id',
+      ),
+    ).toBe(0);
   });
 
   it('creates the documented users, with power_user for supervisors and the admin (D21)', async () => {
@@ -216,11 +265,11 @@ describe('seedDatabase', () => {
     expect(count('SELECT count(*) FROM maintenance_plans WHERE season_from_week IS NOT NULL')).toBe(
       2,
     );
-    // Plans follow their asset (BR-P9) and are logged at creation.
+    // Plans follow their asset (BR-P9, BR-LOC8) and are logged at creation.
     expect(
       count(
         `SELECT count(*) FROM maintenance_plans p JOIN assets a ON a.id = p.asset_id
-         WHERE p.site <> a.site OR p.building IS NOT a.building OR p.category <> a.category`,
+         WHERE p.site <> a.site OR p.location_id <> a.location_id OR p.category <> a.category`,
       ),
     ).toBe(0);
     expect(count("SELECT count(*) FROM audit_log WHERE entity_type = 'maintenance_plans'")).toBe(
@@ -288,7 +337,7 @@ describe('seedDatabase', () => {
       expect(day >= 1 && day <= 5).toBe(true);
     }
     expect(new Set(blocks.map((b) => b.planned_week)).size).toBeGreaterThanOrEqual(5);
-    // Each history work order and visit change has its audit entry (BR-L4).
+    // Each history work order and visit change has its audit entry (BR-LOC4).
     expect(
       count(
         `SELECT count(*) FROM work_orders w WHERE w.plan_id IS NOT NULL AND NOT EXISTS (

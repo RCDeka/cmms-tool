@@ -34,13 +34,14 @@ const optionalDate = z.preprocess(blankToNull, isoDate.nullable());
 
 const hours = z.number().min(0).max(10_000).nullable();
 const optionalId = z.number().int().positive().nullable();
+/** A place of the location tree (D82); `site` alone means the site itself (BR-LOC7). */
+const placeId = z.number().int().positive();
 
 /** Editable asset fields and their value schemas. */
 export const ASSET_FIELDS = {
   name: requiredText(200),
   site: requiredText(200),
-  building: optionalText(100),
-  floor: optionalText(50),
+  location_id: placeId,
   category: z.enum(CATEGORIES),
   subcategory: optionalText(150),
   criticality: z.enum(CRITICALITIES),
@@ -72,6 +73,7 @@ export const WORK_ORDER_FIELDS = {
   description: optionalText(4000),
   asset_id: optionalId,
   site: requiredText(200),
+  location_id: placeId,
   location: optionalText(200),
   category: z.enum(CATEGORIES).nullable(),
   assignee_id: optionalId,
@@ -99,7 +101,7 @@ export const PLAN_FIELDS = {
   category: z.enum(CATEGORIES),
   asset_id: optionalId,
   site: requiredText(200),
-  building: optionalText(100),
+  location_id: placeId,
   location: optionalText(200),
   estimated_hours: halfHours(200),
   frequency_weeks: z.number().int().min(1).max(104),
@@ -129,7 +131,8 @@ export const EDITABLE_FIELDS = { assets: ASSET_FIELDS, work_orders: WORK_ORDER_F
  * Includes the nested objects of the GET shape, so a client can send back what it received.
  */
 export const READ_ONLY_FIELDS = {
-  assets: ['id', 'code', 'has_conflict', 'updated_by', 'created_at', 'updated_at'],
+  // `place` is the path of `location_id`, kept by the server (D82).
+  assets: ['id', 'code', 'place', 'has_conflict', 'updated_by', 'created_at', 'updated_at'],
   work_orders: [
     'id',
     'number',
@@ -140,6 +143,7 @@ export const READ_ONLY_FIELDS = {
     'updated_by',
     'created_at',
     'updated_at',
+    'place',
     'asset',
     'assignee',
     'supervisor',
@@ -151,9 +155,6 @@ export const READ_ONLY_FIELDS = {
     // Set by the release of a plan's visit (D48); planned_week is editable since D55.
     'plan_id',
     'plan',
-    // Picked by the requester (D81); the team corrects the place in `location`.
-    'room_id',
-    'room',
   ],
 };
 

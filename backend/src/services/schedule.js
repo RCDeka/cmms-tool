@@ -108,11 +108,10 @@ const BLOCK_SELECT = `SELECT al.*, ${userRefColumns('lb')},
     w.number AS w__number, w.title AS w__title, w.site AS w__site, w.status AS w__status,
     w.priority AS w__priority, w.category AS w__category, w.type AS w__type,
     w.location AS w__location, w.estimated_hours AS w__estimated_hours,
-    w.assignee_id AS w__assignee_id, a.building AS w__building
+    w.assignee_id AS w__assignee_id, w.place AS w__place
   FROM allocations al
   LEFT JOIN users lb ON lb.id = al.locked_by
-  LEFT JOIN work_orders w ON w.id = al.work_order_id
-  LEFT JOIN assets a ON a.id = w.asset_id`;
+  LEFT JOIN work_orders w ON w.id = al.work_order_id`;
 
 /** Row → Block shape (docs/api-design.md → Block). */
 function toBlock(row) {
@@ -128,7 +127,7 @@ function toBlock(row) {
             number: row.w__number,
             title: row.w__title,
             site: row.w__site,
-            building: row.w__building,
+            place: row.w__place,
             location: row.w__location,
             status: row.w__status,
             priority: row.w__priority,
@@ -271,14 +270,13 @@ export function createScheduleService(db, { workOrders, planning }) {
       .prepare(
         `SELECT w.id, w.number, w.title, w.type, w.status, w.priority, w.category, w.site,
            w.location, w.due_on, w.estimated_hours, w.planned_week, w.plan_id, w.version,
-           a.building, ${userRefColumns('asg')},
+           w.place, ${userRefColumns('asg')},
            (SELECT coalesce(sum(hours), 0) FROM allocations x
              WHERE x.work_order_id = w.id AND x.kind = 'WORK') AS scheduled_hours,
            (SELECT coalesce(sum(hours), 0) FROM allocations x
              WHERE x.work_order_id = w.id AND x.kind = 'WORK'
                AND x.day BETWEEN @monday AND @sunday) AS week_hours
          FROM work_orders w
-         LEFT JOIN assets a ON a.id = w.asset_id
          LEFT JOIN users asg ON asg.id = w.assignee_id
          WHERE w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')
            AND w.review_status IS NOT 'PENDING'
@@ -298,7 +296,7 @@ export function createScheduleService(db, { workOrders, planning }) {
           priority: r.priority,
           category: r.category,
           site: r.site,
-          building: r.building,
+          place: r.place,
           location: r.location,
           due_on: r.due_on,
           planned_week: r.planned_week,

@@ -47,9 +47,9 @@ export function nextSort(state, key) {
   };
 }
 
-/** "Tower A · L3 · Plant room" from the building, floor and exact location. Pure. */
+/** "Tower A › L3 · Plant room" from the place (D82) and the exact location. Pure. */
 export function assetLocation(asset) {
-  return [asset.building, asset.floor, asset.exact_location].filter(Boolean).join(' · ');
+  return [asset.place, asset.exact_location].filter(Boolean).join(' · ');
 }
 
 /**
@@ -93,7 +93,7 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
       id: 'asset-picker-q',
       type: 'search',
       value: state.q ?? '',
-      placeholder: 'Code, name, building, location, brand…',
+      placeholder: 'Code, name, place, location, brand…',
       autocomplete: 'off',
       onInput: (e) => {
         clearTimeout(searchTimer);

@@ -9,6 +9,7 @@ import {
   pickerQuery,
 } from '../assets/js/asset-picker.js';
 import { renderPlanForm } from '../assets/js/plan-panel.js';
+import { TREE } from './fixtures/places.js';
 
 // jsdom has no modal dialogs.
 HTMLDialogElement.prototype.showModal ??= function showModal() {
@@ -23,8 +24,8 @@ const asset = (id, o = {}) => ({
   code: `AST-${String(id).padStart(4, '0')}`,
   name: `Chiller ${id}`,
   site: 'Lyon Part-Dieu Branch',
-  building: 'Main building',
-  floor: 'L-1',
+  location_id: 11,
+  place: 'Main building › L-1',
   exact_location: 'Plant room',
   category: 'HVAC',
   subcategory: 'Chiller',
@@ -64,8 +65,9 @@ describe('picker query and sort', () => {
   });
 
   it('writes the location from what is known', () => {
-    expect(assetLocation(asset(1))).toBe('Main building · L-1 · Plant room');
-    expect(assetLocation(asset(1, { floor: null, exact_location: '' }))).toBe('Main building');
+    expect(assetLocation(asset(1))).toBe('Main building › L-1 · Plant room');
+    expect(assetLocation(asset(1, { exact_location: '' }))).toBe('Main building › L-1');
+    expect(assetLocation(asset(1, { place: '', exact_location: '' }))).toBe('');
   });
 });
 
@@ -91,7 +93,7 @@ describe('openAssetPicker', () => {
     expect(dialog.querySelector('#asset-picker-category').value).toBe('HVAC');
     const rows = dialog.querySelectorAll('tbody tr');
     expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('Main building · L-1 · Plant room');
+    expect(rows[0].textContent).toContain('Main building › L-1 · Plant room');
     expect(rows[0].textContent).toContain('Chiller'); // subcategory
     expect(rows[1].className).toBe('is-broken-down');
     rows[1].querySelector('button').click();
@@ -149,6 +151,7 @@ describe('plan form', () => {
     renderPlanForm(container, {
       plan: null,
       sites: ['Lyon Part-Dieu Branch'],
+      places: TREE,
       defaultWeek: '2026-W41',
       onClose: () => {},
       onSubmit: () => {},
@@ -156,18 +159,19 @@ describe('plan form', () => {
     });
     const form = container.querySelector('form');
     form.elements.category.value = 'HVAC';
-    form.elements.site.value = 'Lyon Part-Dieu Branch';
-    form.elements.building.value = 'Old typing';
+    const site = container.querySelector('#p-location_id');
+    site.value = '1';
+    site.dispatchEvent(new Event('change'));
     [...container.querySelectorAll('button')]
       .find((b) => b.textContent === 'Browse assets…')
       .click();
     await flush();
     expect(pickAsset).toHaveBeenCalledWith({ category: 'HVAC', site: 'Lyon Part-Dieu Branch' });
     expect(form.elements.asset_code.value).toBe('AST-0007');
-    expect(form.elements.site.value).toBe(''); // follows the asset now
-    expect(form.elements.building.value).toBe('');
+    // The place follows the asset now (BR-LOC8).
+    expect(container.querySelector('#p-location_id').value).toBe('');
     expect(container.querySelector('.asset-chosen').textContent).toBe(
-      'AST-0007 — Chiller 7, Lyon Part-Dieu Branch · Main building',
+      'AST-0007 — Chiller 7, Lyon Part-Dieu Branch · Main building › L-1',
     );
   });
 });

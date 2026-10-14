@@ -50,7 +50,7 @@ export const VALUE_LABELS = {
   schedule_mode: { FIXED: 'Fixed calendar', FLOATING: 'From the last visit' },
   performed_by: { INTERNAL: 'Internal team', CONTRACTOR: 'Contractor' },
   occurrence_status: { PLANNED: 'Planned', RELEASED: 'Work order created', SKIPPED: 'Skipped' },
-  planning_group: { site: 'Site', building: 'Building', category: 'Trade' },
+  planning_group: { site: 'Site', area: 'Area', category: 'Trade' },
   // Week scheduler (D48, Phase 19).
   allocation_kind: {
     WORK: 'Work',

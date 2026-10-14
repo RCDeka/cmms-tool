@@ -94,7 +94,8 @@ frontend/
     export.js                 CSV text (BOM, RFC 4180, formula guard), file names, download, JPG painter
     requests.js               staff pages: open / all requests, request form, request page (D46)
     comments.js               work order conversation (staff request page, work order panel)
-    rooms.js                  room picker of the request form, room list /admin/rooms (D81)
+    places.js                 location tree (D82): helpers on the cached tree, the place picker of every
+                              form (offline too), the Places page /admin/locations and the level types
     review.js                 review box of a staff request: approve and assign, or reject (D47)
     planning.js               year planner: filters in the URL, tiles, load strip, 52-week grid (D48)
     plan-panel.js             plan panel (the visit clicked: move, skip, restore; move the series;
@@ -150,7 +151,7 @@ export const ENTITIES = {
 | `/audit-log?type=…` | global audit log (SUPERVISOR, ADMIN; `users` for ADMIN) |
 | `/admin/users?q=…&role=…&active=…` | user administration (ADMIN, online only, D39) |
 | `/admin/users/new`, `/admin/users/:id` | list + creation form or user panel (split view) |
-| `/admin/rooms?q=…&site=…&active=…`, `/admin/rooms/new`, `/admin/rooms/:id` | room list (SUPERVISOR, ADMIN, online only, D81): list + creation form or room panel (split view) |
+| `/admin/locations?q=…&all=1`, `/admin/locations/new?parent=…`, `/admin/locations/:id`, `/admin/locations/types` | Places (SUPERVISOR, ADMIN, online only, D82): the tree + a place's panel, the creation form (a site without `parent`, ADMIN) or the level types (ADMIN) (split view) |
 | `/account` | change my password (every role) |
 | `/admin/feedback?status=…` | suggestions sent with the top bar button (ADMIN, online only, D40) |
 | `/requests?page=N` | staff home page: my open requests, with status and next step (STAFF, online only, D46) |
@@ -181,7 +182,7 @@ Database `cmms`, versioned schema (`DB.init` upgrades it).
 |---|---|---|
 | `asset_pages`, `wo_pages` | `pageKey` (`asset-page-3`) | `{ pageKey, page, pages, total, sort, order, scope, ids: [...], fetched_at }` (`scope`: query of the role's plain list, D44) |
 | `asset_records`, `wo_records` | `id` | full record + `_fetched_at` |
-| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`), last dashboard and stats responses (`dashboard_cache`, for offline display), my dashboards (`dashboards`) and the last figures of each (`dashboard_data_<id>`, D59), the last 4 weeks of My week (`my_week`, by week, D52) |
+| `config` | key | current page per entity, user id, form lists (`reference_data`, `assignable_users`, and the location tree `locations`, D82), last dashboard and stats responses (`dashboard_cache`, for offline display), my dashboards (`dashboards`) and the last figures of each (`dashboard_data_<id>`, D59), the last 4 weeks of My week (`my_week`, by week, D52) |
 | `drafts` (D10) | `${entity}:${id}` | `{ entity, id, base_version, changes, updated_at }` (`id` = `new` for an unsaved creation form) |
 | `sync_queue` (D10) | auto id | `{ op: 'create' \| 'update', entity, record_id, client_id?, base_version, changes, edited_at, attempts, next_try_at, last_error }` |
 
@@ -281,7 +282,8 @@ flowchart LR
 ## Staff requests (D46)
 
 - A request is a work order created by a `STAFF` user. Staff pages read `/api/requests` and need a connection: nothing is cached in IndexedDB for them (the request form and unsent comments keep their text while the app is open; the form reuses its `client_id` until the request is sent, so a retry after a lost answer never creates two).
-- The request form loads the active rooms of the chosen site (`GET /api/rooms?site=`) when the site is set or changed, and offers Building → Floor → Room, with "Not in the list" (D81). Without a room, or offline (the rooms cannot be loaded), the place in words is required; with a room it is optional. Choosing "Not in the list" starts the words with the building and floor already chosen.
+- Places (D82): every form picks a place with the same picker, from the tree cached in `config` (`locations`), fetched again with the reference data at login and after each change on the Places page. Records carry `place`, the path below their site, written by the server; a place renamed or moved shows its new path on a cached record once the record is fetched again (its list page revalidates).
+- The request form offers the places of the chosen site from the location tree cached at login (`GET /api/locations`, D82), so it works offline too: one list per level down to a place whose level type is offered to staff, with "Not in the list" at the deepest level (D81). Without a place, the place in words is required; with one it is optional. Choosing "Not in the list" starts the words with the path already chosen ("Tower A, L12, ").
 ```mermaid
 stateDiagram-v2
     state "Waiting for review" as waiting

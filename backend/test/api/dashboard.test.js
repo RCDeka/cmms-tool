@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { isOverdue } from '../../src/rules/kpi.js';
 import { NOW, TEST_CONFIG, TODAY, createSeededApp, expectNoSecrets } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 /**
  * Hand-made dataset, values computed by hand. Today is 2026-10-04 (Europe/Paris).
@@ -31,6 +31,7 @@ const tokens = {};
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   const user = db.prepare(
@@ -42,16 +43,18 @@ beforeAll(async () => {
   user.run(5, 'tech2', hash, 'Tom', 'Tech', 'TECHNICIAN');
 
   const asset = db.prepare(
-    "INSERT INTO assets (id, code, name, site, category, criticality, status) VALUES (?, ?, 'A', 'Site', 'HVAC', 'LOW', ?)",
+    `INSERT INTO assets (id, code, name, site, location_id, category, criticality, status)
+     VALUES (?, ?, 'A', 'Site', ${SITE_ID("'Site'")}, 'HVAC', 'LOW', ?)`,
   );
   asset.run(1, 'AST-0001', 'BROKEN_DOWN');
   asset.run(2, 'AST-0002', 'BROKEN_DOWN');
   asset.run(3, 'AST-0003', 'IN_SERVICE');
 
   const wo = db.prepare(`INSERT INTO work_orders
-    (id, number, type, status, priority, title, site, assignee_id, created_on, due_on, started_on,
-     closed_on, work_report, created_by, created_at, updated_at)
-    VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, 'Site', @assignee, @created_on,
+    (id, number, type, status, priority, title, site, location_id, assignee_id, created_on, due_on,
+     started_on, closed_on, work_report, created_by, created_at, updated_at)
+    VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, 'Site', ${SITE_ID("'Site'")},
+     @assignee, @created_on,
      @due_on, @started_on, @closed_on, @report, 2, @at, @at)`);
   const rows = [
     [1, 'OPEN', 'NORMAL', 4, '2026-09-20', '2026-10-03', null, null],

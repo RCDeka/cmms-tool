@@ -11,19 +11,17 @@ import {
 } from '../rules/enums.js';
 
 /**
- * @param {import('better-sqlite3').Database} db
- * @param {{ assistant: boolean }} options a model is configured for the assistant (D66)
+ * @param {import('better-sqlite3').Database} _db
+ * @param {object} options
+ * @param {boolean} options.assistant a model is configured for the assistant (D66)
+ * @param {ReturnType<import('./locations.js').createLocationService>} options.locations
  */
-export function createReferenceDataService(db, { assistant }) {
-  const sites = db
-    .prepare('SELECT site FROM assets UNION SELECT site FROM work_orders ORDER BY site')
-    .pluck();
-
+export function createReferenceDataService(_db, { assistant, locations }) {
   return {
-    /** Lists for filters and dropdowns; sites come from the data, the rest from the enums. */
+    /** Lists for filters and dropdowns; sites come from the location tree (D82), the rest from the enums. */
     get() {
       return {
-        sites: sites.all(),
+        sites: locations.siteNames(),
         categories: CATEGORIES,
         criticalities: CRITICALITIES,
         asset_statuses: ASSET_STATUSES,

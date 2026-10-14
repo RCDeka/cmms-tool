@@ -207,16 +207,17 @@ async function main() {
   await matrix('API-09', 'POST', '/requests', STAFF, {});
   // An unknown field: the requester's call is refused with 400, so nothing is cancelled.
   await matrix('API-09', 'POST', `/requests/${ids.request ?? wo}/cancel`, STAFF, { x: 1 });
-  await matrix(
-    'API-49',
-    'GET',
-    `/rooms?site=${encodeURIComponent('Lyon Part-Dieu Branch')}`,
-    EVERYONE,
-  );
-  // An empty body: refused with 400 when allowed, so no room is created.
-  await matrix('API-50', 'GET', '/admin/rooms?size=1', SUP);
-  await matrix('API-50', 'POST', '/admin/rooms', SUP, {});
-  await matrix('API-50', 'PUT', '/admin/rooms/1', SUP, {});
+  await matrix('API-49', 'GET', '/locations', EVERYONE);
+  // Empty bodies: refused with 400 when allowed, so no place or level type is written.
+  await matrix('API-50', 'GET', '/admin/locations/1', SUP);
+  await matrix('API-50', 'POST', '/admin/locations', SUP, {});
+  await matrix('API-50', 'PUT', '/admin/locations/1', SUP, {});
+  await matrix('API-50', 'GET', '/admin/level-types', SUP);
+  await matrix('API-51', 'POST', '/admin/locations', ADMIN, { parent_id: null });
+  // A stale version: refused with 409 when allowed, so the site is not changed.
+  await matrix('API-51', 'PUT', '/admin/locations/1', ADMIN, { version: 999999, name: 'x' });
+  await matrix('API-51', 'POST', '/admin/level-types', ADMIN, {});
+  await matrix('API-51', 'PUT', '/admin/level-types/1', ADMIN, {});
   await matrix('API-10', 'GET', '/users', SUP);
   await matrix('API-11', 'GET', '/audit-log?size=1', SUP);
   await single('API-11', 'SU', 'GET', '/audit-log?size=100', 200, {

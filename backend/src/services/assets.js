@@ -17,17 +17,18 @@ import { orderByClause, pageOffset, pageResponse, rankExpression } from '../lib/
 import { toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges } from '../rules/audit.js';
 import { snapshotToApi } from '../rules/conflict-diff.js';
-import { addInFilter } from '../lib/list-filter.js';
+import { addInFilter, addPlaceFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
 import { parseUpdate, resolveConflict, toColumns, versionedUpdate } from './writes.js';
 
 /**
- * WHERE clause of the asset filters: full-text `q` and exact site, category, status and
- * criticality (each one value or a list). Fixed SQL fragments only; values are bound parameters.
+ * WHERE clause of the asset filters: full-text `q`, exact site, category, status and
+ * criticality (each one value or a list), and places with everything below them (BR-LOC10).
+ * Fixed SQL fragments only; values are bound parameters.
  * `extra`: the condition of a dashboard widget segment (`drill`, built by the widget service).
  * @returns {{ clause: string, params: object }}
  */
-export function assetFilters({ q, site, category, status, criticality }, extra) {
+export function assetFilters({ q, site, location, category, status, criticality }, extra) {
   const where = [];
   const params = {};
   if (q !== undefined) {
@@ -40,6 +41,7 @@ export function assetFilters({ q, site, category, status, criticality }, extra) 
     }
   }
   addInFilter(where, params, 'a.site', 'site', site);
+  addPlaceFilter(where, params, 'a.location_id', 'location', location);
   addInFilter(where, params, 'a.category', 'category', category);
   addInFilter(where, params, 'a.status', 'status', status);
   addInFilter(where, params, 'a.criticality', 'criticality', criticality);
@@ -50,7 +52,10 @@ export function assetFilters({ q, site, category, status, criticality }, extra) 
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
-/** POST /api/assets body: required fields as in the table, the rest optional (BR-A4). */
+/**
+ * POST /api/assets body: required fields as in the table, the rest optional (BR-A4). The place
+ * is a `location_id`, or a `site` alone for the site itself (BR-LOC7).
+ */
 const createSchema = z.strictObject({
   code: z
     .string()
@@ -63,10 +68,7 @@ const createSchema = z.strictObject({
   ...Object.fromEntries(
     Object.entries(ASSET_FIELDS)
       .filter(
-        ([f]) =>
-          !['name', 'site', 'category', 'criticality', 'status', 'maintenance_contract'].includes(
-            f,
-          ),
+        ([f]) => !['name', 'category', 'criticality', 'status', 'maintenance_contract'].includes(f),
       )
       .map(([f, schema]) => [f, schema.optional()]),
   ),
@@ -77,8 +79,8 @@ const FIELDS = [
   'code',
   'name',
   'site',
-  'building',
-  'floor',
+  'location_id',
+  'place',
   'category',
   'subcategory',
   'criticality',
@@ -124,8 +126,11 @@ export function toAsset(row) {
   return asset;
 }
 
-/** @param {import('better-sqlite3').Database} db */
-export function createAssetService(db) {
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ locations: ReturnType<import('./locations.js').createLocationService> }} deps
+ */
+export function createAssetService(db, { locations }) {
   const byId = db.prepare(`${SELECT} WHERE a.id = ?`);
   const getById = (id) => {
     const row = byId.get(id);
@@ -139,6 +144,33 @@ export function createAssetService(db) {
     )
     .pluck();
   const workOrderCount = db.prepare('SELECT count(*) FROM work_orders WHERE asset_id = ?').pluck();
+  // BR-LOC8: the asset's open work orders and its plans are where the asset is. Their version
+  // stays (nobody edited them), their date changes so devices fetch them again.
+  const followers = [
+    db.prepare(
+      `UPDATE work_orders SET location_id = @location_id, site = @site, place = @place,
+         updated_at = @now
+       WHERE asset_id = @id AND status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')`,
+    ),
+    db.prepare(
+      `UPDATE maintenance_plans SET location_id = @location_id, site = @site, place = @place,
+         updated_at = @now
+       WHERE asset_id = @id`,
+    ),
+  ];
+
+  /** BR-LOC5, BR-LOC7: the place of a change, with its site and path. */
+  const placeChanges = (current, changes) => ({
+    ...changes,
+    ...locations.derive(changes, current),
+  });
+  /** BR-LOC8: the asset moved, its open work orders and plans follow (same transaction). */
+  const follow = (now) => (current, changes) => {
+    if (!('location_id' in changes) || changes.location_id === current.location_id) return;
+    for (const stmt of followers) {
+      stmt.run({ ...locations.columnsOf(changes.location_id), id: current.id, now });
+    }
+  };
 
   return {
     /** Paginated list, complete records (D7). */
@@ -181,6 +213,8 @@ export function createAssetService(db) {
         editedAt,
         user,
         now: now.toISOString(),
+        prepare: (current) => placeChanges(current, changes),
+        afterWrite: follow(now.toISOString()),
       });
       return { ...result, item: getById(id), changes, version };
     },
@@ -193,6 +227,12 @@ export function createAssetService(db) {
       const parsed = createSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
       const { code, ...fields } = parsed.data;
+      if (fields.location_id === undefined && fields.site === undefined) {
+        const message = 'Choose the place of the asset';
+        throw new HttpError(400, 'Invalid body', {
+          fields: { location_id: message, site: message },
+        });
+      }
       const id = db
         .transaction(() => {
           if (code && codeExists.get(code)) {
@@ -201,6 +241,7 @@ export function createAssetService(db) {
               fields: { code: 'Already used' },
             });
           }
+          Object.assign(fields, locations.derive(fields));
           const row = {
             code: code ?? nextAssetCode(highestNumber.get()),
             ...toColumns('assets', fields),
@@ -263,7 +304,15 @@ export function createAssetService(db) {
 
     /** PUT /api/assets/:id/resolve-conflict (BR-V5). */
     resolveConflict(id, body, user, { now }) {
-      resolveConflict(db, { entity: 'assets', id, body, user, now: now.toISOString() });
+      resolveConflict(db, {
+        entity: 'assets',
+        id,
+        body,
+        user,
+        now: now.toISOString(),
+        prepare: placeChanges,
+        afterWrite: follow(now.toISOString()),
+      });
       return getById(id);
     },
 

@@ -18,7 +18,14 @@ import { ASSISTANT_TIMEOUT_MS } from './config.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import { renderDashboard } from './dashboard.js';
-import { renderRoomCreate, renderRoomList, renderRoomPanel, roomsUrl } from './rooms.js';
+import {
+  placeIndex,
+  placesUrl,
+  renderLevelTypes,
+  renderPlaceCreate,
+  renderPlacePanel,
+  renderPlaceTree,
+} from './places.js';
 import {
   hasDashboards,
   initDashboardsPage,
@@ -243,11 +250,12 @@ async function render(route) {
       return hasRole('ADMIN')
         ? showUsers(route, isCurrent)
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
-    case 'rooms':
-    case 'room':
-    case 'roomCreate':
+    case 'places':
+    case 'place':
+    case 'placeCreate':
+    case 'levelTypes':
       return hasRole('SUPERVISOR', 'ADMIN')
-        ? showRooms(route, isCurrent)
+        ? showPlaces(route, isCurrent)
         : showPlaceholder(
             null,
             'Access denied',
@@ -419,12 +427,12 @@ async function showRequests(route, isCurrent, { quiet = false } = {}) {
 async function showRequestCreate(isCurrent) {
   leaveRecordViews('request_new', 'New request');
   renderPage();
-  const { sites } = await getRefs();
+  const { sites, places } = await getRefs();
   if (!isCurrent()) return;
   renderRequestForm(tableContainer, {
     sites,
     defaultSite: currentUser().site,
-    loadRooms: async (site) => (await apiFetch(`/rooms?site=${encodeURIComponent(site)}`)).items,
+    places,
     onSubmit: async (body, form) => {
       try {
         const { item } = await apiFetch('/requests', { method: 'POST', body });
@@ -748,94 +756,126 @@ async function showUsers(route, isCurrent) {
   detailContainer.querySelector('.detail-title')?.focus();
 }
 
-// --- Room list (supervisors and admins, online only, D81) -----------------------------------
+// --- Places (supervisors and admins, online only, D82) -----------------------------------
 
-async function showRooms(route, isCurrent) {
-  leaveRecordViews('rooms', 'Rooms');
+async function showPlaces(route, isCurrent) {
+  leaveRecordViews('locations', 'Places');
   const filters = route.filters ?? {};
-  if (!tableContainer.querySelector('.rooms-table, .filter-bar')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading rooms…'));
+  if (!tableContainer.querySelector('.place-tree, .filter-bar')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading places…'));
   }
-  const query = new URLSearchParams({ page: String(route.page), size: '50' });
-  if (filters.q) query.set('q', filters.q);
-  if (filters.site) query.set('site', filters.site);
-  if (filters.active) query.set('is_active', filters.active);
-  let data;
-  let room = null;
-  let sites;
+  const admin = hasRole('ADMIN');
+  let tree;
+  let types;
   try {
-    [data, room, { sites }] = await Promise.all([
-      apiFetch(`/admin/rooms?${query}`),
-      route.name === 'room' ? apiFetch(`/admin/rooms/${route.id}`) : null,
-      getRefs(),
+    [tree, types] = await Promise.all([
+      apiFetch('/locations'),
+      route.name === 'levelTypes' && admin ? apiFetch('/admin/level-types') : null,
     ]);
   } catch (err) {
     if (!isCurrent()) return;
-    if (err.status === 404) {
-      return showPlaceholder('rooms', 'Room not found', 'This room does not exist.');
-    }
     showConsoleError(err, () => render(currentRoute()));
     if (err.status === 0) {
       tableContainer.querySelector('.error-state p').textContent =
-        'The room list needs a connection to the server.';
+        'The places need a connection to the server.';
     }
     return;
   }
   if (!isCurrent()) return;
-
-  const listUrlFor = (page) => roomsUrl({ ...filters, page });
-  const close = () => navigate(listUrlFor(route.page));
-  const onPage = (page, control) => {
-    pendingFocus = { type: 'pager', control };
-    navigate(listUrlFor(page));
+  const index = placeIndex(tree);
+  const place = route.name === 'place' ? index.byId.get(route.id) : null;
+  if (route.name === 'place' && !place) {
+    return showPlaceholder('locations', 'Place not found', 'This place does not exist.');
+  }
+  // The forms read the tree from the cache: keep it as the server has it now.
+  DB.setConfig('locations', tree);
+  const pageUrl = (panel) => placesUrl({ q: filters.q, all: filters.all, panel });
+  const close = () => navigate(pageUrl());
+  /** After a change: the forms get the new tree, the page shows it. */
+  const changed = (url) => {
+    setRefs(loadRefs(currentUser()));
+    navigate(url, { force: true });
   };
-  renderRoomList(tableContainer, {
-    data,
+  renderPlaceTree(tableContainer, {
+    index,
     filters,
-    sites,
-    selectedId: room?.id ?? null,
-    onFilter: (next, { typing = false } = {}) => {
-      if (typing) pendingFocus = { type: 'field', selector: '#rooms-q' };
-      navigate(roomsUrl({ ...next, page: 1 }));
+    selectedId: place?.id ?? null,
+    canAddSite: admin,
+    onFilter: (next) => {
+      pendingFocus = { type: 'field', selector: '#places-q' };
+      navigate(placesUrl(next));
     },
-    pagination: renderPagination(data, onPage),
-    paginationTop: renderPagination(data, onPage, 'top'),
   });
 
-  if (route.name === 'rooms') {
+  if (route.name === 'places') {
     setSplitView(false);
     replaceChildren(detailContainer);
     restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
     return;
   }
   setSplitView(true);
-  if (route.name === 'roomCreate') {
-    renderRoomCreate(detailContainer, {
-      sites,
-      site: filters.site,
+  tableContainer.querySelector('.place-tree li.is-selected')?.scrollIntoView({ block: 'nearest' });
+  if (route.name === 'levelTypes') {
+    if (!admin) {
+      replaceChildren(detailContainer);
+      return showPlaceholder(
+        'locations',
+        'Access denied',
+        'Only administrators change level types.',
+      );
+    }
+    renderLevelTypes(detailContainer, {
+      types: types.items,
       onClose: close,
-      onCreate: async (values, form) => {
+      onSave: async (type, body, form) => {
         try {
-          const { item } = await apiFetch('/admin/rooms', { method: 'POST', body: values });
-          announce(`Room ${item.name} created.`);
-          navigate(roomsUrl({ ...filters, page: route.page, id: item.id }), { force: true });
+          if (type) {
+            await apiFetch(`/admin/level-types/${type.id}`, { method: 'PUT', body });
+          } else {
+            await apiFetch('/admin/level-types', { method: 'POST', body });
+          }
+          announce(type ? 'Level type saved.' : `Level type ${body.name} added.`);
+          changed(pageUrl('types'));
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+    });
+  } else if (route.name === 'placeCreate') {
+    const parent = filters.parent ? (index.byId.get(filters.parent) ?? null) : null;
+    if (!parent && !admin) {
+      replaceChildren(detailContainer);
+      return showPlaceholder('locations', 'Access denied', 'Only administrators create sites.');
+    }
+    renderPlaceCreate(detailContainer, {
+      index,
+      parent,
+      onClose: close,
+      onCreate: async (body, form) => {
+        try {
+          const { item } = await apiFetch('/admin/locations', { method: 'POST', body });
+          announce(`${item.name} created.`);
+          changed(pageUrl(item.id));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
         }
       },
     });
   } else {
-    renderRoomPanel(detailContainer, {
-      room,
+    renderPlacePanel(detailContainer, {
+      index,
+      place,
+      canEdit: admin || place.parent_id !== null,
+      addUrl: placesUrl({ q: filters.q, all: filters.all, parent: place.id, panel: 'new' }),
       onClose: close,
-      onSave: async (values, form) => {
+      onSave: async (body, form) => {
         try {
-          const { updated } = await apiFetch(`/admin/rooms/${room.id}`, {
+          const { updated } = await apiFetch(`/admin/locations/${place.id}`, {
             method: 'PUT',
-            body: values,
+            body,
           });
           announce(updated ? 'Changes saved.' : 'Nothing to save.');
-          render(currentRoute());
+          changed(pageUrl(place.id));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
         }
@@ -1039,7 +1079,8 @@ async function conflictLookups(conflict) {
       if (asset) assets.set(id, asset);
     }
   }
-  return { users: (await getRefs()).users, assets };
+  const { users, places } = await getRefs();
+  return { users, assets, places: placeIndex(places) };
 }
 
 async function showConflict(route, isCurrent, error = '') {

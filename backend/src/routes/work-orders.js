@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
-import { listFilter } from '../lib/list-filter.js';
+import { listFilter, placeFilter } from '../lib/list-filter.js';
 import {
   flagFilter,
   idParams,
@@ -35,6 +35,8 @@ const listQuery = z.strictObject({
   type: listFilter(z.enum(WORK_ORDER_TYPES)),
   category: listFilter(z.enum(CATEGORIES)),
   site: listFilter(z.string().max(200), { separator: '|' }),
+  // A place and everything below it (BR-LOC10).
+  location: placeFilter(),
   assignee_id: listFilter(z.coerce.number().int().positive()),
   mine: flagFilter,
   overdue: flagFilter,

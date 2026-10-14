@@ -6,7 +6,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { NOW, TEST_CONFIG } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 /**
  * Compliance widgets (Phase 23) on a hand-made dataset, values computed by hand. Today is
@@ -43,16 +43,20 @@ let token;
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   db.prepare(
     "INSERT INTO users (id, username, password_hash, first_name, last_name, role) VALUES (2, 'sup', ?, 'S', 'U', 'SUPERVISOR')",
   ).run(hash);
 
+  // The site and its place (D82) from one parameter.
   const plan = db.prepare(`INSERT INTO maintenance_plans
-    (id, code, title, type, category, site, estimated_hours, frequency_weeks, anchor_week,
-     tolerance_weeks, performed_by, supplier, created_by, created_at, updated_at)
-    VALUES (?, ?, 'Visit', ?, ?, ?, 2, 1, '2026-W01', ?, ?, ?, 2, 'x', 'x')`);
+    (id, code, title, type, category, site, location_id, estimated_hours, frequency_weeks,
+     anchor_week, tolerance_weeks, performed_by, supplier, created_by, created_at, updated_at)
+    SELECT v.column1, v.column2, 'Visit', v.column3, v.column4, v.column5, ${SITE_ID('v.column5')},
+      2, 1, '2026-W01', v.column6, v.column7, v.column8, 2, 'x', 'x'
+    FROM (VALUES (?, ?, ?, ?, ?, ?, ?, ?)) v`);
   plan.run(1, 'PM-0001', 'PREVENTIVE', 'HVAC', 'Paris', 1, 'INTERNAL', null);
   plan.run(
     2,
@@ -67,9 +71,10 @@ beforeAll(async () => {
   plan.run(3, 'PM-0003', 'PREVENTIVE', 'ELECTRICAL', 'Lyon', 0, 'CONTRACTOR', 'Volt & Co');
 
   const wo = db.prepare(`INSERT INTO work_orders
-    (id, number, type, status, priority, title, site, category, created_on, started_on, closed_on,
-     work_report, plan_id, planned_week, created_by, created_at, updated_at)
-    VALUES (@id, @number, @type, @status, 'NORMAL', 'Job', @site, @category, '2026-08-01',
+    (id, number, type, status, priority, title, site, location_id, category, created_on,
+     started_on, closed_on, work_report, plan_id, planned_week, created_by, created_at, updated_at)
+    VALUES (@id, @number, @type, @status, 'NORMAL', 'Job', @site, ${SITE_ID('@site')}, @category,
+     '2026-08-01',
      @started, @closed, @report, @plan, @week, 2, 'x', 'x')`);
   const workOrders = [
     // id, plan, status, closed, planned week

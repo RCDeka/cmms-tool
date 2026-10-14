@@ -25,3 +25,28 @@ export function createTestDb() {
 }
 
 export const TEST_PASSWORD = 'test-password-123';
+
+/**
+ * Sites of the location tree (D82), for tests that build their own records: a record names
+ * its site's place in `location_id`. Returns the id of each site by name.
+ * @param {import('better-sqlite3').Database} db
+ * @param {string[]} names
+ */
+export function addSites(db, names) {
+  const insert = db.prepare(
+    `INSERT INTO locations (id, parent_id, site_id, level_type_id, name, created_at, updated_at)
+     VALUES (@id, NULL, @id, 1, @name, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+  );
+  const next = db.prepare('SELECT coalesce(max(id), 0) + 1 FROM locations').pluck();
+  return new Map(
+    names.map((name) => {
+      const id = next.get();
+      insert.run({ id, name });
+      return [name, id];
+    }),
+  );
+}
+
+/** SQL for the id of the site named by the SQL expression `expr` (see addSites). */
+export const SITE_ID = (expr) =>
+  `(SELECT id FROM locations WHERE parent_id IS NULL AND name = ${expr})`;

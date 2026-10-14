@@ -34,8 +34,8 @@ describe('planner routes and filters', () => {
     ['/planning', '', { name: 'planning', page: 1, filters: {} }],
     [
       '/planning',
-      '?group=building&site=Lyon',
-      { name: 'planning', page: 1, filters: { group: 'building', site: 'Lyon' } },
+      '?group=area&site=Lyon',
+      { name: 'planning', page: 1, filters: { group: 'area', site: 'Lyon' } },
     ],
     ['/planning/plans/new', '', { name: 'planCreate', page: 1, filters: {} }],
     ['/planning/plans/12', '', { name: 'plan', id: 12, page: 1, filters: {} }],
@@ -174,8 +174,8 @@ describe('figures', () => {
 
   it('names groups and audit values', () => {
     expect(groupTitle({ site: 'Lyon' })).toBe('Lyon');
-    expect(groupTitle({ site: 'Paris', building: 'Tower A' })).toBe('Paris · Tower A');
-    expect(groupTitle({ site: 'Lyon', building: null })).toBe('Lyon · No building');
+    expect(groupTitle({ site: 'Paris', area: 'Tower A' })).toBe('Paris · Tower A');
+    expect(groupTitle({ site: 'Lyon', area: null })).toBe('Lyon · The site itself');
     expect(groupTitle({ category: 'FIRE_SAFETY' })).toBe('Fire safety');
     expect(planningFieldValue('reserve_percent', 20)).toBe('20%');
     expect(planningFieldValue('status', 'RELEASED')).toBe('Work order created');
@@ -409,8 +409,7 @@ describe('plan form', () => {
     title: ' Quarterly service ',
     type: 'PREVENTIVE',
     category: '',
-    site: 'Lyon',
-    building: '',
+    location_id: 1,
     location: '',
     estimated_hours: '2.5',
     frequency_weeks: '13',
@@ -441,8 +440,7 @@ describe('plan form', () => {
   it('clears emptied fields when editing, but keeps the trade and tolerance', () => {
     const body = planBody({ ...raw, is_active: false }, { editing: true, assetId: null });
     expect(body).toMatchObject({
-      site: 'Lyon',
-      building: null,
+      location_id: 1,
       end_week: null,
       supplier: null,
       is_active: false,

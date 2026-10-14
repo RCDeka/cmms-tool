@@ -20,7 +20,11 @@ erDiagram
     work_orders ||--o{ work_order_comments : "work_order_id"
     users ||--o{ work_order_comments : "user_id"
     assets |o--o{ work_orders : "asset_id (optional)"
-    rooms |o--o{ work_orders : "room_id (staff requests, optional)"
+    locations ||--o{ locations : "parent_id (the tree, D82)"
+    level_types ||--o{ locations : "level_type_id"
+    locations ||--o{ assets : "location_id"
+    locations ||--o{ work_orders : "location_id"
+    locations ||--o{ maintenance_plans : "location_id"
     assets ||--o{ conflicts : "entity_type + entity_id"
     work_orders ||--o{ conflicts : "entity_type + entity_id"
     assets |o--o{ maintenance_plans : "asset_id (optional)"
@@ -82,9 +86,9 @@ erDiagram
 | id | INTEGER | no | PK | |
 | code | TEXT | no | UNIQUE | e.g. `AST-0001`; immutable |
 | name | TEXT | no | | e.g. "Fan coil unit, floor 3" |
-| site | TEXT | no | | |
-| building | TEXT | yes | | |
-| floor | TEXT | yes | | e.g. `L3` |
+| site | TEXT | no | | the name of the place's site, set by the server (BR-LOC7) |
+| location_id | INTEGER | no | FK → locations.id | where the asset is (D82, `015`; replaces `building` and `floor`) |
+| place | TEXT | no | default `''` | the path below the site ("Tower A › B1"), kept by the server (D83) |
 | category | TEXT | no | CHECK Category | |
 | subcategory | TEXT | yes | | |
 | criticality | TEXT | no | CHECK Criticality | |
@@ -97,14 +101,14 @@ erDiagram
 | supplier | TEXT | yes | | |
 | maintenance_contract | INTEGER | no | default 0 | boolean |
 | responsible_technician | TEXT | yes | | free text (D5) |
-| exact_location | TEXT | yes | | |
+| exact_location | TEXT | yes | | the words below the place ("north wall") |
 | comment | TEXT | yes | | |
 | version | INTEGER | no | default 1 | optimistic concurrency **(added, D2)** |
 | has_conflict | INTEGER | no | default 0 | 1 while a conflict is open **(added, D2)** |
 | updated_by | INTEGER | yes | FK → users.id | last writer **(added, D2)** |
 | created_at / updated_at | TEXT | no | default now | |
 
-Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
+Indexes: `code` (unique), `site`, `location_id`, `category`, `status`, `updated_at`.
 
 ### work_orders
 | Column | Type | Null | Constraints / default | Notes |
@@ -118,9 +122,10 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | title | TEXT | no | | |
 | description | TEXT | yes | | |
 | asset_id | INTEGER | yes | FK → assets.id | optional (brief) |
-| site | TEXT | no | | equals the asset's site when `asset_id` is set |
-| location | TEXT | yes | | where exactly, free text ("Tower A, floor 12, desk 12-21"); given by staff requests **(added, D46)**; with a room, only the details ("desk 12-21") |
-| room_id | INTEGER | yes | FK → rooms.id | the room a staff request was sent from; NULL when none was picked **(added, D81, `014`)**; read-only for the team |
+| site | TEXT | no | | the name of the place's site, set by the server (BR-LOC7) |
+| location_id | INTEGER | no | FK → locations.id | the place: the asset's when `asset_id` is set (BR-LOC8), else chosen; for a staff request, the room picked or the site **(added, D82, `015`; replaces `room_id` of D81)** |
+| place | TEXT | no | default `''` | the path below the site, kept by the server (D83) |
+| location | TEXT | yes | | the words about the place, free text ("desk 12-21"); given by staff requests **(added, D46)** |
 | category | TEXT | yes | CHECK Category | technical trade |
 | assignee_id | INTEGER | yes | FK → users.id | (D5) |
 | supervisor_id | INTEGER | yes | FK → users.id | (D5) |
@@ -190,7 +195,7 @@ Rules:
 - BR-L4: The mock data comes with a matching history: creation of every asset and work order, and the status changes of each work order.
 
 ### Full-text indexes (added, D38)
-`assets_fts` and `work_orders_fts` (migration `003_search.sql`; `location` added to `work_orders_fts` by `006`): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
+`assets_fts` and `work_orders_fts` (migration `003_search.sql`; `location` added to `work_orders_fts` by `006`; `place` replaces `building` in `assets_fts` and joins `work_orders_fts` in `015`, D82): FTS5 external-content tables over the text columns listed in `docs/api-design.md` → Search and filters, kept in sync by `AFTER INSERT/UPDATE/DELETE` triggers on `assets` and `work_orders`.
 
 ### feedback (added, D40)
 Improvement ideas sent from the pages of the tool (migration `005_feedback.sql`).
@@ -226,21 +231,35 @@ Index: (`work_order_id`, `created_at`).
 
 Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role `CHECK` (SQLite cannot alter a constraint), and added `location` to the work order search index. The migration runner turns foreign keys off while migrations run and runs `PRAGMA foreign_key_check` before each commit.
 
-### rooms (added, D81)
-The rooms staff pick from when they send a request (migration `014_rooms.sql`). Kept by supervisors and admins; never deleted, only taken out of use.
+### level_types (added, D82)
+The kinds of places (migration `015_locations.sql`), kept by admins (BR-LT1).
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | `1` is the site type, created by the migration with Building (`2`), Floor (`3`) and Room (`4`, offered to staff) |
+| name | TEXT | no | 1 to 50, unique whatever the case | "Technical room" |
+| token | TEXT | no | `[A-Z][A-Z0-9_]{0,19}`, unique | its name in asset code patterns (`{BUILDING}`, Phase 33) |
+| offered_to_staff | INTEGER | no | 0/1, default 0 | staff pick places of this type in their requests (BR-LOC9) |
+| is_active | INTEGER | no | 0/1, default 1 | the site type is always in use, and its token is `SITE` (CHECK) |
+| version, updated_by, created_at, updated_at | | | | optimistic check, as for plans |
+
+### locations (added, D82)
+The places of the location tree (migration `015_locations.sql`, `docs/spec-locations.md`). Kept by supervisors and admins; sites by admins (BR-LOC6). Never deleted, only taken out of use (BR-LOC5). Place changes are not in the audit log: like the rooms of D81 they are reference data, and a record keeps the place it names (its own history shows its path when it moves).
 
 | Column | Type | Null | Constraints / default | Notes |
 |---|---|---|---|---|
 | id | INTEGER | no | PK | |
-| site | TEXT | no | 1 to 200 characters | set at creation, never changed (BR-RM2) |
-| building | TEXT | no | 1 to 100 characters | e.g. `Tower A` |
-| floor | TEXT | no | 1 to 50 characters | same convention as the assets: `B1` (first basement), `L0` (ground floor), `L12` |
-| name | TEXT | no | 1 to 100 characters | e.g. `Meeting room 12.02` |
-| is_active | INTEGER | no | 0/1, default 1 | 0 = no longer offered to staff (BR-RM3) |
-| created_by, updated_by | INTEGER | yes | FK → users.id | NULL for the seeded rooms |
-| created_at, updated_at | TEXT | no | | |
+| parent_id | INTEGER | yes | FK → locations.id | NULL for a site (BR-LOC1) |
+| site_id | INTEGER | no | FK → locations.id | its site; a site is its own (CHECK) |
+| level_type_id | INTEGER | no | FK → level_types.id | the site type exactly when `parent_id` is NULL (CHECK) |
+| name | TEXT | no | 1 to 100 through the API (200 in the table, for older site names), without ` › ` | "Tower A", "L12", "Meeting room 12.02" |
+| code | TEXT | yes | `[A-Z0-9]{1,10}` | for asset codes (Phase 33): `2`, `01`, `PAR` |
+| is_active | INTEGER | no | 0/1, default 1 | |
+| version, created_by, updated_by, created_at, updated_at | | | | optimistic check, as for plans |
 
-Index: unique (`site`, `building`, `floor`, `name`), case-insensitive (BR-RM1). Room changes are not in the audit log: like the widget settings, the list is reference data, and a work order keeps the room it names. Room names are not in the work order search index.
+Indexes: `parent_id`, `site_id`; unique (`coalesce(parent_id, 0)`, `name` case-insensitive) and (`coalesce(parent_id, 0)`, `code`) where a code is set (BR-LOC2).
+
+Migration `015` moves today's places into the tree: each site named by the data (assets, work orders, plans, rooms, users, blocked weeks) becomes a site, each (site, building) a Building, each (site, building, floor) a Floor (under the site when no building was given), each room of D81 a Room under its floor, keeping its state, author and dates. Assets point to their floor (else building, else site), work orders to their asset's place, else their room, else their site, plans to their asset's place, else their building, else their site; the words (`exact_location`, `location`) stay as they were. It rebuilds `assets`, `work_orders` and `maintenance_plans` without `building`, `floor` and `room_id`, removes those keys from the JSON of stored conflicts, writes the site names of users and blocked weeks as their site place spells them, and drops `rooms`.
 
 ### schema_migrations
 | Column | Type | Notes |
@@ -263,9 +282,10 @@ A recurring preventive task: what, where, which trade, how long, how often.
 | type | TEXT | no | CHECK Plan type | work order type of the visits |
 | category | TEXT | no | CHECK Category | trade; defaults to the asset's |
 | asset_id | INTEGER | yes | FK → assets.id | the asset maintained, if one |
-| site | TEXT | no | | the asset's site when `asset_id` is set (BR-P9) |
-| building | TEXT | yes | | the asset's building when `asset_id` is set (BR-P9) |
-| location | TEXT | yes | ≤ 200 | free text, as on work orders |
+| site | TEXT | no | | the name of the place's site, set by the server (BR-LOC7) |
+| location_id | INTEGER | no | FK → locations.id | the asset's place when `asset_id` is set (BR-P9, BR-LOC8) **(D82, `015`; replaces `building`)** |
+| place | TEXT | no | default `''` | the path below the site, kept by the server (D83) |
+| location | TEXT | yes | ≤ 200 | the words about the place, as on work orders |
 | estimated_hours | REAL | no | > 0, ≤ 200, multiple of 0.5 | per visit |
 | frequency_weeks | INTEGER | no | 1–104 | 1, 2, 4, 8, 13, 26, 52 are offered first |
 | anchor_week | TEXT | no | ISO week | first visit of the series |
@@ -280,7 +300,7 @@ A recurring preventive task: what, where, which trade, how long, how often.
 | created_by / updated_by | INTEGER | no / yes | FK → users.id | |
 | created_at / updated_at | TEXT | no | | |
 
-Indexes: `code` (unique), (`site`, `building`), `category`, `is_active`.
+Indexes: `code` (unique), `site`, `location_id`, `category`, `is_active`.
 
 #### plan_occurrences
 One visit of a plan in a week.
@@ -379,11 +399,11 @@ Rules: BR-K1 a dashboard is only seen and changed by its owner (404 for others);
 - BR-A1: `code` is unique and immutable.
 - BR-A2: Fields editable per role are listed in `docs/api-design.md` (permission matrix).
 - BR-A3: Deleting an asset is for records created by mistake: only assets without any work order (open or closed) can be deleted, at the version the user saw, and without an open conflict. Otherwise 409: an asset with maintenance history is set `OUT_OF_SERVICE` instead. Resolved conflicts of a deleted asset are deleted with it.
-- BR-A4: At creation, `code` is optional. When left out, the server gives `AST-` + the next number after the highest existing `AST-<digits>` code (at least 4 digits). A typed code is stored in capitals, must match `[A-Z0-9][A-Z0-9-]{1,49}`, and must be unused (409). Required: `name`, `site`, `category`, `criticality`; `status` defaults to `IN_SERVICE`.
+- BR-A4: At creation, `code` is optional. When left out, the server gives `AST-` + the next number after the highest existing `AST-<digits>` code (at least 4 digits). A typed code is stored in capitals, must match `[A-Z0-9][A-Z0-9-]{1,49}`, and must be unused (409). Required: `name`, a place (`location_id`, or `site` alone for the site itself, BR-LOC7), `category`, `criticality`; `status` defaults to `IN_SERVICE`.
 
 ### Work orders
 - BR-W1: `number` is unique and immutable; format `WO-YYYY-NNNNN` (see BR-W10).
-- BR-W2: If `asset_id` is set, it must reference an existing asset, and `site` takes the asset's site. Sending a different `site` together with an asset is refused (422).
+- BR-W2: If `asset_id` is set, it must reference an existing asset, and `site` and the place take the asset's (BR-LOC8). Sending a different `site` together with an asset is refused (422 `BR-W2`), a different `location_id` too (422 `BR-LOC8`).
 - BR-W3: `assignee_id` must reference an active user with role `TECHNICIAN` or `SUPERVISOR`; `supervisor_id` a user with role `SUPERVISOR` or `ADMIN`.
 - BR-W4: Allowed status transitions (any other is rejected with 422):
 
@@ -415,14 +435,14 @@ stateDiagram-v2
 - BR-W8: `due_on`, if set, is not earlier than `created_on`. `closed_on`, if set, is not earlier than `started_on`.
 
 ### Work order creation (D15, D25–D27)
-- BR-W9: Required at creation: `title`, `type`, `client_id`, and either `asset_id` or `site`. Defaults: `priority = NORMAL`; `category` = the asset's category when an asset is given and no category is sent. The server sets `status = OPEN`, `created_by` = current user, `version = 1`, and `created_on` = the date (in `APP_TIMEZONE`) of the client's `edited_at`, i.e. when the user actually created it, which may be earlier than the sync for offline creations. `edited_at` defaults to now and must be neither in the future (1 min tolerance) nor more than 30 days old (422). The client can't send `status`, `created_on`, `created_by`, `version` or `number`.
+- BR-W9: Required at creation: `title`, `type`, `client_id`, and either `asset_id` or a place (`location_id`, or `site` alone, BR-LOC7). Defaults: `priority = NORMAL`; `category` = the asset's category when an asset is given and no category is sent. The server sets `status = OPEN`, `created_by` = current user, `version = 1`, and `created_on` = the date (in `APP_TIMEZONE`) of the client's `edited_at`, i.e. when the user actually created it, which may be earlier than the sync for offline creations. `edited_at` defaults to now and must be neither in the future (1 min tolerance) nor more than 30 days old (422). The client can't send `status`, `created_on`, `created_by`, `version` or `number`.
 - BR-W10: `number` = `WO-` + year of `created_on` + `-` + the next 5-digit sequence for that year (`MAX` of that year's numbers + 1, computed inside the insert transaction; SQLite allows one writer at a time, so two creations can't get the same number). The sequence restarts at `00001` each year.
 - BR-W11: A `POST` whose `client_id` already exists returns the existing work order (no new row), so retrying a queued creation never creates a duplicate.
 - BR-W12: A `TECHNICIAN` creating a work order: `assignee_id` is set to themselves, and sending another `assignee_id` or a `supervisor_id` is rejected (403). `SUPERVISOR` and `ADMIN` may set both or leave them empty.
 - BR-W13: BR-W2, BR-W3 and BR-W8 apply at creation (so `due_on` can't be earlier than `created_on`).
 
 ### Staff requests (D46)
-- BR-R1: A request is a work order created by a `STAFF` user through `POST /api/requests`. Required: `client_id`, `title`, `site`, and a place: a room of the list (`room_id`), a `location` in words, or both (D81). Optional: `description`, `category`, `priority` ("I don't know" in the form = left out: no category, priority `NORMAL`). The server sets `type = CORRECTIVE`, no assignee, no supervisor, no asset; BR-W9 to BR-W11 apply (number, creation date, idempotent `client_id`).
+- BR-R1: A request is a work order created by a `STAFF` user through `POST /api/requests`. Required: `client_id`, `title`, `site`, and a place: a place of the list (`location_id`, BR-LOC9), a `location` in words, or both (D81, D82). Optional: `description`, `category`, `priority` ("I don't know" in the form = left out: no category, priority `NORMAL`). The server sets `type = CORRECTIVE`, no assignee, no supervisor, no asset; BR-W9 to BR-W11 apply (number, creation date, idempotent `client_id`).
 - BR-R2: Staff see only the work orders they created (`created_by`); another work order answers 404, so its existence is not revealed. They cannot read or write any other business data (403), except the reference data (site list), their account and suggestions.
 - BR-R3: Staff are never assignees or supervisors (BR-W3 already limits these to maintenance roles).
 - BR-R4: Comments: the requester comments on their own requests; maintenance roles comment on any work order. 1 to 2000 characters. A comment does not change the work order (`version`, `updated_at`), so it never causes a conflict.
@@ -433,20 +453,28 @@ stateDiagram-v2
 - BR-R9: Approving requires an `assignee_id` (BR-W3: an active technician or supervisor) and sets `review_status = APPROVED`; `supervisor_id` defaults to the reviewer. `type`, `priority`, `category` and `due_on` (BR-W8) may be set in the same request. Both decisions increment `version`, set `reviewed_by`, `reviewed_at`, `updated_by`, `updated_at`, and write one `UPDATE` audit entry with `note: { review: "APPROVED" | "REJECTED" }`, in one transaction.
 - BR-R10 (D79): The requester may cancel their own request while it is `OPEN`, reviewed or not (`POST /api/requests/:id/cancel`, no version: staff never see it). It sets `status = CANCELLED` and `review_status = WITHDRAWN`, keeps the review fields of an approved request, increments `version`, sets `updated_by` and `updated_at`, and writes one `UPDATE` audit entry, in one transaction. Refused with 422 once work has started (`IN_PROGRESS`, `ON_HOLD`) or when the request is finished, and with 409 (`BR-V4`) while a conflict is open. A maintenance edit made from an older version then becomes a conflict (BR-V3). The status steps (BR-R5) show it as one step, `WITHDRAWN`.
 
-- BR-RM1: A room has a building, a floor and a name; two rooms of a site cannot share them, whatever the case (409).
-- BR-RM2: A room's site is set at creation and never changes: a room on another site is a new room.
-- BR-RM3: Rooms are never deleted. A room taken out of use (`is_active = 0`) is no longer offered to staff; the requests sent from it keep it.
-- BR-RM4: A request may only name an active room of its own site (422 otherwise).
+### Places (D82, `docs/spec-locations.md`; BR-RM1 to BR-RM4 of D81 are replaced)
+- BR-LOC1: A place without a parent is a site, and a site has no parent. A place other than a site never has the site type.
+- BR-LOC2: Siblings cannot share a name whatever the case, nor two sites (409); siblings cannot share a code (409).
+- BR-LOC3: A branch has at most 8 levels, the site included (422).
+- BR-LOC4: A place moves under another place of the same site, never into its own subtree (422); a site never moves. The records of its subtree follow: their `place` is rewritten, their `version` and `updated_at` are not.
+- BR-LOC5: Places are never deleted. Taking a place out of use takes its whole subtree with it; a place comes back into use only under a place in use (422). Records keep a place out of use, but a new record or a changed `location_id` names a place in use (422).
+- BR-LOC6: Only admins create, change or take out of use a site (403). A site is renamed only while no asset, work order, plan, user, blocked week or dashboard filter names it (409).
+- BR-LOC7: The server sets a record's `site` (the name of its place's site) and `place`. A body may send `site` alone: the site itself. A `site` other than the place's → 422.
+- BR-LOC8: With an asset, a work order's or a plan's place is the asset's (422 otherwise). When an asset moves, its open work orders and its plans follow in the same transaction: `location_id`, `site`, `place` and `updated_at` change, `version` does not.
+- BR-LOC9: A staff request names a place in use of its site whose level type is offered to staff (and in use), or the site itself with the place in words (422 otherwise; 422 `BR-LOC7` for an unknown site).
+- BR-LOC10: The `location` list filter takes places (`location=12,15`) and matches each one and everything below it.
+- BR-LT1: Only admins write level types; names and tokens are unique (409). The site type keeps its token and stays in use: only its name changes (422). A type out of use keeps its places but is not offered for new ones (422).
 ### Preventive maintenance (D48, D49)
 - BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
 - BR-P2 (D51): Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved. When the anchor moves at the same frequency, the series **shifts**: a visit moved by hand moves by the same number of weeks (keeping its own offset); a visit with a work order, or skipped, keeps its week but its `due_week` follows the series when it is still to come, so it holds its slot and no second visit is planned next to it. A moved visit whose due week leaves the series, lands in the past or meets a taken slot is removed. When the frequency changes, the series is rebuilt (no shift). A `FLOATING` restart (BR-P5) is a rebuild too. Deactivating removes every `PLANNED` occurrence.
 - BR-P3: One visit moves within `due_week ± tolerance_weeks`, never before the current week; a `REGULATORY` visit only earlier (its due week is a legal deadline). Otherwise 422 with the reason ("Week 1 is outside this visit's tolerance of ± 3 weeks around week 50.", "A regulatory visit can only move earlier: week 50 is its deadline."). Back on its due week, it is no longer a moved visit.
 - BR-P4: A visit with a work order is not moved in the year planner (422): its work order is rescheduled instead (D55), through its `planned_week` (the work order form) or the week scheduler (D52). Changing the `planned_week` of a released visit's work order moves the visit's `week` too (a moved visit, unless back on its due week; logged on the visit, `note: { work_order }`), without the tolerance; it cannot be cleared (422 `BR-P4`), and a regulatory visit cannot go past its due week (422 `BR-P3`).
 - BR-P5: `FIXED` plans keep their calendar. In a `FLOATING` plan, closing a visit's work order moves the anchor to the closing week + the frequency (logged on the plan) and replaces the planned visits.
-- BR-P6: The release creates the work order of every `PLANNED` occurrence of an active plan whose week is at most `release_weeks_ahead` weeks after the current week, one transaction per occurrence; a second run creates nothing (the occurrence is no longer `PLANNED`, and `work_order_id` is UNIQUE). The work order takes the plan's type, title (+ " – 2026-W43"), description, asset, site, location, trade and hours, with `status = OPEN`, `priority = NORMAL`, no assignee, `created_on` = today, `due_on` = the Friday of the week (today when late), `plan_id`, `planned_week`, and the plan's author (or the user who asked for the release) as `created_by`.
+- BR-P6: The release creates the work order of every `PLANNED` occurrence of an active plan whose week is at most `release_weeks_ahead` weeks after the current week, one transaction per occurrence; a second run creates nothing (the occurrence is no longer `PLANNED`, and `work_order_id` is UNIQUE). The work order takes the plan's type, title (+ " – 2026-W43"), description, asset, site, place, location, trade and hours, with `status = OPEN`, `priority = NORMAL`, no assignee, `created_on` = today, `due_on` = the Friday of the week (today when late), `plan_id`, `planned_week`, and the plan's author (or the user who asked for the release) as `created_by`.
 - BR-P7: A planned visit is skipped with a reason (1–500) and leaves the load; it can be restored (back to `PLANNED`). A visit with a work order is skipped only by cancelling its work order, which skips it with the reason "Work order WO-… cancelled"; that skip cannot be undone (422).
 - BR-P8: Warnings, never refusals: a visit longer than `max_block_hours` (`LONG_VISIT`, "will be split"), a visit outside the plan's season (`OUT_OF_SEASON`), a visit in a week blocked for its site or every site (`BLOCKED_WEEK`), a week over capacity.
-- BR-P9: With an asset, a plan's `site` and `building` are the asset's; sending others is refused (422), as is an unknown asset. The trade defaults to the asset's.
+- BR-P9: With an asset, a plan's `site` and place are the asset's; sending another site is refused (422 `BR-P9`), another place too (422 `BR-LOC8`), as is an unknown asset. The trade defaults to the asset's.
 
 ### Year planner figures (D48)
 - BR-Y1: Planned hours of a week = estimated hours of the internal occurrences whose `week` is that week, released ones included, skipped ones excluded; per trade and per site.
@@ -510,14 +538,13 @@ stateDiagram-v2
 
 Generated by `backend/src/db/seed/` with a fixed random seed (the output is the same on every run). All names are fictional (Q5).
 
-- **5 sites**: Paris La Défense Headquarters, Saclay Data Center, Lyon Part-Dieu Branch, Marseille Prado Branch, Lille Grand Place Branch. Each has buildings, floors and exact locations.
-- **333 rooms** (D81, `roomCatalog()` in `seed/catalog.js`): on the headquarters towers, every office floor has two open spaces, three meeting rooms and a kitchen (plus a lobby and a reception on L0, and office 12.07); branches have a banking hall, offices, meeting rooms and a kitchen; the data center its halls, offices and control room. Basements of the towers have none, so places there are described in words.
+- **The location tree** (D82, `SITES` and `roomCatalog()` in `seed/catalog.js`), 414 places: **5 sites**, Paris La Défense Headquarters, Saclay Data Center, Lyon Part-Dieu Branch, Marseille Prado Branch, Lille Grand Place Branch (codes `PAR`, `SAC`, `LYS`, `MRS`, `LIL`), with **8 buildings** and their **68 floors** (codes on those of the headquarters and the data center: `1`, `2`, `3` for the buildings, `01` for B1, `10` for L0, `11` for L1…), and **333 rooms**: on the headquarters towers, every office floor has two open spaces, three meeting rooms and a kitchen (plus a lobby and a reception on L0, and office 12.07); branches have a banking hall, offices, meeting rooms and a kitchen; the data center its halls, offices and control room. Basements of the towers have none, so places there are described in words.
 - **6 users**: 1 `ADMIN`, 2 `SUPERVISOR`, 2 `TECHNICIAN`, 1 `STAFF`. Usernames: `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`, `user1` (staff member Emma Rousseau, Paris headquarters). The password is `SEED_PASSWORD` for all of them. `power_user = 1` for the admin and supervisors.
-- **500 assets**, spread across all sites and categories, with realistic subcategories, brands and models per category (e.g. HVAC → air handling unit, fan coil unit, chiller). About 3–5 % are `BROKEN_DOWN`.
+- **500 assets**, spread across all sites and categories, with realistic subcategories, brands and models per category (e.g. HVAC → air handling unit, fan coil unit, chiller). Each is on a floor of its site, with an exact location in words. About 3–5 % are `BROKEN_DOWN`.
 - **207 work orders**: 200 generated ones and 7 requests of `user1` (D46), and about 115 more for the past plan visits (see the history below; 113 when today is 2026-10-04): every work order is numbered in creation order, the history's included (D64).
 - The **200 generated work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
 - The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), six of them from a room of the list (one, the garage door, described in words only), some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
-- **62 maintenance plans** (D48), each on its own asset (site, building and trade follow it), from `PLAN_TEMPLATES` in `seed/catalog.js`: every trade, both calendar modes, regulatory plans, 8 contractor plans (fire safety, backflow tests, CCTV), visits above 3 h 30, two seasonal plans (one placed outside its season), and one contract ending in a little over a year. Most long-period plans start 5, 18, 31 or 44 weeks after the current week, so the year has visible peaks (one week over capacity, three tight, about 41 % on average); the first peak lies just beyond the release horizon, so the balancing assistant can still move its visits (D53). Occurrences are stored up to the horizon; no work order is released by the seed: the daily job or the first opening of the planner does it. The plans use their own random stream, so the rest of the dataset is unchanged.
+- **62 maintenance plans** (D48), each on its own asset (site, place and trade follow it), from `PLAN_TEMPLATES` in `seed/catalog.js`: every trade, both calendar modes, regulatory plans, 8 contractor plans (fire safety, backflow tests, CCTV), visits above 3 h 30, two seasonal plans (one placed outside its season), and one contract ending in a little over a year. Most long-period plans start 5, 18, 31 or 44 weeks after the current week, so the year has visible peaks (one week over capacity, three tight, about 41 % on average); the first peak lies just beyond the release horizon, so the balancing assistant can still move its visits (D53). Occurrences are stored up to the horizon; no work order is released by the seed: the daily job or the first opening of the planner does it. The plans use their own random stream, so the rest of the dataset is unchanged.
 - **A week of the week scheduler** (D52), the current week: technician1 has a 6 h job split over Monday (3 h 30) and Tuesday (2 h 30), a 2 h appointment locked at 10:00 on Tuesday by supervisor1 ("Keys at reception"), and two sites on Wednesday with 1 h of travel between them; technician2 has preparation time and work on Monday and Tuesday, and is on leave on Thursday (capacity override 0 h). The work orders are open ones already assigned to them; they get the current week as planned week. 9 blocks, each with its creation in the audit log.
 - **History** (D64), its own random stream (`seed/history.js`), so the rest of the dataset is the same with or without it:
   - Past visits over the 16 weeks before the current one, for the plans on a fixed calendar without season: their anchor is moved back by whole periods into those weeks (never before the week after the plan was created), so their future visits are unchanged. About 6 % are skipped with a reason; the others are released 4 weeks ahead (as the release does: title "plan – week", due on the Friday) and done in their week, about 14 % late (18 % for regulatory plans), closed after their deadline. The latest regulatory visit due two weeks ago or earlier is always still going on, so a regulatory visit is late and carried over in the week scheduler. Each has its audit history: release, creation, start and closing.

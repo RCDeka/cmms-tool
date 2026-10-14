@@ -20,6 +20,7 @@ import { apiFetch } from './api.js';
 import { applyToPage, isOnline } from './network.js';
 import { enqueue, discard, listEntries, pendingChanges } from './queue.js';
 import { findAssetById, findAssetByCode } from './refs.js';
+import { placeIndex, placeOf } from './places.js';
 import { openAssetPicker } from './asset-picker.js';
 import { detailUrl, listUrl, navigate, parseRoute } from './router.js';
 import {
@@ -377,7 +378,8 @@ async function historyLookups(entries) {
     const asset = await findAssetById(id);
     if (asset) assets.set(id, asset);
   }
-  return { users: (await refsPromise).users, assets };
+  const { users, places } = await refsPromise;
+  return { users, assets, places: placeIndex(places) };
 }
 
 /** Field errors from the API: { field: message } (400) — other shapes are ignored. */
@@ -605,7 +607,12 @@ export async function showCreate({ route, onClose }) {
     const asset = await findAssetById(route.assetId);
     if (asset) {
       assetRefs.set(asset.id, asset);
-      prefill = { asset_id: asset.id, asset, site: asset.site, category: asset.category };
+      prefill = {
+        asset_id: asset.id,
+        asset,
+        location_id: asset.location_id,
+        category: asset.category,
+      };
     }
   }
   const ed = {
@@ -662,6 +669,12 @@ export async function showCreate({ route, onClose }) {
   });
 }
 
+/** `{ location_id, site, place }` of a place of the cached tree. */
+function placeColumns(locationId, tree) {
+  if (!locationId) return { location_id: null, site: null, place: '' };
+  return { location_id: locationId, ...placeOf(placeIndex(tree), locationId) };
+}
+
 /** Builds the temporary record shown until the server creates the work order. */
 async function temporaryRecord(tmpId, clientId, values, editedAt) {
   const user = currentUser();
@@ -682,7 +695,8 @@ async function temporaryRecord(tmpId, clientId, values, editedAt) {
     asset: asset
       ? { id: asset.id, code: asset.code, name: asset.name, site: asset.site, status: asset.status }
       : null,
-    site: asset?.site ?? values.site ?? null,
+    // Where it is, from the asset or the cached tree (D82); the server sends the same.
+    ...placeColumns(asset?.location_id ?? values.location_id, (await refsPromise).places),
     category: values.category ?? asset?.category ?? null,
     assignee_id: assigneeId,
     assignee: await userRefFor(assigneeId),

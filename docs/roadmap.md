@@ -148,7 +148,7 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 
 Specified in `docs/spec-locations.md` (confirmed; section 11 holds the full acceptance criteria). Both phases come before the import tools (backlog item 14) and the first deployment to users.
 
-- **Phase 32: location tree.** Level types and places (`locations`), the migration of today's sites, buildings, floors and rooms into the tree, `location_id` on assets, work orders and plans with the site set by the server, the Places page replacing the Rooms page, one place picker for every form (offline, from the cached tree), paths in lists and search, the `location` filter and `group_by=area`. Acceptance: see the spec, section 11.
+- **Phase 32: location tree** — done (D83). Level types and places (`locations`), the migration of today's sites, buildings, floors and rooms into the tree, `location_id` on assets, work orders and plans with the site set by the server, the Places page replacing the Rooms page, one place picker for every form (offline, from the cached tree), paths in lists and search, the `location` filter and `group_by=area`. Acceptance: see the spec, section 11.
 - **Phase 33: asset types and codes.** Managed asset types replacing `subcategory`, the default and per-type code patterns, the code proposal and its server-side computation at creation, the admin recode. Acceptance: see the spec, section 11.
 
 ## Production (D73)

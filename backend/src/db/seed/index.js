@@ -20,8 +20,12 @@ import {
   SITES,
   SUPPLIERS,
   WORK_REPORTS,
+  floorCode,
   roomCatalog,
 } from './catalog.js';
+
+/** Level types created by migration 015 (D82). */
+const LEVEL = { SITE: 1, BUILDING: 2, FLOOR: 3, ROOM: 4 };
 
 const RANDOM_SEED = 20261004;
 // Staff requests use their own random stream, so adding them left the rest of the dataset
@@ -259,10 +263,10 @@ export async function seedDatabase(
   const counts = db.transaction(() => {
     const users = insertUsers(db, USERS, hashes, timestamp, today);
     const staff = insertUsers(db, STAFF_USERS, staffHashes, requestTimestamp, today);
-    const assets = insertAssets(db, rng, timestamp, today);
-    const roomIds = insertRooms(db, today);
-    const requests = requestDrafts([...users, ...staff], requestTimestamp, today, roomIds);
-    const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests);
+    const places = insertLocations(db, today);
+    const assets = insertAssets(db, rng, timestamp, today, places);
+    const requests = requestDrafts([...users, ...staff], requestTimestamp, today, places);
+    const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests, places);
     insertRequestComments(db, [...users, ...staff], today, now);
     insertHistory(db);
     const plans = insertPlans(
@@ -282,7 +286,8 @@ export async function seedDatabase(
       pastWorkOrders: past.workOrders,
       pastBlocks: past.blocks,
       requests: requests.length,
-      rooms: roomIds.size,
+      places: places.count,
+      rooms: places.rooms,
       plans,
       allocations: allocations + past.blocks,
       conflicts,
@@ -320,12 +325,12 @@ function insertUsers(db, list, hashes, timestamp, today) {
   });
 }
 
-function insertAssets(db, rng, timestamp, today) {
+function insertAssets(db, rng, timestamp, today, places) {
   const stmt = db.prepare(`INSERT INTO assets
-    (code, name, site, building, floor, category, subcategory, criticality, status, brand, model,
+    (code, name, site, location_id, place, category, subcategory, criticality, status, brand, model,
      serial_number, commissioned_on, last_serviced_on, supplier, maintenance_contract,
      responsible_technician, exact_location, comment, created_at, updated_at)
-    VALUES (@code, @name, @site, @building, @floor, @category, @subcategory, @criticality, @status,
+    VALUES (@code, @name, @site, @location_id, @place, @category, @subcategory, @criticality, @status,
      @brand, @model, @serial_number, @commissioned_on, @last_serviced_on, @supplier,
      @maintenance_contract, @responsible_technician, @exact_location, @comment, @created_at, @updated_at)`);
 
@@ -359,9 +364,7 @@ function insertAssets(db, rng, timestamp, today) {
     const row = {
       code: `AST-${String(i + 1).padStart(4, '0')}`,
       name: `${sub.name} – ${building.name} ${floor}`,
-      site: site.name,
-      building: building.name,
-      floor,
+      ...places.of(site.name, building.name, floor),
       category,
       subcategory: sub.name,
       criticality: rng.weighted(
@@ -397,28 +400,83 @@ function insertAssets(db, rng, timestamp, today) {
       updated_at: createdAt,
     };
     const id = Number(stmt.run(row).lastInsertRowid);
-    assets.push({ id, ...row });
+    assets.push({ id, ...row, building: building.name, floor });
   }
   return assets;
 }
 
-const roomKey = (site, building, floor, name) => [site, building, floor, name].join('|');
-
-/** The room list (D81), created before the requests that name a room. Returns key → id. */
-function insertRooms(db, today) {
-  const stmt = db.prepare(`INSERT INTO rooms (site, building, floor, name, created_at, updated_at)
-    VALUES (@site, @building, @floor, @name, @stamp, @stamp)`);
+/**
+ * The location tree (D82): the sites, their buildings and floors, and the rooms staff pick
+ * from (D81), created before the records that name them. `of(site, building?, floor?, room?)`
+ * gives a place as the records store it: `{ site, location_id, place }`.
+ */
+function insertLocations(db, today) {
+  const stmt = db.prepare(`INSERT INTO locations
+    (id, parent_id, site_id, level_type_id, name, code, created_at, updated_at)
+    VALUES (@id, @parent_id, @site_id, @level_type_id, @name, @code, @stamp, @stamp)`);
   const stamp = `${addDays(today, -120)}T08:00:00.000Z`;
-  const ids = new Map();
-  for (const room of roomCatalog()) {
-    const key = roomKey(room.site, room.building, room.floor, room.name);
-    ids.set(key, Number(stmt.run({ ...room, stamp }).lastInsertRowid));
+  const byPath = new Map();
+  let nextId = 1;
+  const add = (path, parent, levelTypeId, name, code = null) => {
+    const id = nextId++;
+    const siteId = parent ? parent.site_id : id;
+    stmt.run({
+      id,
+      parent_id: parent?.location_id ?? null,
+      site_id: siteId,
+      level_type_id: levelTypeId,
+      name,
+      code,
+      stamp,
+    });
+    const place = {
+      site: parent ? parent.site : name,
+      location_id: id,
+      site_id: siteId,
+      place: !parent ? '' : parent.place ? `${parent.place} › ${name}` : name,
+    };
+    byPath.set(path.join('|'), place);
+    return place;
+  };
+  const coded = (site) => site.isDataCenter || site.name.startsWith('Paris');
+  for (const site of SITES) {
+    const s = add([site.name], null, LEVEL.SITE, site.name, site.code);
+    for (const building of site.buildings) {
+      const b = add(
+        [site.name, building.name],
+        s,
+        LEVEL.BUILDING,
+        building.name,
+        coded(site) ? building.code : null,
+      );
+      for (const floor of building.floors) {
+        add(
+          [site.name, building.name, floor],
+          b,
+          LEVEL.FLOOR,
+          floor,
+          coded(site) ? floorCode(floor) : null,
+        );
+      }
+    }
   }
-  return ids;
+  const rooms = roomCatalog();
+  for (const room of rooms) {
+    const floor = byPath.get([room.site, room.building, room.floor].join('|'));
+    add([room.site, room.building, room.floor, room.name], floor, LEVEL.ROOM, room.name);
+  }
+  return {
+    count: nextId - 1,
+    rooms: rooms.length,
+    of: (...path) => {
+      const { site, location_id: locationId, place } = byPath.get(path.join('|'));
+      return { site, location_id: locationId, place };
+    },
+  };
 }
 
 /** Work order rows of STAFF_REQUESTS, in the shape insertWorkOrders inserts. */
-function requestDrafts(users, timestamp, today, roomIds) {
+function requestDrafts(users, timestamp, today, places) {
   const id = (username) => users.find((u) => u.username === username).id;
   const requester = id('user1');
   return STAFF_REQUESTS.map((r) => {
@@ -441,9 +499,8 @@ function requestDrafts(users, timestamp, today, roomIds) {
       title: r.title,
       description: r.description,
       asset_id: null,
-      site: 'Paris La Défense Headquarters',
+      ...places.of('Paris La Défense Headquarters', ...(r.room ?? [])),
       location: r.location,
-      room_id: r.room ? roomIds.get(roomKey('Paris La Défense Headquarters', ...r.room)) : null,
       category: r.category,
       assignee_id: assignee,
       supervisor_id: assignee ? id('supervisor1') : null,
@@ -492,7 +549,7 @@ function insertRequestComments(db, users, today, now) {
   }
 }
 
-function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
+function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, places) {
   const technicians = users.filter((u) => u.role === 'TECHNICIAN');
   const supervisors = users.filter((u) => u.role === 'SUPERVISOR');
   const creators = users.filter((u) => u.role !== 'TECHNICIAN');
@@ -579,7 +636,8 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
       title,
       description,
       asset_id: asset?.id ?? null,
-      site,
+      // BR-LOC8: the asset's place, else the site.
+      ...(asset ? { site, location_id: asset.location_id, place: asset.place } : places.of(site)),
       location: null,
       category,
       review_status: null,
@@ -607,12 +665,12 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
   drafts.sort((a, b) => a.created_at.localeCompare(b.created_at));
   const sequence = new Map();
   const stmt = db.prepare(`INSERT INTO work_orders
-    (number, type, status, priority, title, description, asset_id, site, location, room_id,
-     category, assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
+    (number, type, status, priority, title, description, asset_id, site, location_id, place,
+     location, category, assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
      actual_hours, work_report, created_by, updated_by, review_status, reviewed_by, reviewed_at,
      review_note, created_at, updated_at)
-    VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site, @location,
-     @room_id, @category,
+    VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site,
+     @location_id, @place, @location, @category,
      @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on, @estimated_hours,
      @actual_hours, @work_report, @created_by, @updated_by, @review_status, @reviewed_by,
      @reviewed_at, @review_note, @created_at, @updated_at)`);
@@ -620,7 +678,7 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
     const year = wo.created_on.slice(0, 4);
     const n = (sequence.get(year) ?? 0) + 1;
     sequence.set(year, n);
-    stmt.run({ room_id: null, ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
+    stmt.run({ ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
   }
   return drafts.length;
 }
@@ -638,15 +696,15 @@ function insertPlans(db, today, users, timestamp) {
   const authors = users.filter((u) => u.role === 'SUPERVISOR');
   const assets = db
     .prepare(
-      "SELECT id, code, site, building, floor, subcategory FROM assets WHERE status <> 'OUT_OF_SERVICE' ORDER BY id",
+      "SELECT id, code, site, location_id, place, subcategory FROM assets WHERE status <> 'OUT_OF_SERVICE' ORDER BY id",
     )
     .all();
   const used = new Set();
   const insert = db.prepare(`INSERT INTO maintenance_plans
-    (code, title, description, type, category, asset_id, site, building, location, estimated_hours,
+    (code, title, description, type, category, asset_id, site, location_id, place, location, estimated_hours,
      frequency_weeks, anchor_week, end_week, schedule_mode, tolerance_weeks, season_from_week,
      season_to_week, performed_by, supplier, created_by, updated_by, created_at, updated_at)
-    VALUES (@code, @title, @description, @type, @category, @asset_id, @site, @building, @location,
+    VALUES (@code, @title, @description, @type, @category, @asset_id, @site, @location_id, @place, @location,
      @estimated_hours, @frequency_weeks, @anchor_week, @end_week, @schedule_mode, @tolerance_weeks,
      @season_from_week, @season_to_week, @performed_by, @supplier, @created_by, @created_by,
      @created_at, @created_at)`);
@@ -670,13 +728,14 @@ function insertPlans(db, today, users, timestamp) {
           : addWeeks(currentWeek, anchorOffset(rng, t.every));
       const plan = {
         code: nextPlanCode(count),
-        title: `${t.title}, ${asset.building} ${asset.floor}`,
+        title: `${t.title}, ${asset.place.replace(' › ', ' ')}`,
         description: `Preventive visit of ${asset.code} (${asset.subcategory}) following the maintenance checklist.`,
         type: t.regulatory ? 'REGULATORY' : 'PREVENTIVE',
         category,
         asset_id: asset.id,
         site: asset.site,
-        building: asset.building,
+        location_id: asset.location_id,
+        place: asset.place,
         location: null,
         estimated_hours: t.hours,
         frequency_weeks: t.every,

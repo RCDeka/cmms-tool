@@ -6,7 +6,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { NOW, TEST_CONFIG, TODAY } from '../helpers/app.js';
-import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
+import { SITE_ID, TEST_PASSWORD, addSites, createTestDb } from '../helpers/db.js';
 
 /**
  * Flow and backlog widgets (Phase 22) on a hand-made dataset, values computed by hand.
@@ -35,6 +35,7 @@ let token;
 
 beforeAll(async () => {
   ctx = createTestDb();
+  addSites(ctx.db, ['Site', 'Paris', 'Lyon', 'Lille', 'Marseille']);
   const { db } = ctx;
   const hash = await argon2.hash(TEST_PASSWORD);
   const user = db.prepare(
@@ -48,9 +49,11 @@ beforeAll(async () => {
   user.run(7, 'tech4', hash, 'TECHNICIAN', 'HVAC', 'Paris', 0);
 
   const wo = db.prepare(`INSERT INTO work_orders
-    (id, number, type, status, priority, title, site, category, created_on, started_on, closed_on,
-     estimated_hours, actual_hours, work_report, review_status, created_by, created_at, updated_at)
-    VALUES (@id, @number, @type, @status, @priority, 'Job', @site, @category, @created, @started,
+    (id, number, type, status, priority, title, site, location_id, category, created_on, started_on,
+     closed_on, estimated_hours, actual_hours, work_report, review_status, created_by, created_at,
+     updated_at)
+    VALUES (@id, @number, @type, @status, @priority, 'Job', @site, ${SITE_ID('@site')}, @category,
+     @created, @started,
      @closed, @est, @act, @report, @review, 2, '2026-10-01T08:00:00.000Z', @updated)`);
   const rows = [
     [1, 'CORRECTIVE', 'OPEN', 'URGENT', 'Paris', 'HVAC', '2026-10-01', null, 4, null],

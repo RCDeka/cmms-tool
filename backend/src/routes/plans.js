@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
-import { listFilter } from '../lib/list-filter.js';
+import { listFilter, placeFilter } from '../lib/list-filter.js';
 import {
   flagFilter,
   idParams,
@@ -18,11 +18,12 @@ import { CATEGORIES, PERFORMERS, PLAN_TYPES } from '../rules/enums.js';
 import { isoWeek, WRITE_META } from '../rules/fields.js';
 import { PLAN_SORTS } from '../services/plans.js';
 
-/** Filters shared by the plan list and the year planner (site and building names use "|"). */
+/** Filters shared by the plan list and the year planner (site names use "|"). */
 export const planFilterFields = {
   q: textFilter,
   site: listFilter(z.string().max(200), { separator: '|' }),
-  building: listFilter(z.string().max(100), { separator: '|' }),
+  // A place and everything below it (BR-LOC10).
+  location: placeFilter(),
   category: listFilter(z.enum(CATEGORIES)),
   type: listFilter(z.enum(PLAN_TYPES)),
   performed_by: listFilter(z.enum(PERFORMERS)),

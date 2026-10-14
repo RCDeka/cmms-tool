@@ -3,6 +3,7 @@
 
 // Supervisor conflict console (brief → Conflict management; docs/architecture.md → Conflicts).
 // Conflict cues always combine color, an icon and text (brief → Accessibility).
+import { fullPath } from './places.js';
 import { codeFirst, h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDateTime, isEmpty, personName, renderValue } from './format.js';
@@ -44,7 +45,8 @@ export function mergeFields(conflict, choices) {
 
 /**
  * Display of an API value in the comparison: names for people and assets, labels for codes.
- * @param {{ users: object[], assets: Map<number, object> }} lookups
+ * @param {{ users: object[], assets: Map<number, object>, places?: object }} lookups `places`:
+ *   placeIndex of the cached tree, for the path of a place (D82)
  */
 export function displayValue(entityKey, apiField, value, lookups) {
   if (isEmpty(value)) return h('span', { class: 'no-value' }, 'No value');
@@ -60,7 +62,10 @@ export function displayValue(entityKey, apiField, value, lookups) {
     return asset ? `${asset.code} — ${asset.name}` : `Asset #${value}`;
   }
   if (def.type === 'plan') return `Plan #${value}`;
-  if (def.type === 'room') return `Room #${value}`;
+  if (def.type === 'place') {
+    const path = lookups.places ? fullPath(lookups.places, value) : '';
+    return path || `Place #${value}`;
+  }
   return renderValue(field, def, value);
 }
 

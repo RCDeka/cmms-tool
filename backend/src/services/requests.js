@@ -11,9 +11,8 @@ import { WORK_ORDER_FIELDS, WRITE_META } from '../rules/fields.js';
 import { auditLabel, diffChanges } from '../rules/audit.js';
 import { snapshotToApi } from '../rules/conflict-diff.js';
 import { REQUEST_TYPE, statusTimeline, withdrawalBlocker } from '../rules/requests.js';
-import { missingPlace, roomProblem } from '../rules/rooms.js';
 import { recordAudit } from './audit.js';
-import { roomRef, roomRefColumns, userRef, userRefColumns } from './mappers.js';
+import { userRef, userRefColumns } from './mappers.js';
 
 /** POST /api/requests body. "I don't know" in the form means the field is left out (or null). */
 const createSchema = z.strictObject({
@@ -21,8 +20,8 @@ const createSchema = z.strictObject({
   title: WORK_ORDER_FIELDS.title,
   description: WORK_ORDER_FIELDS.description.optional(),
   site: WORK_ORDER_FIELDS.site,
-  // A room of the list, or a description of the place, or both (BR-R1, D81).
-  room_id: z.number().int().positive().nullable().optional(),
+  // A place of the list, or a description of the place, or both (BR-R1, BR-LOC9).
+  location_id: z.number().int().positive().nullable().optional(),
   location: WORK_ORDER_FIELDS.location.optional(),
   category: WORK_ORDER_FIELDS.category.optional(),
   priority: WORK_ORDER_FIELDS.priority.optional(),
@@ -37,6 +36,8 @@ const FIELDS = [
   'title',
   'description',
   'site',
+  'location_id',
+  'place',
   'location',
   'category',
   'created_on',
@@ -53,12 +54,10 @@ const FIELDS = [
 ];
 
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')}, ${userRefColumns('asg')},
-    ${roomRefColumns('rm')},
     (SELECT count(*) FROM work_order_comments c WHERE c.work_order_id = w.id) AS comment_count,
     (SELECT max(c.created_at) FROM work_order_comments c WHERE c.work_order_id = w.id) AS last_comment_at
   FROM work_orders w
-  LEFT JOIN users asg ON asg.id = w.assignee_id
-  LEFT JOIN rooms rm ON rm.id = w.room_id`;
+  LEFT JOIN users asg ON asg.id = w.assignee_id`;
 
 const OPEN_CLAUSE = "AND w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')";
 
@@ -66,7 +65,6 @@ function toRequest(row) {
   const item = {};
   for (const f of FIELDS) item[f] = row[f];
   item.assignee = userRef(row, 'asg');
-  item.room = roomRef(row, 'rm');
   item.comment_count = row.comment_count;
   item.last_comment_at = row.last_comment_at;
   return item;
@@ -77,9 +75,9 @@ function toRequest(row) {
  * @param {object} deps
  * @param {ReturnType<import('./work-orders.js').createWorkOrderService>} deps.workOrders
  * @param {ReturnType<import('./comments.js').createCommentService>} deps.comments
- * @param {ReturnType<import('./rooms.js').createRoomService>} deps.rooms
+ * @param {ReturnType<import('./locations.js').createLocationService>} deps.locations
  */
-export function createRequestService(db, { workOrders, comments, rooms }) {
+export function createRequestService(db, { workOrders, comments, locations }) {
   const ownById = db.prepare(`${SELECT} WHERE w.id = ? AND w.created_by = ?`);
   const ownRow = db.prepare('SELECT * FROM work_orders WHERE id = ? AND created_by = ?');
   const withdraw = db.prepare(
@@ -133,20 +131,19 @@ export function createRequestService(db, { workOrders, comments, rooms }) {
     create(body, user, ctx) {
       const parsed = createSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
-      const { room_id: roomId = null, ...fields } = parsed.data;
-      if (missingPlace(parsed.data)) {
+      const { location_id: locationId = null, ...fields } = parsed.data;
+      // The site alone needs the place in words (BR-R1).
+      if (locationId === null && !(fields.location ?? '').trim()) {
         throw new HttpError(400, 'Invalid body', {
           fields: { location: 'Required: pick a room or say where the problem is' },
         });
       }
-      if (roomId !== null) {
-        const problem = roomProblem(rooms.row(roomId), fields.site);
-        if (problem) throw new HttpError(422, problem.message, { rule: problem.rule });
-      }
+      const place = locations.forRequest({ site: fields.site, location_id: locationId });
+      const { site: _site, ...rest } = fields;
       // Every request waits for a supervisor's review (D47).
-      const { created, item } = workOrders.create({ ...fields, type: REQUEST_TYPE }, user, ctx, {
+      const { created, item } = workOrders.create({ ...rest, type: REQUEST_TYPE }, user, ctx, {
         reviewStatus: 'PENDING',
-        roomId,
+        place,
       });
       const own = getOwn(item.id, user.id);
       // A replayed client_id that belongs to someone else's work order (BR-W11).

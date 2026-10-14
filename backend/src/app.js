@@ -25,7 +25,11 @@ import { planningRouter } from './routes/planning.js';
 import { plansRouter } from './routes/plans.js';
 import { referenceRouter } from './routes/reference.js';
 import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
-import { adminRoomsRouter, roomsRouter } from './routes/rooms.js';
+import {
+  adminLevelTypesRouter,
+  adminLocationsRouter,
+  locationsRouter,
+} from './routes/locations.js';
 import { myWeekRouter, scheduleRouter } from './routes/schedule.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
@@ -43,7 +47,7 @@ import { createPlanService } from './services/plans.js';
 import { createPlanningService } from './services/planning.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createRequestService } from './services/requests.js';
-import { createRoomService } from './services/rooms.js';
+import { createLocationService } from './services/locations.js';
 import { createScheduleService } from './services/schedule.js';
 import { createUserService } from './services/users.js';
 import { createWidgetSettingsService } from './services/widget-settings.js';
@@ -95,15 +99,19 @@ export function createApp({
 
   const users = createUserService(db);
   const auth = createAuthService(config, users);
-  const assets = createAssetService(db);
-  const workOrders = createWorkOrderService(db);
+  const locations = createLocationService(db);
+  const assets = createAssetService(db, { locations });
+  const workOrders = createWorkOrderService(db, { locations });
   const assistant = createAssistantService(db, {
     workOrders,
     provider: assistantProvider,
     timeoutMs: config.aiTimeoutMs,
     log: assistantLog,
   });
-  const referenceData = createReferenceDataService(db, { assistant: assistant.enabled });
+  const referenceData = createReferenceDataService(db, {
+    assistant: assistant.enabled,
+    locations,
+  });
   const conflicts = createConflictService(db, { assets, workOrders });
   const dashboard = createDashboardService(db, { workOrders });
   const widgetSettings = createWidgetSettingsService(db);
@@ -112,9 +120,8 @@ export function createApp({
   const audit = createAuditService(db);
   const feedback = createFeedbackService(db);
   const comments = createCommentService(db);
-  const rooms = createRoomService(db);
-  const requests = createRequestService(db, { workOrders, comments, rooms });
-  const plans = createPlanService(db);
+  const requests = createRequestService(db, { workOrders, comments, locations });
+  const plans = createPlanService(db, { locations });
   const planning = createPlanningService(db, { workOrders });
   const occurrences = createOccurrenceService(db);
   const schedule = createScheduleService(db, { workOrders, planning });
@@ -185,8 +192,9 @@ export function createApp({
   );
   app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
-  app.use('/api/admin/rooms', adminRoomsRouter({ rooms, now }));
-  app.use('/api/rooms', roomsRouter({ rooms }));
+  app.use('/api/admin/locations', adminLocationsRouter({ locations, now }));
+  app.use('/api/admin/level-types', adminLevelTypesRouter({ locations, now }));
+  app.use('/api/locations', locationsRouter({ locations }));
   app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
   app.use(
     '/api/assets',

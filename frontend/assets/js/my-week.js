@@ -145,7 +145,7 @@ function blockCard(block, day, { past, ...options }) {
     block.kind === 'WORK'
       ? h('a', { href: `/work-orders/${wo.id}`, 'data-link': true }, `${wo.number} — ${wo.title}`)
       : h('strong', {}, valueLabel('allocation_kind', block.kind));
-  const where = wo ? [wo.site, wo.building, wo.location].filter(Boolean).join(' · ') : null;
+  const where = wo ? [wo.site, wo.place, wo.location].filter(Boolean).join(' · ') : null;
   return h(
     'li',
     {

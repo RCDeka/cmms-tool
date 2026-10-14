@@ -6,12 +6,14 @@ One entry per release, newest first, written from the conventional commits since
 
 ### Added
 
+- Location tree (Phase 32, D82, D83): sites, buildings, floors, rooms and any other level an admin defines, as one tree per site. Assets, work orders and plans point to a place, shown as its path ("Tower A › B1"); the site follows the place. One place picker in every form, with a search on the paths, that works offline. The Places page (`/admin/locations`) replaces the Rooms page: a folding tree with search, moves within a site, places taken out of use with their branch, and the level types for admins. Lists filter by a place and everything below it (`location=`), the search finds the names of the places, and the year planner groups by area.
 - Room list (D81): staff pick the building, floor and room of a request, or "Not in the list" and describe the place; supervisors and admins keep the list on the new Rooms page (`/admin/rooms`). The room is shown on the request and in the work order panel.
 - Requests waiting for a reply (D80): when the requester wrote the latest comment, the request is counted on a dashboard tile (supervisors and admins: a new widget, in the Overview template, for all requests; technicians: those assigned to them), listed by the new filter "Waiting for a reply" (`awaiting_reply=true`), and the work order panel says that the requester is waiting for a reply.
 - A staff member can cancel their own request until work starts, whether it waits for review or was approved (D79). The maintenance team sees the new review status Withdrawn; the staff request widget does not count a request withdrawn before its review as reviewed.
 
 ### Upgrade notes
 
+- Migration `015_locations.sql` (D82) moves every site, building, floor and room of the data into the location tree, then rebuilds `assets`, `work_orders` and `maintenance_plans` without `building`, `floor` and `room_id`, and drops `rooms`; the service takes a backup first (D74). The API takes `location_id` instead of `building`, `floor` and `room_id` (`site` alone still means the site itself): clients from before cannot write places. `GET /api/rooms` and `/api/admin/rooms` are replaced by `GET /api/locations`, `/api/admin/locations` and `/api/admin/level-types`. Codes on the places are left empty, for the admins to fill in (Phase 33).
 - Migration `014_rooms.sql` adds the `rooms` table and `work_orders.room_id`; the room list starts empty in production: supervisors or admins fill it on the Rooms page (bulk import is backlog item 14).
 - Migration `013_request_withdrawal.sql` rebuilds the `work_orders` table; the service takes a backup before applying it (D74).
 

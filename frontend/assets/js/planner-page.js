@@ -304,10 +304,12 @@ export async function showPlanning(route, isCurrent) {
     if (!hadFocus) tableContainer.querySelector('#planner-tiles-heading')?.focus();
     return;
   }
-  const showForm = (current) => {
+  const showForm = async (current) => {
+    const { places } = await getRefs();
     renderPlanForm(detailContainer, {
       plan: current,
       sites,
+      places,
       defaultWeek: data.current_week,
       onClose: current ? () => app.render(currentRoute()) : close,
       onSubmit: (raw, form, assetCode) => submitPlan(raw, form, assetCode, current, filters),

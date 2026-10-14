@@ -3,7 +3,7 @@
 
 // Entity definitions: API and UI paths (D18), table columns and detail fields.
 // Field types drive formatting: text (default), enum, date, datetime, boolean, hours, user,
-// asset (work order → asset link).
+// asset (work order → asset link), place (the path of `location_id` in the location tree, D82).
 
 const COMMON_FIELDS = {
   site: { label: 'Site' },
@@ -25,8 +25,8 @@ export const ENTITIES = {
       ...COMMON_FIELDS,
       code: { label: 'Asset code' },
       name: { label: 'Name' },
-      building: { label: 'Building' },
-      floor: { label: 'Floor' },
+      // The path below the site; edited through location_id with the place picker (D82).
+      place: { label: 'Place', type: 'place', editField: 'location_id' },
       subcategory: { label: 'Subcategory' },
       criticality: { label: 'Criticality', type: 'enum', enum: 'criticality' },
       status: { label: 'Status', type: 'enum', enum: 'asset_status' },
@@ -52,8 +52,8 @@ export const ENTITIES = {
       'code',
       'name',
       'site',
-      'building',
-      'floor',
+      'place',
+      'exact_location',
       'category',
       'subcategory',
       'criticality',
@@ -66,7 +66,6 @@ export const ENTITIES = {
       'supplier',
       'maintenance_contract',
       'responsible_technician',
-      'exact_location',
       'comment',
       'updated_by',
       'updated_at',
@@ -88,9 +87,9 @@ export const ENTITIES = {
       status: { label: 'Status', type: 'enum', enum: 'work_order_status' },
       priority: { label: 'Priority', type: 'enum', enum: 'work_order_priority' },
       description: { label: 'Description' },
-      location: { label: 'Location' },
-      // Picked by the requester from the room list (D81); read-only for the team.
-      room: { label: 'Room', type: 'room', editField: 'room_id' },
+      // The place (D82) and the words about it ("desk 12-21").
+      place: { label: 'Place', type: 'place', editField: 'location_id' },
+      location: { label: 'Exact location' },
       // editField: the API field a row edits when it shows a nested object.
       asset: { label: 'Asset', type: 'asset', editField: 'asset_id' },
       assignee: { label: 'Assignee', type: 'user', editField: 'assignee_id' },
@@ -126,7 +125,7 @@ export const ENTITIES = {
       'type',
       'category',
       'site',
-      'room',
+      'place',
       'location',
       'asset',
       'plan',
@@ -156,7 +155,7 @@ export const ENTITIES = {
       'priority',
       'description',
       'site',
-      'room',
+      'place',
       'location',
       'asset',
       'due_on',

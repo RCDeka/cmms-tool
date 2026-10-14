@@ -35,6 +35,8 @@ const WORK_ORDER_KEYS = [
   'asset_id',
   'asset',
   'site',
+  'location_id',
+  'place',
   'location',
   'category',
   'assignee_id',
@@ -60,8 +62,6 @@ const WORK_ORDER_KEYS = [
   'plan_id',
   'plan',
   'planned_week',
-  'room_id',
-  'room',
   'created_at',
   'updated_at',
 ].sort();

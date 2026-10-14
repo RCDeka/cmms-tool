@@ -79,12 +79,13 @@ describe('checks before saving', () => {
     expect(checkBeforeSave('work_orders', wo, { due_on: '2026-09-30' })).toHaveProperty('due_on');
   });
 
-  it('requires a title, a type and an asset or a site to create', () => {
+  it('requires a title, a type and an asset or a place to create', () => {
     expect(checkBeforeCreate({})).toEqual({
       title: 'Required',
       type: 'Required',
-      site: 'Choose an asset or a site',
+      location_id: 'Choose an asset or a place',
     });
+    expect(checkBeforeCreate({ title: 'x', type: 'CORRECTIVE', location_id: 3 })).toEqual({});
     expect(checkBeforeCreate({ title: 'x', type: 'CORRECTIVE', asset_id: 3 })).toEqual({});
   });
 });
@@ -100,11 +101,11 @@ describe('asset creation', () => {
   it('checks required fields and the code format', () => {
     expect(checkBeforeCreateAsset({})).toEqual({
       name: 'Required',
-      site: 'Required',
       category: 'Required',
       criticality: 'Required',
+      location_id: 'Required',
     });
-    const ok = { name: 'Chiller', site: 'Lyon', category: 'HVAC', criticality: 'LOW' };
+    const ok = { name: 'Chiller', location_id: 3, category: 'HVAC', criticality: 'LOW' };
     expect(checkBeforeCreateAsset({ ...ok, code: 'cta-01' })).toEqual({});
     expect(checkBeforeCreateAsset({ ...ok, code: 'AST 01' })).toHaveProperty('code');
   });

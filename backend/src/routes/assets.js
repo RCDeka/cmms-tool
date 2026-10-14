@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../lib/http-error.js';
-import { listFilter } from '../lib/list-filter.js';
+import { listFilter, placeFilter } from '../lib/list-filter.js';
 import { idParams, pageQueryFields, sortQueryFields, textFilter } from '../lib/pagination.js';
 import { requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -19,6 +19,8 @@ const filterFields = {
   q: textFilter,
   // Several values: comma-separated (site names may hold commas, so those use "|").
   site: listFilter(z.string().max(200), { separator: '|' }),
+  // A place and everything below it (BR-LOC10).
+  location: placeFilter(),
   category: listFilter(z.enum(CATEGORIES)),
   status: listFilter(z.enum(ASSET_STATUSES)),
   criticality: listFilter(z.enum(CRITICALITIES)),

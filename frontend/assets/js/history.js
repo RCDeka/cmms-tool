@@ -132,9 +132,22 @@ export function entryTitle(entry) {
     : base;
 }
 
-/** Fields of an entry to list, status first (it tells the story of a work order). Pure. */
+/** Labels of fields the records no longer have, or that no form shows (D82). */
+const OTHER_FIELD_LABELS = {
+  place: 'Place',
+  building: 'Building',
+  floor: 'Floor',
+  room_id: 'Room',
+};
+
+/**
+ * Fields of an entry to list, status first (it tells the story of a work order). A place's
+ * id is left out when its path is there (D82). Pure.
+ */
 export function changedFields(entry) {
-  const fields = Object.keys(entry.changes);
+  const fields = Object.keys(entry.changes).filter(
+    (f) => !(f === 'location_id' && 'place' in entry.changes),
+  );
   const shown =
     entry.action === 'CREATE' ? fields.filter((f) => CREATION_SUMMARY.includes(f)) : fields;
   return shown.sort((a, b) => (a === 'status' ? -1 : b === 'status' ? 1 : 0));
@@ -151,7 +164,7 @@ function changeList(entityKey, entry, lookups) {
       const other = OTHER_RECORDS[entityKey];
       const label = other
         ? (other.labels[field] ?? field)
-        : (fieldForApi(entityKey, field)?.def.label ?? field);
+        : (fieldForApi(entityKey, field)?.def.label ?? OTHER_FIELD_LABELS[field] ?? field);
       const show = (value) =>
         other ? other.value(field, value, lookups) : displayValue(entityKey, field, value, lookups);
       return h(

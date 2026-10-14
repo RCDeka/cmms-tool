@@ -37,9 +37,6 @@ export function personName(ref) {
   return `${ref.first_name} ${ref.last_name}`;
 }
 
-/** "Tower A, L12, Meeting room 12.02" for a room reference (D81). Pure. */
-export const roomLabel = (room) => `${room.building}, ${room.floor}, ${room.name}`;
-
 /** True when a value should not be displayed (brief: only non-empty fields are shown). */
 export function isEmpty(value) {
   return value === null || value === undefined || value === '';
@@ -82,8 +79,6 @@ export function renderValue(field, def, value) {
         { href: `/planning/plans/${value.id}`, 'data-link': true },
         `${value.code} — ${value.title}`,
       );
-    case 'room':
-      return roomLabel(value);
     case 'asset':
       return h(
         'a',

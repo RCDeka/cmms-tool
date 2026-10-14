@@ -3,6 +3,7 @@
 
 // Year planner (D48): planning settings, the 52-week timeline with its figures, and the
 // release of each visit's work order (docs/data-model.md → BR-P6, BR-Y1 to BR-Y4).
+import { PATH_SEPARATOR } from '../rules/locations.js';
 import { z } from 'zod';
 import { addDays, dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
@@ -62,8 +63,11 @@ const blockedSchema = z.strictObject({
   reason: z.string().trim().min(1, 'Say why the week is blocked').max(200),
 });
 
-/** Group keys of the timeline rows. */
-export const GROUP_BY = ['site', 'building', 'category'];
+/**
+ * Group keys of the timeline rows. `area`: the plan's first place under its site, whatever
+ * its level type (a building, a data center hall; D82).
+ */
+export const GROUP_BY = ['site', 'area', 'category'];
 
 /** Released work orders take the plan's title and the week, within the 200-character limit. */
 const releaseTitle = (plan, week) => `${plan.title.slice(0, 186)} – ${week}`;
@@ -125,6 +129,8 @@ export function createPlanningService(db, { workOrders }) {
             description: plan.description,
             asset_id: plan.asset_id,
             site: plan.site,
+            location_id: plan.location_id,
+            place: plan.place,
             location: plan.location,
             category: plan.category,
             assignee_id: null,
@@ -346,7 +352,7 @@ export function createPlanningService(db, { workOrders }) {
       const plans = db
         .prepare(
           `SELECT p.* FROM maintenance_plans p ${clause}
-           ORDER BY p.site, p.building, p.category, p.code`,
+           ORDER BY p.site, p.place, p.category, p.code`,
         )
         .all(params);
       const rows = db
@@ -415,7 +421,8 @@ export function createPlanningService(db, { workOrders }) {
             'type',
             'category',
             'site',
-            'building',
+            'location_id',
+            'place',
             'estimated_hours',
             'frequency_weeks',
             'anchor_week',
@@ -478,14 +485,17 @@ function figuresWith(timeline, weekOf) {
 
 const pick = (object, keys) => Object.fromEntries(keys.map((k) => [k, object[k]]));
 
+/** The first place under the site of a path ("Tower A" for "Tower A › B1"), or null. */
+const areaOf = (place) => (place ? place.split(PATH_SEPARATOR)[0] : null);
+
 function groupKey(plan, groupBy) {
-  if (groupBy === 'building') return `${plan.site}\u0000${plan.building ?? ''}`;
+  if (groupBy === 'area') return `${plan.site}\u0000${areaOf(plan.place) ?? ''}`;
   return plan[groupBy];
 }
 
-/** Group title: the site, "site · building", or the trade code (the client shows its label). */
+/** Group title: the site, "site · area", or the trade code (the client shows its label). */
 function groupLabel(plan, groupBy) {
-  if (groupBy === 'building') return { site: plan.site, building: plan.building };
+  if (groupBy === 'area') return { site: plan.site, area: areaOf(plan.place) };
   if (groupBy === 'site') return { site: plan.site };
   return { category: plan.category ?? GENERAL };
 }
