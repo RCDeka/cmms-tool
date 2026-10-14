@@ -86,6 +86,7 @@ Check these on every screen without repeating them in each test; any breach is a
 | P-08 | `npm run db:reset -- --with-conflicts`, then count | 6 users, 500 assets, about 320 work orders (207 + the history), 62 plans, 3 open conflicts; `db:seed` alone gives 0 conflicts. |
 | P-09 | Run the seed twice on the same day, compare a dump of `assets` | Identical (deterministic seed). |
 | P-10 | Check the vendored libraries in `frontend/assets/vendor/` | Version named in the file name or header; licenses compatible with the AGPL (idb ISC, Chart.js MIT). |
+| P-11 | `npm run check:permissions` against the staging server (section 3) | 0 failed. |
 
 ---
 
@@ -145,7 +146,9 @@ Type each URL in the address bar (then reload it) with each role that has no acc
 
 ## 3. API authorization matrix (curl)
 
-Run from the staging server (or through HTTPS). Get one token per role:
+**Automated:** `cd backend && CHECK_URL=https://staging.example.com npm run check:permissions` runs every check of sections 3.1 to 3.3 (about 340 requests) as the demo accounts and exits with 1 on any failure. It reads the accounts' password from `CHECK_PASSWORD` or `SEED_PASSWORD`, and other usernames from `CHECK_STAFF`, `CHECK_TECHNICIAN`, `CHECK_TECHNICIAN2`, `CHECK_SUPERVISOR`, `CHECK_ADMIN`. It changes no data: refused writes get 403, allowed ones are sent with bodies the server refuses. Its only side effects are those of opening the screens (preventive work orders due are released, as by the daily job; "Overview" is created for an account without dashboards). It logs in 4 times, so at most two runs per 15 minutes from one address. Run it after every deployment to staging; use the manual steps below to investigate a failure.
+
+Manual: run from the staging server (or through HTTPS). Get one token per role:
 
 ```bash
 API=https://staging.example.com/api

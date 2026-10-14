@@ -65,6 +65,7 @@ cd backend  && npm run db:reset -- --with-conflicts   # reseed with 3 demo confl
 cd backend  && npm run db:backup                       # backup into BACKUP_DIR (keeps 14 days)
 cd backend  && npm run pm:release                      # create the work orders of plan visits due (daily job)
 cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
+cd backend  && CHECK_URL=https://staging.example.com npm run check:permissions   # every role × endpoint (docs/test-protocol.md, section 3)
 cd backend  && npm run user:create-admin -- --username <name> --first-name <name> --last-name <name>   # first admin of an empty database (D70)
 cd frontend && npm install && npm test               # frontend logic tests
 ```

@@ -20,7 +20,8 @@
     "db:backup": "node src/db/cli.js backup",
     "feedback:export": "node src/db/cli.js feedback",
     "pm:release": "node src/db/cli.js release",
-    "user:create-admin": "node src/db/cli.js create-admin"
+    "user:create-admin": "node src/db/cli.js create-admin",
+    "check:permissions": "node scripts/check-permissions.js"
   },
   "dependencies": {
     "argon2": "^0.45.1",
