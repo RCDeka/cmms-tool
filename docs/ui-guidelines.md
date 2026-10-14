@@ -200,20 +200,20 @@ Every column title of the asset and work order tables is a button. A click sorts
 
 ## Screenshots
 
-The README shows the main screens with pictures from `docs/img/` (D78). Take them again when a screen they show changes visibly, in the same commit as the change if possible.
+The README shows the main screens with pictures from `docs/img/` (D78). Take them again when a screen they show changes visibly, in the same commit as the change if possible: `cd backend && npm run docs:screenshots` (Chromium needed, about a minute).
 
-- **Data**: a separate copy of the mock data, never a real database: `DATABASE_PATH=<temporary file> npm run db:reset -- --with-conflicts`, then the server on that file. The pictures only ever show mock names and sites.
-- **Browser**: in English (the browser's own week and date fields follow its language, see Language), no extensions, scrollbars hidden, after the page has finished loading.
+- **Data**: the script (`backend/scripts/take-screenshots.js`) creates a throwaway database with the mock data and conflicts in a temporary folder and starts its own server on it (port 3100, `SHOTS_PORT`); the database of `.env` is never opened. The pictures only ever show mock names and sites.
+- **Browser**: headless Chromium (`SHOTS_CHROME` to choose another command) in English, since the browser's own week and date fields follow its language (see Language); scrollbars hidden. Each user starts from an empty session; the script stops if a login fails or two pictures come out identical.
 - **Sizes**: computers 1440 × 900 at 1×; phones 402 × 874 (iPhone 17) at 2×, to keep the files small.
-- **Pictures** (PNG, named after the screen):
+- **Pictures** (PNG, named after the screen; the list is `SHOTS` in the script):
 
 | File | User | Page | Size |
 |---|---|---|---|
 | `dashboard.png` | `supervisor1` | `/dashboard` | computer |
-| `work-orders.png` | `supervisor1` | `/work-orders/40` (table + detail panel) | computer |
-| `conflict.png` | `supervisor1` | `/conflicts/3` (the work order conflict) | computer |
+| `work-orders.png` | `supervisor1` | a work order in progress on an asset, without a conflict (table + detail panel) | computer |
+| `conflict.png` | `supervisor1` | the open work order conflict | computer |
 | `year-planner.png` | `supervisor1` | `/planning` | computer |
 | `week-scheduler.png` | `supervisor1` | `/schedule` | computer |
 | `my-week-phone.png` | `technician1` | `/my-week` | phone |
 | `requests-phone.png` | `user1` | `/requests` | phone |
-| `request-phone.png` | `user1` | `/requests/164` (a request in progress) | phone |
+| `request-phone.png` | `user1` | a request of `user1` in progress | phone |

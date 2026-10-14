@@ -38,7 +38,7 @@ Out of scope: deleting work orders (they are cancelled), inventory, attachments 
 
 ## Screenshots
 
-Taken with the mock data (`npm run db:reset -- --with-conflicts`); how to take them again is in `docs/ui-guidelines.md` → Screenshots.
+Taken with the mock data (`npm run db:reset -- --with-conflicts`); `npm run docs:screenshots` takes them again (`docs/ui-guidelines.md` → Screenshots).
 
 **Dashboard** (supervisor): KPI tiles that open the matching list, charts, widgets ticked in the sidebar.
 
@@ -101,6 +101,7 @@ cd backend  && npm run pm:release                      # create the work orders 
 cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
 cd backend  && CHECK_URL=https://staging.example.com npm run check:permissions   # every role × endpoint (docs/test-protocol.md, section 3)
 cd backend  && npm run user:create-admin -- --username <name> --first-name <name> --last-name <name>   # first admin of an empty database (D70)
+cd backend  && npm run docs:screenshots             # README pictures in docs/img/, from a throwaway mock database (Chromium needed)
 cd frontend && npm install && npm test               # frontend logic tests (some compare with the backend rules: npm install in backend/ first)
 ```
 
