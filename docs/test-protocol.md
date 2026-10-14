@@ -800,10 +800,10 @@ Run the **main flows** below on each line of the matrix: log in; browse a list a
 | OPS-03 | `systemctl restart tacto` while a user is editing | The user sees at most a short "offline" period; the edit is saved after. |
 | OPS-04 | Kill the node process (`kill -9`) | systemd restarts it within 5 s. |
 | OPS-05 | `sudo nginx -t`; `certbot renew --dry-run` | Both succeed. |
-| OPS-06 | `systemctl start tacto-backup`; list `/var/backups/tacto` | A new file; logs show the integrity check passed. |
-| OPS-07 | **Restore drill**: restore yesterday's backup on staging following the README | App starts on it; the data is the backup's; then put back the current database. |
+| OPS-06 | `systemctl start tacto-backup`; list `/var/backups/tacto`; `journalctl -u tacto-offsite-backup -n 3` | A new file; logs show the integrity check passed; then "Off-server copy of … stored and verified" (D72). |
+| OPS-07 | **Restore drill**: on a separate VM, restore the latest **off-server** copy following README → Restore from the off-server copies, using only the password kept outside the VPS; also restore yesterday's local backup on staging | The app starts on each restored database and shows the expected data. |
 | OPS-08 | Backups older than 14 days | Deleted by the next run. |
-| OPS-09 | Copy of backups off the server (rsync or other) | In place and tested (the README asks for it; not automated). |
+| OPS-09 | Off-server copies: `restic snapshots` (README → Operations); stop the network of the VPS or set a wrong key in `/etc/tacto/offsite.env`, then `systemctl start tacto-backup` | One copy per night; with the fault, `tacto-offsite-backup` fails visibly (`systemctl --failed`) while the local backup still exists. Put the settings back. |
 | OPS-10 | Update procedure: deploy the next version with a new migration (README "Update") | Migration runs at start, app works, users keep their session and queued writes. |
 | OPS-11 | Permissions: `ls -l /etc/tacto/tacto.env /var/lib/tacto` | env file `640 root:tacto`; database directory `750 tacto`; code owned by root. |
 | OPS-12 | Login rate limit through Nginx from two different client IPs | Each IP has its own counter (the real client address is used, not Nginx's). |
@@ -834,6 +834,6 @@ Found while writing this protocol (2026-10-14). They are not test failures yet, 
 1. ~~**No way to create the first administrator without the demo data.**~~ Fixed by `npm run user:create-admin` (D70), tested by OPS-16. If the demo data is loaded on purpose instead, every demo account shares `SEED_PASSWORD` and must be deactivated or have its password changed.
 2. **"Source code" link (DT2, D57, roadmap backlog item 11).** The repository is private; the AGPL requires the source to be offered to the users of a network service. Make the repository public or serve an archive before real users get access.
 3. ~~**Server time of the timers**~~ Fixed (D71): the timers run in Paris time, the backup at 01:30 so that it never falls in the hour skipped or repeated by daylight saving. Tested by T-10.
-4. **Off-server backups** (OPS-09). The README recommends them but nothing automates them; a backup on the same disk does not survive losing the VPS.
+4. ~~**Off-server backups**~~ Automated (D72): an encrypted restic copy after each nightly backup, read back and compared every night. Before launch: choose the storage, keep the restic password outside the VPS, run OPS-07 and OPS-09. No alert is sent on failure yet: check `systemctl --failed` or add monitoring.
 5. **Tokens stay valid after logout until they expire** (SEC-25, D22): known and accepted by design. Confirm the 8-hour lifetime with the product owner.
 6. **`deploy/tacto.env.example` does not list `AI_PROVIDER` and `AI_TIMEOUT_MS`.** The defaults are right for now (`none`), but add them so the production settings file shows every option.

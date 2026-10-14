@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Off-server copy of the nightly backup (D72; install as
+# /etc/systemd/system/tacto-offsite-backup.service). Started by tacto-backup.service when the
+# backup succeeds (OnSuccess=); run it by hand with: systemctl start tacto-offsite-backup
+[Unit]
+Description=Tacto off-server backup copy
+Wants=network-online.target
+After=network-online.target tacto-backup.service
+
+[Service]
+Type=oneshot
+User=tacto
+Group=tacto
+# Repository and keys: root-owned, readable by the group, apart from the app's settings.
+EnvironmentFile=/etc/tacto/offsite.env
+Environment=BACKUP_DIR=/var/backups/tacto
+Environment=RESTIC_CACHE_DIR=/var/cache/tacto-restic
+ExecStart=/bin/bash /opt/tacto/deploy/tacto-offsite-backup.sh
+UMask=0077
+# Reads /var/backups/tacto; writes only its restic cache. /var/lib/tacto (the service user's
+# home) holds ~/.ssh for an SFTP repository.
+CacheDirectory=tacto-restic
+StateDirectory=tacto
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

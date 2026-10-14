@@ -99,7 +99,7 @@ Replace `cmms.example.com` with your domain everywhere below.
 ```bash
 # Node.js 24 LTS (NodeSource), Nginx, Certbot, Git
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-sudo apt-get install -y nodejs nginx certbot git
+sudo apt-get install -y nodejs nginx certbot git restic
 node --version                                   # v24.x
 
 # Firewall
@@ -137,12 +137,27 @@ sudo nano /etc/tacto/tacto.env
 - `SEED_PASSWORD`: only if you load the demo data (step 5); at least 10 characters.
 - Changing `JWT_SECRET` later logs every user out.
 
+**Off-server backups** (D72). The nightly backup stays on the VPS for 14 days; a copy also goes, encrypted, to storage elsewhere, so the data survives the loss of the VPS. Create a bucket at another provider than the VPS (any S3-compatible storage: OVH, Scaleway, AWS…; or Backblaze B2), or use another server over SFTP. Then:
+
+```bash
+sudo install -m 640 -o root -g tacto /opt/tacto/deploy/tacto-offsite.env.example /etc/tacto/offsite.env
+sudo nano /etc/tacto/offsite.env     # RESTIC_REPOSITORY, RESTIC_PASSWORD, the storage keys
+# Create the repository once (encrypted with RESTIC_PASSWORD):
+sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic --no-cache init'
+```
+
+- `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. **Store it outside the VPS too** (password manager): if the VPS is lost, it is the only way to read the copies.
+- SFTP only: give the `tacto` user an SSH key and trust the backup server once: `sudo install -d -m 750 -o tacto -g tacto /var/lib/tacto && sudo -u tacto ssh-keygen -t ed25519 -N '' -f /var/lib/tacto/.ssh/id_ed25519`, add the public key to the backup account, then `sudo -u tacto ssh backup@backup.example.com exit` to record its host key.
+
+Each night, once the backup has succeeded, `tacto-offsite-backup` sends it, reads it back to compare it with the original, keeps 14 daily, 8 weekly and 12 monthly copies, and checks the repository.
+
 ### 4. Start the service, the backups and the daily release
 
 ```bash
 sudo cp /opt/tacto/deploy/systemd/tacto.service \
         /opt/tacto/deploy/systemd/tacto-backup.service \
         /opt/tacto/deploy/systemd/tacto-backup.timer \
+        /opt/tacto/deploy/systemd/tacto-offsite-backup.service \
         /opt/tacto/deploy/systemd/tacto-pm-release.service \
         /opt/tacto/deploy/systemd/tacto-pm-release.timer /etc/systemd/system/
 
@@ -164,6 +179,10 @@ sudo systemctl enable --now tacto tacto-backup.timer tacto-pm-release.timer
 
 systemctl status tacto --no-pager            # active (running)
 curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
+
+# First backup, then its off-server copy (started by the backup when it succeeds):
+sudo systemctl start tacto-backup
+journalctl -u tacto-offsite-backup -n 3 --no-pager   # "Off-server copy of … stored and verified …"
 ```
 
 The database is created and migrated when the service starts.
@@ -223,11 +242,13 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Update to the latest version | `cd /opt/tacto && sudo git pull && cd backend && sudo npm ci --omit=dev && sudo systemctl restart tacto` (new migrations run at start) |
 | Backup now | `sudo systemctl start tacto-backup && ls /var/backups/tacto` |
 | Next scheduled backups | `systemctl list-timers tacto-backup` |
+| Last off-server copy | `journalctl -u tacto-offsite-backup -n 3` (a failure shows in `systemctl --failed`) |
+| List the off-server copies | `sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic snapshots'` |
 | Release preventive work orders now | `sudo systemctl start tacto-pm-release && journalctl -u tacto-pm-release -n 3` |
 | Restore a backup | see below |
 | Change the time zone | edit `APP_TIMEZONE` in `/etc/tacto/tacto.env`, run the `ZONE=…` and `sed` lines of step 4 again (with the old zone in place of `Europe/Paris`), then `sudo systemctl daemon-reload && sudo systemctl restart tacto` |
 
-Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`). Copy them off the server too (e.g. `rsync` to another machine): a backup on the same disk does not survive the loss of the VPS.
+Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`) on the VPS. Each one is then copied off the server, encrypted, with restic (`tacto-offsite-backup`, D72): 14 daily, 8 weekly and 12 monthly copies.
 
 **Restore:**
 
@@ -237,6 +258,16 @@ sudo -u tacto cp /var/backups/tacto/cmms-2026-10-04T02-30-00Z.sqlite /var/lib/ta
 sudo rm -f /var/lib/tacto/cmms.sqlite-wal /var/lib/tacto/cmms.sqlite-shm
 sudo systemctl start tacto
 ```
+
+**Restore from the off-server copies** (VPS lost: on the new server, after steps 1 to 3 with the same `offsite.env` and `RESTIC_PASSWORD`):
+
+```bash
+sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic snapshots'      # pick one, or "latest"
+sudo install -d -m 750 -o tacto -g tacto /var/lib/tacto
+sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic --no-cache dump latest cmms.sqlite > /var/lib/tacto/cmms.sqlite'
+```
+
+Then go on with step 4: the service starts on the restored database.
 
 ## Repository structure
 
@@ -276,7 +307,7 @@ sudo systemctl start tacto
 └── deploy/
     ├── tacto.env.example production settings template
     ├── nginx/                site config + security headers snippet
-    └── systemd/              API service, backup and preventive release services with their timers
+    └── systemd/              API service, backup, off-server copy and preventive release services with their timers
 ```
 
 ## License

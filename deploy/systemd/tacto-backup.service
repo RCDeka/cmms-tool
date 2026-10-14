@@ -6,6 +6,8 @@
 [Unit]
 Description=Tacto database backup
 After=tacto.service
+# Then the off-server copy (D72), only when this backup succeeded.
+OnSuccess=tacto-offsite-backup.service
 
 [Service]
 Type=oneshot
