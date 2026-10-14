@@ -11,7 +11,7 @@ import { apiFetch } from './api.js';
 import { hasRole } from './auth.js';
 import { h } from './dom.js';
 import { getRefs } from './editor.js';
-import { announce, renderPage, setTitle } from './layout.js';
+import { announce, renderPage } from './layout.js';
 import { findAssetByCode } from './refs.js';
 import {
   checkPlanForm,
@@ -322,15 +322,12 @@ export async function showPlanning(route, isCurrent) {
     detailContainer.querySelector('#p-title')?.focus();
   };
   if (route.name === 'suggestions') {
-    setTitle('Suggested moves');
     return showSuggestions(data, filters, close);
   }
   if (route.name === 'planCreate') {
-    setTitle('New maintenance plan');
     return showForm(null);
   }
   if (route.name === 'blockedWeeks') {
-    setTitle('Blocked weeks');
     renderBlockedWeeksPanel(detailContainer, {
       items: blocked.items,
       sites,
@@ -364,7 +361,6 @@ export async function showPlanning(route, isCurrent) {
     detailContainer.querySelector('.detail-title')?.focus();
     return;
   }
-  setTitle(`${plan.code} — ${plan.title}`);
   const occurrence = route.occurrenceId
     ? (data.groups
         .flatMap((g) => g.plans)

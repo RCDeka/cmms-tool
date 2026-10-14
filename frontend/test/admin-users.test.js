@@ -8,6 +8,7 @@ import {
   checkUserForm,
   parseUserFilters,
   renderUserCreate,
+  renderUserList,
   renderUserPanel,
   usersUrl,
 } from '../assets/js/admin-users.js';
@@ -179,5 +180,52 @@ describe('user forms', () => {
     container.querySelector('#a-confirm_password').value = 'new-password-1';
     container.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
     expect(onChange).toHaveBeenCalledWith('old-password', 'new-password-1', expect.any(Object));
+  });
+});
+
+describe('user list', () => {
+  const list = (onFilter = vi.fn()) => {
+    const container = document.createElement('div');
+    renderUserList(container, {
+      data: { total: 1, page: 1, pages: 1, items: [{ ...user, id: 4 }] },
+      filters: {},
+      selectedId: null,
+      onFilter,
+      pagination: null,
+      paginationTop: null,
+    });
+    return container;
+  };
+
+  it('follows the search as you type, like the other lists (DT13)', () => {
+    vi.useFakeTimers();
+    try {
+      const onFilter = vi.fn();
+      const container = list(onFilter);
+      expect(container.querySelector('button[type="submit"]')).toBeNull();
+      const search = container.querySelector('#users-q');
+      search.value = 'kar';
+      search.dispatchEvent(new Event('input'));
+      expect(onFilter).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(400);
+      expect(onFilter).toHaveBeenCalledWith(
+        { q: 'kar', role: undefined, active: undefined },
+        { typing: true },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens a user from anywhere on the row (DT13)', () => {
+    const container = list();
+    const link = container.querySelector('tbody a');
+    let clicked = 0;
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      clicked += 1;
+    });
+    container.querySelector('tbody tr td:nth-child(2)').click();
+    expect(clicked).toBe(1);
   });
 });

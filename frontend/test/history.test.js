@@ -6,6 +6,7 @@ import {
   changedFields,
   entryTitle,
   historySection,
+  recordLabel,
   renderAuditLog,
   renderTimeline,
   withPeople,
@@ -192,5 +193,20 @@ describe('user accounts in the audit log (admins, D39)', () => {
     });
     expect(container.querySelector('option[value="users"]')).toBeNull();
     expect(parseRoute('/audit-log', '?type=users').entityType).toBe('users');
+  });
+});
+
+describe('record labels', () => {
+  it('writes the day of a scheduler block like the other dates (DT11)', () => {
+    const block = entry({
+      entity_type: 'allocations',
+      label: 'WO-2026-00259 · Lucas Moreau · 2026-10-13',
+    });
+    expect(recordLabel(block)).toBe('WO-2026-00259 · Lucas Moreau · 13 Oct 2026');
+  });
+
+  it('keeps the label of other records as it is', () => {
+    const order = entry({ entity_type: 'work_orders', label: 'WO-2026-00001 — Leak 2026-10-13' });
+    expect(recordLabel(order)).toBe('WO-2026-00001 — Leak 2026-10-13');
   });
 });

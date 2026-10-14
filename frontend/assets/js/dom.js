@@ -94,6 +94,19 @@ export function pageMessage() {
   return { element, say };
 }
 
+/**
+ * A label "WO-2026-00133 — Title" with its code kept on one line (DT5): the hyphens of a code
+ * are otherwise line-break points in narrow columns.
+ * @param {string} label
+ * @param {string} [separator] between the code and the rest
+ * @returns {(string | HTMLElement)[]}
+ */
+export function codeFirst(label, separator = ' — ') {
+  const at = label.indexOf(separator);
+  if (at < 0) return [label];
+  return [h('span', { class: 'nowrap' }, label.slice(0, at)), label.slice(at)];
+}
+
 /** Phone-sized screen: under 768 px wide (docs/ui-guidelines.md). False where unknown. */
 export function isPhone() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches;

@@ -66,12 +66,28 @@ let saving = Promise.resolve();
  */
 export function initDashboardsPage(hooks) {
   app = hooks;
-  // Widget menus close on a click elsewhere, like the filter dropdowns.
+  // Widget menus close on a click elsewhere or with Escape, like the filter dropdowns (DT8).
   document.addEventListener('click', (event) => {
-    for (const open of document.querySelectorAll('.widget-menu[open], .page-menu[open]')) {
+    for (const open of document.querySelectorAll(MENUS)) {
       if (!open.contains(event.target)) open.open = false;
     }
   });
+  document.addEventListener('keydown', closeMenuOnEscape);
+}
+
+const MENUS = '.widget-menu[open], .page-menu[open]';
+
+/**
+ * Escape closes the open widget or dashboard menu and puts the focus back on its button.
+ * @param {KeyboardEvent} event
+ */
+export function closeMenuOnEscape(event) {
+  if (event.key !== 'Escape') return;
+  const open = document.querySelector(MENUS);
+  if (!open) return;
+  event.preventDefault();
+  open.open = false;
+  open.querySelector('summary')?.focus();
 }
 
 /** True for the roles that have personal dashboards. */

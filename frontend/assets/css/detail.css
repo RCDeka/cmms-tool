@@ -107,6 +107,11 @@
   gap: var(--space-3);
 }
 
+/* A form that opens with a section heading is set apart from what comes before it (DT15). */
+.detail-form > h3:first-child {
+  margin-top: var(--space-4);
+}
+
 .form-row {
   display: grid;
   grid-template-columns: minmax(9rem, 35%) minmax(0, 1fr);

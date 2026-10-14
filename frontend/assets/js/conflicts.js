@@ -3,7 +3,7 @@
 
 // Supervisor conflict console (brief → Conflict management; docs/architecture.md → Conflicts).
 // Conflict cues always combine color, an icon and text (brief → Accessibility).
-import { h, replaceChildren } from './dom.js';
+import { codeFirst, h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDateTime, isEmpty, personName, renderValue } from './format.js';
 
@@ -82,7 +82,7 @@ export function renderConflictList(container, items) {
         h(
           'a',
           { href: `/conflicts/${c.id}`, 'data-link': true },
-          c.label ?? `${ENTITY_LABELS[c.entity_type]} #${c.entity_id}`,
+          codeFirst(c.label ?? `${ENTITY_LABELS[c.entity_type]} #${c.entity_id}`),
         ),
       ),
       h('td', {}, ENTITY_LABELS[c.entity_type]),

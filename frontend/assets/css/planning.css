@@ -693,6 +693,14 @@
   font-size: 1rem;
 }
 
+/* Next to a side panel (DT4): the tiles and the drag help give way, so the grid sits next to
+   the panel instead of a screen below it. The panel shows the figures it changes. */
+#main-content.split-view .planner .planner-tiles,
+#main-content.split-view .planner .planner-reserve,
+#main-content.split-view .planner .planner-help {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chip.is-leaving,
   .chip-ghost {

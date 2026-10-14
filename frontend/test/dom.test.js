@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it, vi } from 'vitest';
-import { badgeClass, escapeHtml, h, pageMessage, slug } from '../assets/js/dom.js';
+import { badgeClass, codeFirst, escapeHtml, h, pageMessage, slug } from '../assets/js/dom.js';
 
 describe('escapeHtml', () => {
   it('escapes the five HTML-sensitive characters', () => {
@@ -96,5 +96,16 @@ describe('pageMessage', () => {
     element.querySelector('.planner-message-close').click();
     expect(element.classList.contains('has-message')).toBe(false);
     expect(element.querySelector('.planner-message-text').textContent).toBe('');
+  });
+});
+
+describe('codeFirst', () => {
+  it('keeps the code of a record on one line (DT5)', () => {
+    const [code, rest] = codeFirst('WO-2026-00133 — Scheduled maintenance');
+    expect(code.className).toBe('nowrap');
+    expect(code.textContent).toBe('WO-2026-00133');
+    expect(rest).toBe(' — Scheduled maintenance');
+    expect(codeFirst('WO-2026-00286 · Extract fan', ' · ')[0].textContent).toBe('WO-2026-00286');
+    expect(codeFirst('Asset #3')).toEqual(['Asset #3']);
   });
 });

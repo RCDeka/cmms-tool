@@ -800,7 +800,7 @@ export function proposalSummary(before, after, capacityByCategory) {
   return [
     line('Peak week load', work(before).peak_load ?? 0, work(after).peak_load ?? 0, formatLoad),
     line('Weeks over capacity', work(before).weeks_over, work(after).weeks_over, String),
-    line('Tight weeks (85–100 %)', work(before).weeks_tight, work(after).weeks_tight, String),
+    line('Tight weeks (85–100%)', work(before).weeks_tight, work(after).weeks_tight, String),
     line(
       'Busiest week of one trade',
       peakTradeLoad(before.figures, capacityByCategory),

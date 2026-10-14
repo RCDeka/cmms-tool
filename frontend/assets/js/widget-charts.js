@@ -477,7 +477,7 @@ export async function drawRanges(canvas, { labels, medians, p90s, counts, format
         ? 'None in this period'
         : [
             `Median: ${format(medians[item.dataIndex])}`,
-            `90 % within: ${format(p90s[item.dataIndex])}`,
+            `90% within: ${format(p90s[item.dataIndex])}`,
             `${numberFormat.format(counts[item.dataIndex])} work orders`,
           ],
   };

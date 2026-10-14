@@ -19,6 +19,10 @@ body:not(.is-logged-out) {
   background: var(--color-sidebar-bg);
   color: var(--color-sidebar-text);
   overflow-y: auto;
+  /* A dark scrollbar whose room is always kept, so the links never shift (DT14). */
+  scrollbar-color: #666666 var(--color-sidebar-bg);
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 #sidebar :focus-visible {
@@ -68,6 +72,12 @@ body:not(.is-logged-out) {
   gap: var(--space-1);
   padding-top: var(--space-4);
   border-top: 1px solid var(--color-sidebar-border);
+  /* Stays at the bottom while a long sidebar scrolls (DT14). */
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  padding-bottom: var(--space-4);
+  margin-bottom: calc(-1 * var(--space-4));
+  background: var(--color-sidebar-bg);
 }
 
 .user-box .button-secondary {
@@ -169,6 +179,18 @@ body:not(.is-logged-out) {
   }
 }
 
+/* From tablets up, one line: a long title ends with an ellipsis instead of making the bar
+   taller (DT7). Phones keep wrapping it, as they have little room for the words. */
+@media (min-width: 768px) {
+  #page-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 #menu-button {
   display: none;
 }
@@ -176,6 +198,10 @@ body:not(.is-logged-out) {
 #main-content {
   /* Containing block of the floating page message on small screens (M2). */
   position: relative;
+  /* Clipped, not scrollable: the screen-reader-only texts placed against this box can no longer
+     stretch the page, and scrollIntoView can no longer scroll it (DT1). Only the table and
+     detail areas scroll. */
+  overflow: clip;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;

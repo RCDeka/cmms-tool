@@ -48,7 +48,17 @@
 
 .data-table .col-code,
 .data-table .col-number {
-  width: 8rem;
+  width: 9.5rem;
+  /* "WO-2026-00330" on one line (DT5). */
+  white-space: nowrap;
+}
+
+/* The "Conflict" badge sits on its own line above the code. */
+.data-table .col-code .badge,
+.data-table .col-number .badge {
+  display: flex;
+  width: fit-content;
+  margin-bottom: var(--space-1);
 }
 
 .data-table .col-site {
@@ -190,6 +200,12 @@
   padding: 0 var(--space-2);
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Next to a side panel the buttons keep only their arrows, so the pager stays on one line
+   (DT4); each button keeps its name for screen readers (aria-label). */
+#main-content.split-view .pager-label {
+  display: none;
 }
 
 .table-header {

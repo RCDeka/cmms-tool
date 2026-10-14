@@ -5,7 +5,7 @@
 // open weekends, the tiles, the "to schedule" tray, and the grid of people × days with their
 // blocks of hours. Needs a connection (P18). Drag and keyboard moves are in
 // schedule-editing.js, the side panels in schedule-panel.js.
-import { badgeClass, h, pageMessage, replaceChildren } from './dom.js';
+import { badgeClass, codeFirst, h, pageMessage, replaceChildren } from './dom.js';
 import { formatDate, formatWeek, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { historyButton } from './planning.js';
@@ -295,7 +295,7 @@ function blockItem(block, person, { canEdit, selected, week }) {
         title: view.label,
       },
       view.lock ? h('span', { class: 'block-lock' }, view.lock) : null,
-      h('span', { class: 'block-title' }, view.title),
+      h('span', { class: 'block-title' }, codeFirst(view.title, ' · ')),
       h(
         'span',
         { class: 'block-meta' },

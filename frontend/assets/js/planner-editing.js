@@ -329,7 +329,7 @@ export function attachPlannerEditing(
       else {
         const load = result.preview?.figures?.[next]?.load;
         const share =
-          load === null || load === undefined ? '' : `, load ${Math.round(load * 100)} %`;
+          load === null || load === undefined ? '' : `, load ${Math.round(load * 100)}%`;
         announce(`${what} to ${week}${share}. Enter to confirm, Escape to cancel.`);
       }
       return;

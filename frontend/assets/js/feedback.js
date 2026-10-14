@@ -166,9 +166,12 @@ const statusBadge = (status) =>
  * @param {HTMLElement} container
  * @param {{ data: object, filters: object, onFilter: (status: string | null) => void,
  *   onStatus: (id: number, status: string, select: HTMLSelectElement) => void,
- *   pagination: HTMLElement }} options
+ *   pagination: HTMLElement | null, paginationTop: HTMLElement | null }} options
  */
-export function renderFeedbackLog(container, { data, filters, onFilter, onStatus, pagination }) {
+export function renderFeedbackLog(
+  container,
+  { data, filters, onFilter, onStatus, pagination, paginationTop },
+) {
   const filter = h(
     'select',
     { id: 'feedback-status', onChange: (event) => onFilter(event.target.value || null) },
@@ -221,6 +224,7 @@ export function renderFeedbackLog(container, { data, filters, onFilter, onStatus
       { class: 'filter-row' },
       h('label', { for: 'feedback-status' }, 'Show'),
       filter,
+      paginationTop,
       h(
         'p',
         { class: 'table-count', role: 'status' },

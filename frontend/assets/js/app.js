@@ -435,7 +435,7 @@ async function showRequestCreate(isCurrent) {
 }
 
 async function showRequest(route, isCurrent) {
-  leaveRecordViews(null, 'Request');
+  leaveRecordViews('requests', 'My open requests');
   if (!tableContainer.querySelector('.request-page')) {
     renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the request…'));
   }
@@ -455,8 +455,10 @@ async function showRequest(route, isCurrent) {
     return showRequestsError(err);
   }
   if (!isCurrent()) return;
-  setActiveNav(['CLOSED', 'CANCELLED'].includes(request.status) ? 'requests_all' : 'requests');
-  setTitle(request.title);
+  // The top bar names the sidebar section (docs/ui-guidelines.md → Page title, DT6).
+  const finished = ['CLOSED', 'CANCELLED'].includes(request.status);
+  setActiveNav(finished ? 'requests_all' : 'requests');
+  setTitle(finished ? 'All my requests' : 'My open requests');
   renderPage();
   renderRequestDetail(tableContainer, {
     request,
@@ -578,16 +580,18 @@ async function showAuditLog(route, isCurrent) {
   }
   if (!isCurrent()) return;
   renderPage();
+  const onPage = (page, control) => {
+    pendingFocus = { type: 'pager', control };
+    navigate(auditUrl(route.entityType, page));
+  };
   renderAuditLog(tableContainer, {
     data,
     entityType: route.entityType,
     lookups: withPeople({ users: (await getRefs()).users, assets: new Map() }, data.people),
     withUsers: hasRole('ADMIN'),
     onFilter: (type) => navigate(auditUrl(type, 1)),
-    pagination: renderPagination(data, (page, control) => {
-      pendingFocus = { type: 'pager', control };
-      navigate(auditUrl(route.entityType, page));
-    }),
+    pagination: renderPagination(data, onPage),
+    paginationTop: renderPagination(data, onPage, 'top'),
   });
   restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
 }
@@ -629,15 +633,21 @@ async function showUsers(route, isCurrent) {
   const listUrlFor = (page) => usersUrl({ ...filters, page });
   const close = () => navigate(listUrlFor(route.page));
   const refs = { sites: [...new Set(data.items.map((u) => u.site).filter(Boolean))].sort() };
+  const onPage = (page, control) => {
+    pendingFocus = { type: 'pager', control };
+    navigate(listUrlFor(page));
+  };
   renderUserList(tableContainer, {
     data,
     filters,
     selectedId: user?.id ?? null,
-    onFilter: (next) => navigate(usersUrl({ ...next, page: 1 })),
-    pagination: renderPagination(data, (page, control) => {
-      pendingFocus = { type: 'pager', control };
-      navigate(listUrlFor(page));
-    }),
+    onFilter: (next, { typing = false } = {}) => {
+      // Typing in the search box keeps the focus there while the list follows (DT13).
+      if (typing) pendingFocus = { type: 'field', selector: '#users-q' };
+      navigate(usersUrl({ ...next, page: 1 }));
+    },
+    pagination: renderPagination(data, onPage),
+    paginationTop: renderPagination(data, onPage, 'top'),
   });
 
   if (route.name === 'users') {
@@ -648,7 +658,6 @@ async function showUsers(route, isCurrent) {
   }
   setSplitView(true);
   if (route.name === 'userCreate') {
-    setTitle('New user');
     renderUserCreate(detailContainer, {
       refs,
       onClose: close,
@@ -663,7 +672,6 @@ async function showUsers(route, isCurrent) {
       },
     });
   } else {
-    setTitle(`${user.first_name} ${user.last_name}`);
     const isSelf = user.id === currentUser().id;
     renderUserPanel(detailContainer, {
       user,
@@ -833,6 +841,10 @@ async function showFeedbackLog(route, isCurrent) {
   }
   if (!isCurrent()) return;
   renderPage();
+  const onPage = (page, control) => {
+    pendingFocus = { type: 'pager', control };
+    navigate(feedbackUrl({ ...filters, page }));
+  };
   renderFeedbackLog(tableContainer, {
     data,
     filters,
@@ -847,10 +859,8 @@ async function showFeedbackLog(route, isCurrent) {
         announce(err.status === 0 ? 'You are offline: the status was not changed.' : err.message);
       }
     },
-    pagination: renderPagination(data, (page, control) => {
-      pendingFocus = { type: 'pager', control };
-      navigate(feedbackUrl({ ...filters, page }));
-    }),
+    pagination: renderPagination(data, onPage),
+    paginationTop: renderPagination(data, onPage, 'top'),
   });
   restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
 }
@@ -1320,11 +1330,20 @@ function focusTitle() {
   return true;
 }
 
+/** Focuses a text field with the caret at the end, as the user left it. */
+function focusField(field) {
+  if (!field) return;
+  field.focus();
+  const end = field.value.length;
+  field.setSelectionRange?.(end, end);
+}
+
 /** Applies the pending focus request, or the default given for this view. */
 function restoreFocus(defaultFocus) {
   const focus = pendingFocus;
   pendingFocus = null;
   if (focus?.type === 'pager') focusPager(tableContainer, focus.control);
+  else if (focus?.type === 'field') focusField(tableContainer.querySelector(focus.selector));
   else if (focus?.type !== 'sort' || !focusSortButton(tableContainer, focus.column)) defaultFocus();
 }
 

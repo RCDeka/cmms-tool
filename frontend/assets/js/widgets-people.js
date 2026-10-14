@@ -52,10 +52,10 @@ function responseTable(data, { drill }) {
       { label: 'Priority' },
       { label: 'Started', numeric: true },
       { label: 'Median to start', numeric: true },
-      { label: '90 % started within', numeric: true },
+      { label: '90% started within', numeric: true },
       { label: 'Closed', numeric: true },
       { label: 'Median to close', numeric: true },
-      { label: '90 % closed within', numeric: true },
+      { label: '90% closed within', numeric: true },
     ],
     rows: data.rows.map((r) => [
       valueLabel('work_order_priority', r.priority),
@@ -119,7 +119,7 @@ function responseBody(data, context) {
       `${title} per priority. ${data.rows
         .map(
           (r, i) =>
-            `${labels[i]}: median ${durationText(r[kind].median)}, 90 % within ${durationText(r[kind].p90)}`,
+            `${labels[i]}: median ${durationText(r[kind].median)}, 90% within ${durationText(r[kind].p90)}`,
         )
         .join('; ')}.`,
     );

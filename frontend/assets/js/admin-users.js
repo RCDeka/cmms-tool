@@ -6,6 +6,10 @@ import { badgeClass, h, replaceChildren } from './dom.js';
 import { CATEGORIES, ROLES } from './enums.js';
 import { formatDateTime } from './format.js';
 import { valueLabel } from './labels.js';
+import { debounce } from './save-modes.js';
+
+/** Pause after the last key before the list follows the search, as in the other lists. */
+const SEARCH_DELAY_MS = 350;
 
 export const PASSWORD_MIN_LENGTH = 10;
 
@@ -63,9 +67,14 @@ const activeBadge = (active) =>
  * User list with its filter row.
  * @param {HTMLElement} container
  * @param {{ data: object, filters: object, selectedId: number | null,
- *   onFilter: (filters: object) => void, pagination: HTMLElement }} options
+ *   onFilter: (filters: object, options?: { typing?: boolean }) => void,
+ *   pagination: HTMLElement | null,
+ *   paginationTop: HTMLElement | null }} options
  */
-export function renderUserList(container, { data, filters, selectedId, onFilter, pagination }) {
+export function renderUserList(
+  container,
+  { data, filters, selectedId, onFilter, pagination, paginationTop },
+) {
   const search = h('input', {
     id: 'users-q',
     type: 'search',
@@ -88,12 +97,18 @@ export function renderUserList(container, { data, filters, selectedId, onFilter,
     h('option', { value: 'false' }, 'Inactive'),
   );
   active.value = filters.active ?? '';
-  const apply = () =>
-    onFilter({
-      q: search.value.trim() || undefined,
-      role: role.value || undefined,
-      active: active.value || undefined,
-    });
+  const read = () => ({
+    q: search.value.trim() || undefined,
+    role: role.value || undefined,
+    active: active.value || undefined,
+  });
+  // The list follows the filters at once and the search as you type, like the asset and work
+  // order lists (DT13).
+  const apply = () => onFilter(read());
+  const typed = debounce(() => onFilter(read(), { typing: true }), SEARCH_DELAY_MS);
+  search.addEventListener('input', () => {
+    if ((search.value.trim() || undefined) !== filters.q) typed();
+  });
   role.addEventListener('change', apply);
   active.addEventListener('change', apply);
 
@@ -101,8 +116,13 @@ export function renderUserList(container, { data, filters, selectedId, onFilter,
     h(
       'tr',
       {
-        class: u.id === selectedId ? 'is-selected' : null,
+        class: `table-row${u.id === selectedId ? ' is-selected' : ''}`,
         'aria-current': u.id === selectedId ? 'true' : null,
+        // A click anywhere on the row opens the user, as in the other lists; the name stays the
+        // link for the keyboard (DT13).
+        onClick: (event) => {
+          if (!event.target.closest('a')) event.currentTarget.querySelector('a').click();
+        },
       },
       h(
         'td',
@@ -141,11 +161,11 @@ export function renderUserList(container, { data, filters, selectedId, onFilter,
       ),
       h('div', { class: 'filter-field' }, h('label', { for: 'users-role' }, 'Role'), role),
       h('div', { class: 'filter-field' }, h('label', { for: 'users-active' }, 'Account'), active),
-      h('button', { type: 'submit', class: 'button button-secondary' }, 'Search'),
     ),
     h(
       'div',
       { class: 'table-header' },
+      paginationTop,
       h(
         'p',
         { class: 'table-count', role: 'status' },

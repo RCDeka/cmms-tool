@@ -85,7 +85,7 @@ export const hasPlanFilters = (filters) =>
 const percentFormat = new Intl.NumberFormat('en-GB', { style: 'percent' });
 const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 
-/** Load as text: '103 %', or a dash without capacity. Pure. */
+/** Load as text: '103%', or a dash without capacity. Pure. */
 export function formatLoad(load) {
   return load === null || load === undefined ? '—' : percentFormat.format(load);
 }
@@ -302,7 +302,7 @@ export function planningFieldValue(field, value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (PLANNING_ENUMS[field]) return valueLabel(PLANNING_ENUMS[field], value);
   if (field.endsWith('_hours')) return formatHours(value);
-  if (field === 'reserve_percent') return `${value} %`;
+  if (field === 'reserve_percent') return `${value}%`;
   if (field.endsWith('week') && WEEK.test(value)) return formatWeek(value);
   if (field === 'work_order_id' || field === 'asset_id') return `#${value}`;
   return String(value);
@@ -492,7 +492,7 @@ function reserveLine(data, isAdmin) {
   return h(
     'p',
     { class: 'planner-reserve muted' },
-    `Capacity: ${formatHours(data.capacity.weekly)} a week (${formatHours(daily)} a day per technician and supervisor), keeping a ${reserve} % reserve for breakdowns and staff requests, set by the administrators.`,
+    `Capacity: ${formatHours(data.capacity.weekly)} a week (${formatHours(daily)} a day per technician and supervisor), keeping a ${reserve}% reserve for breakdowns and staff requests, set by the administrators.`,
     isAdmin
       ? [' ', h('a', { href: '/admin/planning', 'data-link': true }, 'Change the settings')]
       : null,

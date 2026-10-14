@@ -4,7 +4,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderDetail } from '../assets/js/detail.js';
 import { detailFieldsOf, ENTITIES } from '../assets/js/entities.js';
-import { focusRow, focusSortButton, renderTable, selectRow } from '../assets/js/table.js';
+import {
+  focusRow,
+  focusSortButton,
+  renderPagination,
+  renderTable,
+  selectRow,
+} from '../assets/js/table.js';
 
 const asset = (id, extra = {}) => ({
   id,
@@ -175,7 +181,15 @@ describe('renderTable', () => {
       onOpen() {},
       onPage,
     });
-    expect(container.querySelectorAll('nav.pagination')).toHaveLength(1);
+    // One page: no pager at all, neither above nor below (DT12).
+    expect(container.querySelectorAll('nav.pagination')).toHaveLength(0);
+  });
+
+  it('names each page button, so it keeps a name when its word folds away (DT4)', () => {
+    const nav = renderPagination({ page: 2, pages: 3 }, () => {});
+    const names = [...nav.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+    expect(names).toEqual(['First', 'Previous', 'Next', 'Last']);
+    expect(nav.querySelector('.pager-label').textContent).toBe('First');
   });
 
   it('sorts from the column titles, showing the order with aria-sort and an arrow', () => {

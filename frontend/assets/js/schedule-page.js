@@ -9,7 +9,7 @@ import { apiFieldErrors, showErrors } from './admin-users.js';
 import { apiFetch } from './api.js';
 import { currentUser, hasRole } from './auth.js';
 import { h, replaceChildren } from './dom.js';
-import { announce, confirmDialog, renderPage, setSplitView, setTitle } from './layout.js';
+import { announce, confirmDialog, renderPage, setSplitView } from './layout.js';
 import { formatWeek } from './format.js';
 import { readMyWeek, renderMyWeek, saveMyWeek } from './my-week.js';
 import { longDayLabel as longDay, renderScheduler, scheduleUrl } from './schedule.js';
@@ -35,7 +35,8 @@ let app = null;
  * @param {{ render: (route: object) => Promise<void>,
  *   leaveRecordViews: (section: string, title: string) => void,
  *   showConsoleError: (err: Error, retry: () => void) => void,
- *   showPlaceholder: (section: string | null, title: string, message: string) => void }} hooks
+ *   showPlaceholder: (section: string | null, title: string, message: string,
+ *     withHomeLink?: boolean) => void }} hooks
  */
 export function initSchedulePage(hooks) {
   app = hooks;
@@ -275,7 +276,6 @@ export async function showSchedule(route, isCurrent) {
   if (panel.type === 'item') {
     const item = trayItem(panel.id);
     if (!item) return notFound('This work order is not in this week’s tray');
-    setTitle(`Schedule ${item.number}`);
     renderItemPanel(detailContainer, {
       item,
       data,
@@ -322,7 +322,6 @@ export async function showSchedule(route, isCurrent) {
     const block = blockById(panel.id);
     if (!block) return notFound('This block is not in this week');
     const person = data.people.find((p) => p.id === block.technician_id);
-    setTitle('Block');
     renderBlockPanel(detailContainer, {
       block,
       person,
@@ -384,7 +383,6 @@ export async function showSchedule(route, isCurrent) {
     );
   }
   if (panel.type === 'time') {
-    setTitle('Add time');
     renderTimePanel(detailContainer, {
       data,
       person: person.id,
@@ -398,7 +396,6 @@ export async function showSchedule(route, isCurrent) {
         ),
     });
   } else {
-    setTitle('Hours of the day');
     renderCapacityPanel(detailContainer, {
       data,
       person,
@@ -425,6 +422,15 @@ export async function showSchedule(route, isCurrent) {
 
 /** My week: fetched when online and saved on the device; the saved copy when offline. */
 export async function showMyWeek(route, isCurrent) {
+  // Administrators are not counted as capacity and have no My week link (D52, DT16).
+  if (!hasRole('TECHNICIAN', 'SUPERVISOR')) {
+    return app.showPlaceholder(
+      null,
+      'My week',
+      'My week is for technicians and supervisors: administrators are not counted as capacity.',
+      true,
+    );
+  }
   app.leaveRecordViews('my_week', 'My week');
   if (!tableContainer.querySelector('.my-week')) {
     renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your week…'));

@@ -231,9 +231,18 @@ export function historySection(entityKey, id, getLookups) {
   return section;
 }
 
+/**
+ * Label of a record in the log. Block labels end with their day in ISO form
+ * ("WO-2026-00259 · Lucas Moreau · 2026-10-13"), written like the other dates (DT11). Pure.
+ */
+export function recordLabel(entry) {
+  if (entry.entity_type !== 'allocations') return entry.label;
+  return entry.label.replace(/ · (\d{4}-\d{2}-\d{2})$/, (_, day) => ` · ${formatDate(day)}`);
+}
+
 /** URL of a record in the log (deleted records have none). */
 function recordLink(entry) {
-  const label = entry.label;
+  const label = recordLabel(entry);
   if (entry.action === 'DELETE') return label;
   const other = OTHER_RECORDS[entry.entity_type];
   const url = other
@@ -246,11 +255,12 @@ function recordLink(entry) {
  * Global audit log page: type filter, table, pagination.
  * @param {HTMLElement} container
  * @param {{ data: object, entityType: string | null, lookups: object,
- *   withUsers?: boolean, onFilter: (type: string | null) => void, pagination: HTMLElement }} options
+ *   withUsers?: boolean, onFilter: (type: string | null) => void, pagination: HTMLElement | null,
+ *   paginationTop: HTMLElement | null }} options
  */
 export function renderAuditLog(
   container,
-  { data, entityType, lookups, withUsers = false, onFilter, pagination },
+  { data, entityType, lookups, withUsers = false, onFilter, pagination, paginationTop },
 ) {
   const filter = h(
     'select',
@@ -281,6 +291,7 @@ export function renderAuditLog(
       { class: 'filter-row' },
       h('label', { for: 'audit-type' }, 'Show'),
       filter,
+      paginationTop,
       h('p', { class: 'table-count' }, `${data.total} change${data.total === 1 ? '' : 's'}`),
     ),
     data.items.length

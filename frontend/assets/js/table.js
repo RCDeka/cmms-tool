@@ -84,7 +84,7 @@ export function renderTable(
       // The h1 already shows the section name; the h2 stays for screen readers and focus.
       h('h2', { id: titleId, class: 'table-title visually-hidden', tabindex: '-1' }, cfg.label),
       // Page buttons above long tables too, so changing page needs no scrolling.
-      data.pages > 1 ? renderPagination(data, onPage, 'top') : null,
+      renderPagination(data, onPage, 'top'),
       h(
         'p',
         { class: 'table-count', role: 'status' },
@@ -279,13 +279,15 @@ export function focusPager(container, control) {
 }
 
 /**
- * Pagination controls. The `top` copy above a table names its buttons `top-first`, … so
- * focus returns to the copy that was used.
+ * Pagination controls, or null when everything fits on one page (DT12). The `top` copy above a
+ * table names its buttons `top-first`, … so focus returns to the copy that was used.
  * @param {{ page: number, pages: number }} data
  * @param {(page: number, control: string) => void} onPage
  * @param {'top' | 'bottom'} [position]
+ * @returns {HTMLElement | null}
  */
 export function renderPagination({ page, pages }, onPage, position = 'bottom') {
+  if (pages <= 1) return null;
   const top = position === 'top';
   const button = (name, label, arrow, target, arrowFirst) =>
     h(
@@ -293,12 +295,14 @@ export function renderPagination({ page, pages }, onPage, position = 'bottom') {
       {
         type: 'button',
         class: 'button button-pager',
+        // The words fold away next to a side panel; the name stays (DT4).
+        'aria-label': label,
         dataset: { pager: top ? `top-${name}` : name },
         disabled: target < 1 || target > pages || target === page,
         onClick: () => onPage(target, top ? `top-${name}` : name),
       },
       arrowFirst ? h('span', { 'aria-hidden': 'true' }, `${arrow} `) : null,
-      label,
+      h('span', { class: 'pager-label' }, label),
       arrowFirst ? null : h('span', { 'aria-hidden': 'true' }, ` ${arrow}`),
     );
   return h(

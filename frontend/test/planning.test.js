@@ -177,7 +177,7 @@ describe('figures', () => {
     expect(groupTitle({ site: 'Paris', building: 'Tower A' })).toBe('Paris · Tower A');
     expect(groupTitle({ site: 'Lyon', building: null })).toBe('Lyon · No building');
     expect(groupTitle({ category: 'FIRE_SAFETY' })).toBe('Fire safety');
-    expect(planningFieldValue('reserve_percent', 20)).toBe('20 %');
+    expect(planningFieldValue('reserve_percent', 20)).toBe('20%');
     expect(planningFieldValue('status', 'RELEASED')).toBe('Work order created');
     expect(planningFieldValue('anchor_week', '2027-W01')).toBe('Week 1, 2027');
     expect(planningFieldValue('estimated_hours', 3.5)).toBe('3.5 h');
@@ -300,7 +300,7 @@ describe('renderPlanner', () => {
     chip.click();
     expect(opened).toEqual([[7, 70]]);
     expect(container.querySelectorAll('.planner-figures tbody tr')).toHaveLength(3);
-    expect(container.querySelector('.planner-reserve').textContent).toContain('30 % reserve');
+    expect(container.querySelector('.planner-reserve').textContent).toContain('30% reserve');
     // Read-only: nothing can be dragged, and there is no Undo.
     expect(container.querySelectorAll('.chip.is-movable')).toHaveLength(0);
     expect(container.querySelector('.planner-toolbar').textContent).not.toContain('Undo');
