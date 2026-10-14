@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Database commands: `node src/db/cli.js <migrate|seed|reset|backup|feedback|release> [--with-conflicts] [--force]`
-// Used by the npm scripts db:migrate, db:seed, db:reset, db:backup, feedback:export and pm:release.
+// Database commands: `node src/db/cli.js <migrate|seed|reset|backup|feedback|release|create-admin> [options]`
+// Used by the npm scripts db:migrate, db:seed, db:reset, db:backup, feedback:export, pm:release and
+// user:create-admin.
 import fs from 'node:fs';
 import { loadConfig, loadEnvFile } from '../config/index.js';
 import { dateInZone } from '../lib/dates.js';
@@ -12,11 +13,81 @@ import { createPlanningService } from '../services/planning.js';
 import { createWorkOrderService } from '../services/work-orders.js';
 import { backupDatabase } from './backup.js';
 import { openDb } from './connection.js';
+import { createFirstAdmin } from './first-admin.js';
 import { runMigrations } from './migrate.js';
 import { seedDatabase } from './seed/index.js';
 
-const USAGE =
-  'Usage: node src/db/cli.js <migrate|seed|reset|backup|feedback|release> [--with-conflicts] [--force]';
+const USAGE = `Usage: node src/db/cli.js <command> [options]
+  migrate | seed [--with-conflicts] | reset [--with-conflicts] [--force] | backup | feedback | release
+  create-admin --username <name> --first-name <name> --last-name <name> [--site <site>]
+    (asks for the password, or reads it from the first line of standard input)`;
+
+/** Value of `--name value` or `--name=value` in the command-line flags. */
+function optionValue(flags, name) {
+  const index = flags.findIndex((f) => f === `--${name}` || f.startsWith(`--${name}=`));
+  if (index === -1) return undefined;
+  const flag = flags[index];
+  return flag.includes('=') ? flag.slice(flag.indexOf('=') + 1) : flags[index + 1];
+}
+
+/** First line of piped standard input. */
+async function readPipedLine() {
+  let text = '';
+  for await (const chunk of process.stdin) text += chunk;
+  return text.split(/\r?\n/)[0];
+}
+
+/** Reads a line typed in the terminal without showing it. */
+function readHidden(question) {
+  const { stdin, stdout } = process;
+  stdout.write(question);
+  stdin.setRawMode(true);
+  stdin.setEncoding('utf8');
+  stdin.resume();
+  return new Promise((resolve, reject) => {
+    let value = '';
+    const finish = () => {
+      stdin.off('data', onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdout.write('\n');
+    };
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') {
+          finish();
+          resolve(value);
+          return;
+        }
+        if (ch === '\u0003') {
+          finish();
+          reject(new Error('Cancelled.'));
+          return;
+        }
+        value = ch === '\u007f' || ch === '\b' ? value.slice(0, -1) : value + ch;
+      }
+    };
+    stdin.on('data', onData);
+  });
+}
+
+/** The new administrator's password: typed twice in a terminal, or piped (scripts). */
+async function readPassword() {
+  if (!process.stdin.isTTY) return readPipedLine();
+  const password = await readHidden('Password (at least 10 characters): ');
+  if ((await readHidden('Password again: ')) !== password) {
+    throw new Error('The two passwords differ.');
+  }
+  return password;
+}
+
+/** Error text for the terminal, with the per-field messages of a validation error. */
+function errorText(err) {
+  const fields = err.details?.fields;
+  if (!fields) return err.message;
+  const lines = Object.entries(fields).map(([field, message]) => `  - ${field}: ${message}`);
+  return `${err.message}:\n${lines.join('\n')}`;
+}
 
 async function main() {
   const [command, ...flags] = process.argv.slice(2);
@@ -66,6 +137,25 @@ async function main() {
     return;
   }
 
+  // First administrator of a database without demo data (D70).
+  if (command === 'create-admin') {
+    const input = {
+      username: optionValue(flags, 'username') ?? '',
+      first_name: optionValue(flags, 'first-name') ?? '',
+      last_name: optionValue(flags, 'last-name') ?? '',
+      site: optionValue(flags, 'site') ?? null,
+    };
+    const db = openDb(config.databasePath);
+    try {
+      runMigrations(db);
+      const user = await createFirstAdmin(db, { ...input, password: await readPassword() });
+      console.log(`Administrator ${user.username} created: log in and add the other accounts.`);
+    } finally {
+      db.close();
+    }
+    return;
+  }
+
   if (command === 'reset') {
     if (config.nodeEnv === 'production' && !flags.includes('--force')) {
       throw new Error('Refusing to reset a production database without --force.');
@@ -105,6 +195,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err.message);
+  console.error(errorText(err));
   process.exit(1);
 });

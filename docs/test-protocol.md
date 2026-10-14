@@ -807,6 +807,7 @@ Run the **main flows** below on each line of the matrix: log in; browse a list a
 | OPS-13 | `journalctl -u tacto` after the campaign | No stack trace other than the ones the tests caused on purpose; no password, token or user text in the logs. |
 | OPS-14 | Disk: database, WAL file and logs after the load test | Sizes noted; journald limits set; free space alert on the VPS. |
 | OPS-15 | Uptime monitoring on `https://<domain>/api/health` | Alert received when the service is stopped. |
+| OPS-16 | On a new empty database: `npm run user:create-admin -- --username qa.admin --first-name QA --last-name Admin`; mistype the second password; then run it correctly; then run it again | Mismatch refused; created, can log in and sees every admin page; the second run is refused because an administrator exists. The password never appears on screen or in `journalctl`. |
 
 ---
 
@@ -827,7 +828,7 @@ Run the **main flows** below on each line of the matrix: log in; browse a list a
 
 Found while writing this protocol (2026-10-14). They are not test failures yet, but each would cause trouble in production.
 
-1. **No way to create the first administrator without the demo data.** No migration and no command creates a user: `db:seed` is the only source of accounts, and it also loads 500 fictional assets, 320 work orders and 62 plans. A production database that starts empty has no account, so nobody can log in. Needed before launch: a command such as `npm run user:create-admin`, or a documented procedure. If the demo data is loaded on purpose, every demo account shares `SEED_PASSWORD` and must be deactivated or have its password changed.
+1. ~~**No way to create the first administrator without the demo data.**~~ Fixed by `npm run user:create-admin` (D70), tested by OPS-16. If the demo data is loaded on purpose instead, every demo account shares `SEED_PASSWORD` and must be deactivated or have its password changed.
 2. **"Source code" link (DT2, D57, roadmap backlog item 11).** The repository is private; the AGPL requires the source to be offered to the users of a network service. Make the repository public or serve an archive before real users get access.
 3. **Server time of the timers** (T-10). The 02:30 backup and 04:00 release follow the server clock. On a UTC server they run at 03:30/04:30 or 04:30/05:30 Paris time depending on the season. Check that this suits the teams' hours.
 4. **Off-server backups** (OPS-09). The README recommends them but nothing automates them; a backup on the same disk does not survive losing the VPS.

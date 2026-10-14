@@ -65,6 +65,7 @@ cd backend  && npm run db:reset -- --with-conflicts   # reseed with 3 demo confl
 cd backend  && npm run db:backup                       # backup into BACKUP_DIR (keeps 14 days)
 cd backend  && npm run pm:release                      # create the work orders of plan visits due (daily job)
 cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
+cd backend  && npm run user:create-admin -- --username <name> --first-name <name> --last-name <name>   # first admin of an empty database (D70)
 cd frontend && npm install && npm test               # frontend logic tests
 ```
 
@@ -151,9 +152,17 @@ curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
 
 The database is created and migrated when the service starts.
 
-### 5. Demo data (optional)
+### 5. First administrator, or demo data
 
-Loads the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests, 62 maintenance plans, and a history of about 135 past plan visits and 6 past scheduled weeks, so the dashboards show past figures) into the empty database. The users' password is `SEED_PASSWORD`.
+A new database has no account. Either create the first administrator, who then adds the other accounts on the **Users** page:
+
+```bash
+sudo -u tacto bash -c 'set -a; . /etc/tacto/tacto.env; cd /opt/tacto/backend && npm run user:create-admin -- --username claire.martin --first-name Claire --last-name Martin'
+```
+
+The command asks for the password twice without showing it (at least 10 characters). It is refused once an active administrator exists.
+
+Or, for a demonstration only, load the mock dataset (6 users, 500 assets, 207 work orders including 7 staff requests, 62 maintenance plans, and a history of about 135 past plan visits and 6 past scheduled weeks, so the dashboards show past figures) into the empty database (it refuses a database that already has accounts). Every demo account has the password `SEED_PASSWORD`: change it or deactivate the accounts before real users get access.
 
 ```bash
 sudo -u tacto bash -c 'set -a; . /etc/tacto/tacto.env; cd /opt/tacto/backend && npm run db:seed'
