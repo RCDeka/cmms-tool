@@ -157,3 +157,4 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 9. ~~Mobile use (review of 2026-10-08, `docs/mobile-review.md`): findings M1 to M17 on current phones~~ → all fixed (M1, M2, then D68); the year planner is for tablets and computers only.
 10. ~~Desktop use (review of 2026-10-14, `docs/desktop-review.md`): findings DT1 to DT16~~ → fixed (D69); DT2 once the repository was made public.
 11. ~~Before the first deployment to users: make the "Source code" link of the status bar reachable by every user (AGPL section 13, D57; DT2)~~ → done: the repository is public (2026-10-14).
+12. **Postponed (2026-10-14), before the first deployment to users**: choose the off-server backup storage (S3-compatible or B2 at another provider than the VPS, or an SFTP server), keep the restic password outside the VPS, then run the restore drill and the failure test (`docs/test-protocol.md`, OPS-07 and OPS-09). The copy itself is automated (D72).
