@@ -51,6 +51,28 @@ describe('deploy/systemd', () => {
   });
 });
 
+describe('deploy/systemd timers', () => {
+  const zone = /^APP_TIMEZONE=(.+)$/m.exec(read('deploy/tacto.env.example'))[1];
+
+  it.each(['deploy/systemd/tacto-backup.timer', 'deploy/systemd/tacto-pm-release.timer'])(
+    '%s runs in APP_TIMEZONE, outside the hour skipped or repeated by daylight saving',
+    (timer) => {
+      const [, hour, zoneOfTimer] = /^OnCalendar=\*-\*-\* (\d\d):\d\d:\d\d (\S+)$/m.exec(
+        read(timer),
+      );
+      expect(zoneOfTimer).toBe(zone);
+      expect(hour).not.toBe('02');
+    },
+  );
+
+  it('releases the preventive work orders after the backup', () => {
+    const time = (timer) => /^OnCalendar=\*-\*-\* (\S+)/m.exec(read(timer))[1];
+    expect(
+      time('deploy/systemd/tacto-pm-release.timer') > time('deploy/systemd/tacto-backup.timer'),
+    ).toBe(true);
+  });
+});
+
 describe('deploy/tacto.env.example', () => {
   it('only uses settings the application reads', () => {
     const source = read('backend/src/config/index.js');

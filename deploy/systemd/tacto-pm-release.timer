@@ -8,8 +8,9 @@
 Description=Daily release of Tacto preventive work orders
 
 [Timer]
-# After the nightly backup (02:30), before the teams start.
-OnCalendar=*-*-* 04:00:00
+# After the nightly backup (01:30), before the teams start. Local time in the zone named at the
+# end: CHANGE IT to your APP_TIMEZONE, as in tacto-backup.timer.
+OnCalendar=*-*-* 04:00:00 Europe/Paris
 RandomizedDelaySec=10min
 Persistent=true
 

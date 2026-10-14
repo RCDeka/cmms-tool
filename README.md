@@ -78,7 +78,7 @@ cd frontend && npm install && npm test               # frontend logic tests
 | `PORT` | API port (default 3000) |
 | `DATABASE_PATH` | SQLite file path, relative to the repository root (default `./data/cmms.sqlite`) |
 | `JWT_SECRET`, `JWT_EXPIRES_IN` | token signing secret and lifetime |
-| `APP_TIMEZONE` | timezone for "today" and "this month" in KPIs |
+| `APP_TIMEZONE` | **your** time zone (IANA name, default `Europe/Paris`): "today", overdue work, "this month", weeks, the year of work order numbers. In production the two timers must name the same zone (Deployment, step 4) |
 | `SEED_PASSWORD` | password given to every mock user by the seed |
 | `HOST` | interface the API listens on (default `127.0.0.1`: only local clients such as Nginx) |
 | `BACKUP_DIR`, `BACKUP_KEEP_DAYS` | where `npm run db:backup` writes, and how many days of backups are kept |
@@ -133,6 +133,7 @@ sudo nano /etc/tacto/tacto.env
 ```
 
 - `JWT_SECRET`: paste the output of `openssl rand -base64 48`. The server refuses to start in production with a secret shorter than 32 characters or the example value.
+- `APP_TIMEZONE`: **set the time zone where the app is used** (IANA name: `Europe/Paris`, `Europe/London`, `America/New_York`…). It decides what "today", "overdue", "this month" and "this week" mean for every user, and the year in work order numbers. The default, `Europe/Paris`, is only right for France. Step 4 sets the same zone in the timers.
 - `SEED_PASSWORD`: only if you load the demo data (step 5); at least 10 characters.
 - Changing `JWT_SECRET` later logs every user out.
 
@@ -144,6 +145,20 @@ sudo cp /opt/tacto/deploy/systemd/tacto.service \
         /opt/tacto/deploy/systemd/tacto-backup.timer \
         /opt/tacto/deploy/systemd/tacto-pm-release.service \
         /opt/tacto/deploy/systemd/tacto-pm-release.timer /etc/systemd/system/
+
+# The timers run at local time in the zone they name (Europe/Paris in the files):
+# give them your APP_TIMEZONE, then check both times exist every day in that zone.
+ZONE=$(sudo sed -n 's/^APP_TIMEZONE=//p' /etc/tacto/tacto.env)
+sudo sed -i "s|Europe/Paris\$|$ZONE|" /etc/systemd/system/tacto-backup.timer /etc/systemd/system/tacto-pm-release.timer
+grep OnCalendar /etc/systemd/system/tacto-*.timer           # … 01:30:00 <your zone>, … 04:00:00 <your zone>
+# Prints nothing when both times exist every day of the coming year; otherwise it names the day
+# skipped (e.g. 01:30 in London), and you change that time in the timer file.
+for TIME in 01:30:00 04:00:00; do
+  TZ=$ZONE systemd-analyze calendar --iterations=366 "*-*-* $TIME $ZONE" | grep -E 'Next elapse|Iteration' \
+    | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' \
+    | awk -v t=$TIME 'NR > 1 && $0 != want { print t ": no run on " want } { c = "date -d \"" $0 " +1 day\" +%F"; c | getline want; close(c) }'
+done
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now tacto tacto-backup.timer tacto-pm-release.timer
 
@@ -210,6 +225,7 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Next scheduled backups | `systemctl list-timers tacto-backup` |
 | Release preventive work orders now | `sudo systemctl start tacto-pm-release && journalctl -u tacto-pm-release -n 3` |
 | Restore a backup | see below |
+| Change the time zone | edit `APP_TIMEZONE` in `/etc/tacto/tacto.env`, run the `ZONE=…` and `sed` lines of step 4 again (with the old zone in place of `Europe/Paris`), then `sudo systemctl daemon-reload && sudo systemctl restart tacto` |
 
 Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`). Copy them off the server too (e.g. `rsync` to another machine): a backup on the same disk does not survive the loss of the VPS.
 

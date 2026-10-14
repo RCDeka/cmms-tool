@@ -739,7 +739,7 @@ SELECT number FROM work_orders w WHERE NOT EXISTS(SELECT 1 FROM audit_log l WHER
 
 | ID | Steps | Expected |
 |---|---|---|
-| T-10 | `timedatectl` on the VPS; `systemctl list-timers 'tacto*'` | Know whether the server runs in UTC: the release at "04:00" and the backup at "02:30" are server time, not `APP_TIMEZONE`. Confirm both run before the teams start, in winter and in summer time. |
+| T-10 | `grep APP_TIMEZONE /etc/tacto/tacto.env`; `grep OnCalendar /etc/systemd/system/tacto-*.timer`; `systemctl list-timers 'tacto*'`; the day-skipped check of README → Deployment, step 4 | `APP_TIMEZONE` is the zone where the app is used (not left at `Europe/Paris` by mistake), both timers name that same zone (D71), the next backup and release fall at 01:30 and 04:00 local time there (`list-timers` shows them in the server's own zone), and the check prints nothing. |
 | T-11 | Reboot the VPS during the night window | Missed timers run at boot (`Persistent=true`); the app starts by itself. |
 
 ---
@@ -833,7 +833,7 @@ Found while writing this protocol (2026-10-14). They are not test failures yet, 
 
 1. ~~**No way to create the first administrator without the demo data.**~~ Fixed by `npm run user:create-admin` (D70), tested by OPS-16. If the demo data is loaded on purpose instead, every demo account shares `SEED_PASSWORD` and must be deactivated or have its password changed.
 2. **"Source code" link (DT2, D57, roadmap backlog item 11).** The repository is private; the AGPL requires the source to be offered to the users of a network service. Make the repository public or serve an archive before real users get access.
-3. **Server time of the timers** (T-10). The 02:30 backup and 04:00 release follow the server clock. On a UTC server they run at 03:30/04:30 or 04:30/05:30 Paris time depending on the season. Check that this suits the teams' hours.
+3. ~~**Server time of the timers**~~ Fixed (D71): the timers run in Paris time, the backup at 01:30 so that it never falls in the hour skipped or repeated by daylight saving. Tested by T-10.
 4. **Off-server backups** (OPS-09). The README recommends them but nothing automates them; a backup on the same disk does not survive losing the VPS.
 5. **Tokens stay valid after logout until they expire** (SEC-25, D22): known and accepted by design. Confirm the 8-hour lifetime with the product owner.
 6. **`deploy/tacto.env.example` does not list `AI_PROVIDER` and `AI_TIMEOUT_MS`.** The defaults are right for now (`none`), but add them so the production settings file shows every option.

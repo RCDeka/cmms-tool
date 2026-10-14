@@ -7,9 +7,13 @@
 Description=Daily Tacto database backup
 
 [Timer]
-OnCalendar=*-*-* 02:30:00
+# Local time in the zone named at the end, whatever the server's clock (often UTC). CHANGE IT to
+# your APP_TIMEZONE (/etc/tacto/tacto.env; README → Deployment, step 4). Choose a time that exists
+# every day in that zone: not in the hour skipped when the clocks go forward (02:00–03:00 in
+# Paris, 01:00–02:00 in London): the README (Deployment, step 4) has the check.
+OnCalendar=*-*-* 01:30:00 Europe/Paris
 RandomizedDelaySec=10min
-# Catch up after a reboot if the server was off at 02:30.
+# Catch up after a reboot if the server was off at 01:30.
 Persistent=true
 
 [Install]
