@@ -307,7 +307,7 @@ stateDiagram-v2
 - Review (D47): a request waiting for review opens in the work order panel with a **review box** on top for supervisors and admins (approve with an assignee, or reject with a reason, `PUT /api/work-orders/:id/review`, online only); technicians see a notice instead. The edit form leaves out status and assignee until the review. The reviewed record is stored in IndexedDB and replaces the row on screen. The dashboard tile "Staff requests to review" opens `/work-orders?to_review=true`.
 - Cancellation (D79): until work starts, the request page offers **Cancel this request** (online only) under the next step; after a confirmation it calls `POST /api/requests/:id/cancel` and reloads the page. The maintenance team sees the review status **Withdrawn** and the requester in the history.
 - The open-request list is fetched again when the window gets the focus back (at most every 10 s), so a staff member coming back to the tab sees the latest status.
-- The work order panel of the maintenance team shows the same conversation (`comments.js`, loaded when the panel opens, online only) above the history, with the requester's comments marked.
+- The work order panel of the maintenance team shows the same conversation (`comments.js`, loaded when the panel opens, online only) above the history, with the requester's comments marked. When the requester wrote last, a notice under it says "The requester is waiting for a reply" (D80); the key figure "Requests waiting for a reply" (a dashboard widget for supervisors and admins; technicians: "… my reply" on their dashboard) opens `/work-orders?awaiting_reply=true` (technicians: with `mine=true`).
 
 ## Conflicts
 

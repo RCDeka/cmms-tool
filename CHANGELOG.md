@@ -6,6 +6,7 @@ One entry per release, newest first, written from the conventional commits since
 
 ### Added
 
+- Requests waiting for a reply (D80): when the requester wrote the latest comment, the request is counted on a dashboard tile (supervisors and admins: a new widget, in the Overview template, for all requests; technicians: those assigned to them), listed by the new filter "Waiting for a reply" (`awaiting_reply=true`), and the work order panel says that the requester is waiting for a reply.
 - A staff member can cancel their own request until work starts, whether it waits for review or was approved (D79). The maintenance team sees the new review status Withdrawn; the staff request widget does not count a request withdrawn before its review as reviewed.
 
 ### Upgrade notes

@@ -128,6 +128,16 @@ export const WORK_ORDER_SORTS = {
   updated_at: 'w.updated_at',
 };
 
+/**
+ * Work orders whose latest comment is the requester's: they wait for a reply from the
+ * maintenance team (D80). Staff only comment on their own requests, so a STAFF comment is
+ * always the requester's. Comments are append-only, so the highest id is the latest one.
+ */
+export const AWAITING_REPLY = `w.id IN (SELECT work_order_id FROM work_order_comments
+  GROUP BY work_order_id
+  HAVING max(CASE WHEN user_role = 'STAFF' THEN id END)
+    > coalesce(max(CASE WHEN user_role <> 'STAFF' THEN id END), 0))`;
+
 /** Row → WorkOrder shape, with its asset summary and user references. */
 export function toWorkOrder(row) {
   const wo = {};
@@ -171,6 +181,7 @@ export function workOrderFilters(
     mine,
     overdue,
     to_review: toReview,
+    awaiting_reply: awaitingReply,
   },
   { userId, today, extra },
 ) {
@@ -205,6 +216,8 @@ export function workOrderFilters(
   }
   if (toReview) where.push("w.review_status = 'PENDING'");
   else if (toReview === false) where.push("w.review_status IS NOT 'PENDING'");
+  if (awaitingReply) where.push(AWAITING_REPLY);
+  else if (awaitingReply === false) where.push(`NOT ${AWAITING_REPLY}`);
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
@@ -232,6 +245,12 @@ export function createWorkOrderService(db) {
   const roleOf = db.prepare('SELECT role FROM users WHERE id = ? AND is_active = 1').pluck();
   const toReviewCount = db
     .prepare("SELECT count(*) FROM work_orders WHERE review_status = 'PENDING'")
+    .pluck();
+  const awaitingReplyCount = db
+    .prepare(`SELECT count(*) FROM work_orders w WHERE ${AWAITING_REPLY}`)
+    .pluck();
+  const awaitingReplyAssigned = db
+    .prepare(`SELECT count(*) FROM work_orders w WHERE ${AWAITING_REPLY} AND w.assignee_id = ?`)
     .pluck();
   const idByClientId = db.prepare('SELECT id FROM work_orders WHERE client_id = ?').pluck();
   const highestNumber = db
@@ -546,6 +565,17 @@ export function createWorkOrderService(db) {
     /** Staff requests waiting for a review (dashboard tile, D47). */
     countToReview() {
       return toReviewCount.get();
+    },
+
+    /**
+     * Staff requests waiting for a reply from the maintenance team (D80): all of them, or
+     * those assigned to `assigneeId`.
+     * @param {number} [assigneeId]
+     */
+    countAwaitingReply(assigneeId) {
+      return assigneeId === undefined
+        ? awaitingReplyCount.get()
+        : awaitingReplyAssigned.get(assigneeId);
     },
 
     /**

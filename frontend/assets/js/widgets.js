@@ -109,6 +109,16 @@ export const WIDGETS = [
     attention: true,
   },
   {
+    key: 'requests_awaiting_reply',
+    label: 'Requests waiting for a reply',
+    group: 'Key figures',
+    size: 'S',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+    href: '/work-orders?awaiting_reply=true',
+    attention: true,
+  },
+  {
     key: 'pending_conflicts',
     label: 'Conflicts to arbitrate',
     group: 'Key figures',

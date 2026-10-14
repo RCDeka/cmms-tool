@@ -168,7 +168,7 @@ describe('GET /api/dashboards', () => {
       filters: { period: 30, sites: [], categories: [] },
     });
     expect(overview.widgets.map((w) => w.key)).toEqual(TEMPLATES.OVERVIEW);
-    expect(TEMPLATES.OVERVIEW).toHaveLength(11);
+    expect(TEMPLATES.OVERVIEW).toHaveLength(12);
     const again = await as('sup').get('/api/dashboards').expect(200);
     expect(ids(again.body.items)).toEqual([overview.id]);
     expectNoSecrets(again.body);

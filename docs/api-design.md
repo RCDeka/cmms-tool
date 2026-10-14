@@ -195,6 +195,7 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?`, `priority?`, `type?`, `category?`, `site?`, `assignee_id?` (each one value or several, e.g. `status=OPEN,IN_PROGRESS,ON_HOLD`);
   - `to_review?=true`: staff requests waiting for a review (`review_status = PENDING`, D47);
+  - `awaiting_reply?=true`: staff requests whose latest comment is the requester's, i.e. waiting for a reply from the maintenance team (D80; `false` = the others);
   - `drill?` (D59, K9): the records of a dashboard widget segment, `<widget>[:<segment>]` with the segments of `GET /api/dashboard/widgets/:key/rows` (`backlog_age:URGENT:91+`), with `period?` (30, 90 or 365; only with `drill`, 400 otherwise). The list's own `site` and `category` filters carry the dashboard's sites and trades. Unknown widget or segment, or a widget without work orders (`recent_activity`, `assets_broken_down`, `pending_conflicts`) → 400. For the visit widgets the list holds the work orders of the counted visits (skipped visits usually have none: their Visits CSV lists them).
   - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
 - `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
@@ -380,13 +381,13 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
     "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
               "closed_this_month": 40, "assets_broken_down": 21,
               "overdue_work_orders": 9, "pending_conflicts": 2,
-              "requests_to_review": 1 },
+              "requests_to_review": 1, "requests_awaiting_reply": 2 },
     "week_end": "2026-10-10",
     "recent_activity": [WorkOrder x5],
     "my_work_today": [WorkOrder],
     "my_work_week": [WorkOrder] }
   ```
-- `pending_conflicts` and `requests_to_review` (staff requests waiting for a review, D47) are present for SUPERVISOR and ADMIN only. Definitions: `docs/data-model.md` → KPI definitions.
+- `pending_conflicts`, `requests_to_review` (staff requests waiting for a review, D47) and `requests_awaiting_reply` (staff requests waiting for a reply, D80) are present for SUPERVISOR and ADMIN only. Technicians get `my_requests_awaiting_reply` instead: the same count, limited to the work orders assigned to them. Definitions: `docs/data-model.md` → KPI definitions.
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 
@@ -398,7 +399,7 @@ SUPERVISOR and ADMIN (technicians and staff: 403). A dashboard of another user a
 - `200 { "items": [Dashboard], "disabled_widgets": [key] }` in sidebar order; `disabled_widgets`: the widgets switched off by the administrators (D65), hidden from supervisors. A user without dashboards gets "Overview" created first, with the widgets of the former dashboard (for a supervisor, those switched off left out). `GET /:id`: one dashboard, 404 if not mine.
 
 ### POST /api/dashboards
-- Body: `{ "name": string, "template"?: "OVERVIEW" | "BACKLOG" | "COMPLIANCE" | "ASSETS_PEOPLE" | "EMPTY", "copy_of"?: id }`: from a template (empty by default) or as a copy of one of my dashboards (widgets and filters). Placed last. For a supervisor, a template leaves out the widgets switched off (D65). Overview: the 11 widgets of the former dashboard; Backlog: overdue work orders, opened vs closed, backlog by age and in weeks, workload; Assets and people (`"ASSETS_PEOPLE"`): assets broken down, repeat failures, bad actors, critical assets out of service, response times, estimates, staff requests; Compliance (`"COMPLIANCE"`): regulatory visits late, preventive maintenance compliance, week schedule kept, planned vs reactive work, contractors.
+- Body: `{ "name": string, "template"?: "OVERVIEW" | "BACKLOG" | "COMPLIANCE" | "ASSETS_PEOPLE" | "EMPTY", "copy_of"?: id }`: from a template (empty by default) or as a copy of one of my dashboards (widgets and filters). Placed last. For a supervisor, a template leaves out the widgets switched off (D65). Overview: the 12 widgets of the home dashboard (`requests_awaiting_reply` added by D80); Backlog: overdue work orders, opened vs closed, backlog by age and in weeks, workload; Assets and people (`"ASSETS_PEOPLE"`): assets broken down, repeat failures, bad actors, critical assets out of service, response times, estimates, staff requests; Compliance (`"COMPLIANCE"`): regulatory visits late, preventive maintenance compliance, week schedule kept, planned vs reactive work, contractors.
 - `201 Dashboard`. Errors: 400; 404 `copy_of` not mine; 409 `BR-K2` name used (`details.fields.name = "Already used"`) or 20 dashboards already.
 
 ### PUT /api/dashboards/:id

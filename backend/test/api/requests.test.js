@@ -347,6 +347,93 @@ describe('comments', () => {
   });
 });
 
+describe('requests waiting for a reply (D80)', () => {
+  const kpis = async (username) => (await get(username, '/api/dashboard').expect(200)).body.kpis;
+  const awaitingIds = async (query = '') =>
+    (
+      await get('supervisor1', `/api/work-orders?awaiting_reply=true&size=100${query}`).expect(200)
+    ).body.items.map((w) => w.id);
+  const comment = (username, id, body) =>
+    username === 'user1'
+      ? send('post', 'user1', `/api/requests/${id}/comments`, { body }).expect(201)
+      : send('post', username, `/api/work-orders/${id}/comments`, { body }).expect(201);
+
+  it("counts a request whose latest comment is the requester's, until the team replies", async () => {
+    const { id } = (await send('post', 'user1', '/api/requests', newRequest()).expect(201)).body
+      .item;
+    await send('put', 'supervisor1', `/api/work-orders/${id}/review`, {
+      decision: 'APPROVE',
+      version: 1,
+      assignee_id: userId('technician1'),
+    }).expect(200);
+    const before = await kpis('supervisor1');
+    const techBefore = (await kpis('technician1')).my_requests_awaiting_reply;
+    expect(await awaitingIds()).not.toContain(id);
+
+    await comment('user1', id, 'Any news?');
+    expect(await awaitingIds()).toContain(id);
+    expect((await kpis('supervisor1')).requests_awaiting_reply).toBe(
+      before.requests_awaiting_reply + 1,
+    );
+    expect((await kpis('admin')).requests_awaiting_reply).toBe(before.requests_awaiting_reply + 1);
+    // Technicians count only the requests assigned to them.
+    expect((await kpis('technician1')).my_requests_awaiting_reply).toBe(techBefore + 1);
+    expect((await kpis('technician2')).my_requests_awaiting_reply).toBe(
+      (await get('technician2', '/api/work-orders?awaiting_reply=true&mine=true').expect(200)).body
+        .total,
+    );
+    // A second message from the requester is still one request waiting.
+    await comment('user1', id, 'It is getting worse.');
+    expect((await kpis('supervisor1')).requests_awaiting_reply).toBe(
+      before.requests_awaiting_reply + 1,
+    );
+
+    // Any team member's reply clears it, even one who is not assigned.
+    await comment('supervisor1', id, 'Lucas comes this afternoon.');
+    expect(await awaitingIds()).not.toContain(id);
+    const notWaiting = await get('supervisor1', '/api/work-orders?awaiting_reply=false&size=100');
+    expect(notWaiting.body.items.map((w) => w.id)).toContain(id);
+    expect((await kpis('supervisor1')).requests_awaiting_reply).toBe(
+      before.requests_awaiting_reply,
+    );
+    expect((await kpis('technician1')).my_requests_awaiting_reply).toBe(techBefore);
+  });
+
+  it('splits the list exactly in two with awaiting_reply=true and false', async () => {
+    const total = async (query) =>
+      (await get('supervisor1', `/api/work-orders?size=1${query}`).expect(200)).body.total;
+    const all = await total('');
+    const waiting = await total('&awaiting_reply=true');
+    expect(waiting).toBeGreaterThan(0); // the seed's "thank you" comment
+    expect(waiting + (await total('&awaiting_reply=false'))).toBe(all);
+  });
+
+  it('offers the same count as a dashboard widget, with its drill-down list', async () => {
+    const { requests_awaiting_reply: count } = await kpis('supervisor1');
+    const res = await get('supervisor1', '/api/dashboard/widgets?keys=requests_awaiting_reply');
+    expect(res.status).toBe(200);
+    expect(res.body.widgets.requests_awaiting_reply.value).toBe(count);
+    const drill = await get('supervisor1', '/api/work-orders?drill=requests_awaiting_reply');
+    expect(drill.status).toBe(200);
+    expect(drill.body.total).toBe(count);
+    const overview = (await get('admin', '/api/dashboards').expect(200)).body.items[0];
+    expect(overview.widgets.map((w) => w.key)).toContain('requests_awaiting_reply');
+  });
+
+  it('gives each role its own count only', async () => {
+    const sup = await kpis('supervisor1');
+    expect(sup).toHaveProperty('requests_awaiting_reply');
+    expect(sup).not.toHaveProperty('my_requests_awaiting_reply');
+    const tech = await kpis('technician1');
+    expect(tech).toHaveProperty('my_requests_awaiting_reply');
+    expect(tech).not.toHaveProperty('requests_awaiting_reply');
+  });
+
+  it('refuses an invalid flag (400)', async () => {
+    await get('supervisor1', '/api/work-orders?awaiting_reply=yes').expect(400);
+  });
+});
+
 describe('review by a supervisor (D47)', () => {
   const sendRequest = async (overrides = {}) =>
     (await send('post', 'user1', '/api/requests', newRequest(overrides)).expect(201)).body.item;

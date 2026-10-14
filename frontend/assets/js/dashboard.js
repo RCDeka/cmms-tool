@@ -40,6 +40,19 @@ export const KPI_TILES = [
     href: '/work-orders?to_review=true',
     attention: true,
   },
+  // Requests whose requester wrote last (D80): all of them, or a technician's own.
+  {
+    key: 'requests_awaiting_reply',
+    label: 'Requests waiting for a reply',
+    href: '/work-orders?awaiting_reply=true',
+    attention: true,
+  },
+  {
+    key: 'my_requests_awaiting_reply',
+    label: 'Requests waiting for my reply',
+    href: '/work-orders?mine=true&awaiting_reply=true',
+    attention: true,
+  },
   {
     key: 'pending_conflicts',
     label: 'Conflicts to arbitrate',

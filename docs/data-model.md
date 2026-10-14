@@ -459,6 +459,7 @@ stateDiagram-v2
 - Overdue work orders: non-terminal and `due_on < today`.
 - Pending conflicts: `conflicts.status = 'OPEN'` (only for supervisors and admins).
 - Staff requests to review: `review_status = 'PENDING'` (only for supervisors and admins, D47).
+- Requests waiting for a reply: work orders whose latest comment (highest `work_order_comments.id`) has `user_role = 'STAFF'` (D80). Supervisors and admins: all of them; technicians: those with `assignee_id` = the user (`my_requests_awaiting_reply`).
 - Work orders by category / status / type (`stats?period=N`): work orders with `created_on` within the last N days. Work orders without `category` are counted under `UNSPECIFIED`.
 - Recent activity: the 5 work orders with the most recent `updated_at`.
 - Flow and backlog widgets (D59, Phase 22; pure rules in `rules/kpi-flow.js`). Buckets: ISO weeks for periods of 30 and 90 days, calendar months for 365, cut to the period (first and last may be partial). Unfinished = `OPEN`, `IN_PROGRESS`, `ON_HOLD`.

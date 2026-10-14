@@ -38,6 +38,8 @@ export const FILTERS = {
     overdue: { kind: 'flag', label: 'Overdue' },
     // Staff requests waiting for a supervisor (D47); shown to supervisors and admins.
     to_review: { kind: 'flag', label: 'Requests to review', supervisors: true },
+    // Staff requests whose requester wrote last (D80).
+    awaiting_reply: { kind: 'flag', label: 'Waiting for a reply' },
     // The records behind a dashboard widget segment (D59, K9), and its period in days.
     drill: { kind: 'drill' },
     period: { kind: 'period' },

@@ -131,4 +131,18 @@ describe('dashboard and list', () => {
       to_review: true,
     });
   });
+
+  it('links the "waiting for a reply" tiles to the matching lists (D80)', () => {
+    const tiles = kpiTiles({ requests_awaiting_reply: 2, my_requests_awaiting_reply: 0 });
+    expect(tiles.find((t) => t.key === 'requests_awaiting_reply')).toMatchObject({
+      flagged: true,
+      href: '/work-orders?awaiting_reply=true',
+    });
+    const mine = tiles.find((t) => t.key === 'my_requests_awaiting_reply');
+    expect(mine.flagged).toBe(false);
+    expect(parseFilters('work_orders', new URL(mine.href, 'http://x').searchParams)).toEqual({
+      mine: true,
+      awaiting_reply: true,
+    });
+  });
 });

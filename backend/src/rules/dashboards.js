@@ -27,6 +27,7 @@ export const WIDGETS = [
   { key: 'overdue_work_orders', filters: ['sites', 'categories'], rows: 'work_orders' },
   { key: 'assets_broken_down', filters: ['sites', 'categories'], rows: 'assets' },
   { key: 'requests_to_review', filters: ['sites', 'categories'], rows: 'work_orders' },
+  { key: 'requests_awaiting_reply', filters: ['sites', 'categories'], rows: 'work_orders' },
   { key: 'pending_conflicts', filters: [], rows: null },
   // Flow and backlog (Phase 22).
   { key: 'opened_vs_closed', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
@@ -72,7 +73,7 @@ export function widgetDef(key) {
 
 /** Templates offered when creating a dashboard (§6.5; the others come with their widgets). */
 export const TEMPLATES = {
-  // Today's home dashboard: never grows with new widgets.
+  // Today's home dashboard: grows only with a key figure the team must act on (D80).
   OVERVIEW: [
     'open_work_orders',
     'in_progress_work_orders',
@@ -80,6 +81,7 @@ export const TEMPLATES = {
     'overdue_work_orders',
     'assets_broken_down',
     'requests_to_review',
+    'requests_awaiting_reply',
     'pending_conflicts',
     'by_category',
     'by_status',

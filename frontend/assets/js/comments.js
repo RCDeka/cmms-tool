@@ -36,6 +36,9 @@ export function commentAuthor(comment, viewer) {
   return `${name} (${valueLabel('role', comment.user_role).toLowerCase()})`;
 }
 
+/** The requester wrote last: the maintenance team owes them a reply (D80). Pure. */
+export const awaitsReply = (comments) => comments.at(-1)?.user_role === 'STAFF';
+
 /** The conversation, oldest first. */
 export function renderConversation(comments, viewer) {
   if (!comments.length) return h('p', { class: 'muted' }, 'No comment yet.');
@@ -132,7 +135,14 @@ export function commentForm({ key, label, hint, send, onSent }) {
  */
 export function commentsSection(workOrderId, viewer) {
   const list = h('div', { class: 'comments-body', 'aria-live': 'polite' });
-  const show = (items) => replaceChildren(list, renderConversation(items, viewer));
+  const show = (items) =>
+    replaceChildren(
+      list,
+      renderConversation(items, viewer),
+      awaitsReply(items)
+        ? h('p', { class: 'banner banner-info' }, 'The requester is waiting for a reply.')
+        : null,
+    );
   let items = [];
   const load = async () => {
     replaceChildren(list, h('p', { class: 'muted' }, 'Loading the comments…'));

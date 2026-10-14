@@ -39,6 +39,7 @@ const listQuery = z.strictObject({
   mine: flagFilter,
   overdue: flagFilter,
   to_review: flagFilter,
+  awaiting_reply: flagFilter,
   // A segment of a dashboard widget (D59, K9): "backlog_age:URGENT:31-90", with its period.
   drill: z.string().max(200).optional(),
   period: z.coerce

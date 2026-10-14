@@ -23,7 +23,7 @@ describe('widget catalogue', () => {
   it('builds templates from known widgets only', () => {
     for (const keys of Object.values(TEMPLATES))
       expect(widgetsProblem(keys.map((key) => ({ key })))).toBeNull();
-    expect(templateWidgets('OVERVIEW')).toHaveLength(11);
+    expect(templateWidgets('OVERVIEW')).toHaveLength(12);
     expect(templateWidgets('OVERVIEW')[0]).toEqual({ key: 'open_work_orders', options: {} });
     expect(templateWidgets('EMPTY')).toEqual([]);
   });

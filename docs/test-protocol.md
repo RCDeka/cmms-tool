@@ -381,6 +381,8 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-27 | TE | Open a pending request | An information notice, no review box. |
 | R-28 | SU | Offline | Approve and Reject disabled with the tooltip. |
 | R-29 | SU | History of the reviewed request | One entry for the review with the decision. |
+| R-30 | ST, then SU and TE1 | ST comments on a request approved for TE1; SU and TE1 open the dashboard | SU, AD: tile "Requests waiting for a reply" (attention style; in Overview, or ticked in the sidebar for an Overview created before D80) opens `/work-orders?awaiting_reply=true`, which lists the request. TE1: tile "Requests waiting for my reply" opens `/work-orders?mine=true&awaiting_reply=true`; TE2's count does not change. |
+| R-31 | SU | Open that request | Under the comments: "The requester is waiting for a reply." After SU sends a comment, the notice goes away and both tiles go down by one (D80). |
 
 ---
 
@@ -467,7 +469,7 @@ Use two browsers: **B1** and **B2**.
 
 | ID | Steps | Expected |
 |---|---|---|
-| D-10 | First login of a user without dashboards (new supervisor from section 13) | "Overview" created, with the 11 widgets of the former dashboard. |
+| D-10 | First login of a user without dashboards (new supervisor from section 13) | "Overview" created, with the 12 widgets of the home dashboard (D80 added "Requests waiting for a reply"). |
 | D-11 | New dashboard from each template: Empty, Overview, Backlog, Compliance, Assets and people; and Duplicate | Each has the documented widgets; it is added last in the sidebar. |
 | D-12 | Rename to an existing name with other case or accents (`overview`, `Óverview`) | Error under the field. |
 | D-13 | Create dashboards up to 20, then one more | The 21st is refused with the reason. |
@@ -483,9 +485,9 @@ Use two browsers: **B1** and **B2**.
 
 ### 11.3 Every widget
 
-For **each** of the 26 widgets below, on a dashboard with period 90 days, then with a site filter: (a) it renders, or shows its empty state, without a console error; (b) every mark has a tooltip; (c) a click on a bar, slice, point, cell or tile value opens the list of exactly the records counted (compare the list total with the figure); (d) **Figures (CSV)** opens in a spreadsheet with accents intact and equals "Show as a table"; (e) **Work orders / Assets / Visits (CSV)** has as many rows as the figure counts; (f) **Image (JPG)** shows the title, the scope line, the chart or table, the date; (g) ⋯ → Move earlier / later / Remove work.
+For **each** of the 27 widgets below, on a dashboard with period 90 days, then with a site filter: (a) it renders, or shows its empty state, without a console error; (b) every mark has a tooltip; (c) a click on a bar, slice, point, cell or tile value opens the list of exactly the records counted (compare the list total with the figure); (d) **Figures (CSV)** opens in a spreadsheet with accents intact and equals "Show as a table"; (e) **Work orders / Assets / Visits (CSV)** has as many rows as the figure counts; (f) **Image (JPG)** shows the title, the scope line, the chart or table, the date; (g) ⋯ → Move earlier / later / Remove work.
 
-Key figures: Open work orders · Work orders in progress · Closed this month · Overdue work orders · Assets broken down · Staff requests to review · Conflicts to arbitrate (no records CSV).
+Key figures: Open work orders · Work orders in progress · Closed this month · Overdue work orders · Assets broken down · Staff requests to review · Requests waiting for a reply · Conflicts to arbitrate (no records CSV).
 Flow and backlog: Opened vs closed · Backlog by age and priority · Backlog in weeks of work · Planned vs reactive work (Count/Hours switch saved).
 Compliance: Preventive maintenance compliance · Regulatory visits late · Week schedule kept · Contractors (sortable columns).
 Responsiveness, assets, people: Time to start and to close · Staff requests · Assets with the most breakdowns (All / High and critical switch saved; a bar opens the asset) · Repeat failures · Critical assets out of service (opens the asset list) · Workload per person · Estimates vs actual hours.

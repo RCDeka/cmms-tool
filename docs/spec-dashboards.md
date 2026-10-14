@@ -83,7 +83,7 @@ Sizes on a 4-column grid: **S** = 1 column (tile), **M** = 2 columns, **L** = 4 
 
 | Key | Widget | Size | Notes |
 |---|---|---|---|
-| `open_work_orders`, `in_progress_work_orders`, `closed_this_month`, `overdue_work_orders`, `assets_broken_down`, `requests_to_review`, `pending_conflicts` | the seven current tiles | S | same definitions (`docs/data-model.md` → KPI definitions); sites and trades apply, period does not |
+| `open_work_orders`, `in_progress_work_orders`, `closed_this_month`, `overdue_work_orders`, `assets_broken_down`, `requests_to_review`, `requests_awaiting_reply` (D80), `pending_conflicts` | the eight current tiles | S | same definitions (`docs/data-model.md` → KPI definitions); sites and trades apply, period does not |
 | `by_category` | Work orders by category | M | period, sites |
 | `by_status` | Work orders by status | M | period, sites, trades |
 | `my_work` | My work | M | no filter |
@@ -129,7 +129,7 @@ Sizes on a 4-column grid: **S** = 1 column (tile), **M** = 2 columns, **L** = 4 
 
 | Template | Widgets |
 |---|---|
-| Overview | the 7 tiles, `by_category`, `by_status`, `my_work`, `recent_activity` (today's dashboard) |
+| Overview | the 8 tiles (`requests_awaiting_reply` added by D80), `by_category`, `by_status`, `my_work`, `recent_activity` (today's dashboard) |
 | Backlog | `overdue_work_orders`, `opened_vs_closed`, `backlog_age`, `backlog_weeks`, `workload` |
 | Compliance | `regulatory_late`, `pm_compliance`, `schedule_compliance`, `planned_vs_reactive`, `contractor_scorecard` |
 | Assets and people | `assets_broken_down`, `repeat_failures`, `bad_actors`, `critical_downtime`, `response_times`, `estimate_accuracy`, `request_service` |

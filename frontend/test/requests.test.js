@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import {
+  awaitsReply,
   checkComment,
   commentAuthor,
   commentForm,
@@ -344,6 +345,13 @@ describe('comments', () => {
     const supervisor = { id: 2, role: 'SUPERVISOR' };
     expect(commentAuthor(fromKarim, supervisor)).toBe('Karim Benali (technician)');
     expect(commentAuthor(fromEmma, supervisor)).toBe('Emma Rousseau (requester)');
+  });
+
+  it('waits for a reply when the requester wrote last (D80)', () => {
+    expect(awaitsReply([])).toBe(false);
+    expect(awaitsReply([{ user_role: 'STAFF' }])).toBe(true);
+    expect(awaitsReply([{ user_role: 'STAFF' }, { user_role: 'TECHNICIAN' }])).toBe(false);
+    expect(awaitsReply([{ user_role: 'SUPERVISOR' }, { user_role: 'STAFF' }])).toBe(true);
   });
 
   it('renders comment text as text', () => {

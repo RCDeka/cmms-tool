@@ -28,6 +28,7 @@ import {
 import { weeklyCapacity } from '../rules/planning.js';
 import { complianceWidgets, toVisit } from './dashboard-compliance.js';
 import { peopleWidgets } from './dashboard-people.js';
+import { AWAITING_REPLY } from './work-orders.js';
 
 const RECENT_ACTIVITY_SIZE = 5;
 /** Priorities from the most urgent, as rows of the backlog matrix. */
@@ -122,6 +123,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
       where: ({ today }) => ({ sql: `${UNFINISHED} AND w.due_on < @today`, params: { today } }),
     },
     requests_to_review: { where: () => ({ sql: "w.review_status = 'PENDING'" }) },
+    requests_awaiting_reply: { where: () => ({ sql: AWAITING_REPLY }) },
 
     by_category: {
       where: (ctx, segment) => {

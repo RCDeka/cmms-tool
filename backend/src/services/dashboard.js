@@ -29,7 +29,9 @@ export function createDashboardService(db, { workOrders }) {
 
   return {
     /**
-     * Dashboard of a user. `pending_conflicts` is only given to supervisors and admins.
+     * Dashboard of a user. `pending_conflicts`, `requests_to_review` and
+     * `requests_awaiting_reply` are only given to supervisors and admins, technicians get
+     * `my_requests_awaiting_reply` instead.
      * @param {{ id: number, role: string }} user
      * @param {{ now: Date, timeZone: string }} ctx
      */
@@ -47,6 +49,10 @@ export function createDashboardService(db, { workOrders }) {
         kpis.pending_conflicts = pendingConflicts.get();
         // Staff requests waiting for a supervisor (D47).
         kpis.requests_to_review = workOrders.countToReview();
+        // Requests whose requester wrote last (D80); technicians: those assigned to them.
+        kpis.requests_awaiting_reply = workOrders.countAwaitingReply();
+      } else {
+        kpis.my_requests_awaiting_reply = workOrders.countAwaitingReply(user.id);
       }
 
       const lastDay = weekEnd(today);

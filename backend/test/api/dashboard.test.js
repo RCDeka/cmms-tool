@@ -119,6 +119,7 @@ describe('GET /api/dashboard on a hand-made dataset', () => {
       overdue_work_orders: 2,
       pending_conflicts: 1,
       requests_to_review: 0,
+      requests_awaiting_reply: 0,
     });
     expectNoSecrets(res.body);
   });
