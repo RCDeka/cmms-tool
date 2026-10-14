@@ -67,7 +67,7 @@ cd backend  && npm run pm:release                      # create the work orders 
 cd backend  && npm run feedback:export > ideas.md      # open suggestions (D40) as Markdown
 cd backend  && CHECK_URL=https://staging.example.com npm run check:permissions   # every role × endpoint (docs/test-protocol.md, section 3)
 cd backend  && npm run user:create-admin -- --username <name> --first-name <name> --last-name <name>   # first admin of an empty database (D70)
-cd frontend && npm install && npm test               # frontend logic tests
+cd frontend && npm install && npm test               # frontend logic tests (some compare with the backend rules: npm install in backend/ first)
 ```
 
 Continuous integration (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint` and `npm test` in `backend/` and in `frontend/` on Node 24 for every push and pull request; a failing check marks the commit as failed on GitHub.

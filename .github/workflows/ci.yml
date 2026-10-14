@@ -32,7 +32,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+          cache-dependency-path: '*/package-lock.json'
+      # Some frontend tests compare the frontend's copies of the rules with the
+      # backend's (frontend/test/rules.test.js), which import backend packages.
+      - if: matrix.package == 'frontend'
+        run: npm ci
+        working-directory: backend
       - run: npm ci
       - run: npm run lint
       - run: npm test
