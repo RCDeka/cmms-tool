@@ -51,6 +51,15 @@ export function requestProgress(request) {
       next: 'A supervisor will review your request, then assign a technician to it.',
     };
   }
+  if (request.review_status === 'WITHDRAWN') {
+    return {
+      stage: 'WITHDRAWN',
+      label: 'Cancelled by you',
+      tone: 'neutral',
+      step: null,
+      next: 'Nothing: you cancelled this request. If the problem comes back, send a new request.',
+    };
+  }
   if (request.review_status === 'REJECTED') {
     return {
       stage: 'REJECTED',
@@ -110,6 +119,11 @@ export function requestProgress(request) {
             next: 'The maintenance team will review your request and assign a technician.',
           };
   }
+}
+
+/** True while the requester may cancel their request: until work starts (BR-R10). Pure. */
+export function canCancelRequest(request) {
+  return request.status === 'OPEN';
 }
 
 /** Errors of the request form (the server checks again). Pure. */
@@ -398,15 +412,58 @@ const STATUS_STEP_LABELS = {
   ON_HOLD: 'Put on hold',
   CLOSED: 'Work finished',
   CANCELLED: 'Cancelled',
+  WITHDRAWN: 'Cancelled by you',
 };
+
+/**
+ * "Cancel this request" while work has not started. `cancel` asks for confirmation and sends
+ * it; it resolves when done or declined, and its errors are shown under the button.
+ */
+function cancelSection(cancel) {
+  const error = h('p', { class: 'field-error', role: 'alert' });
+  const button = h(
+    'button',
+    {
+      type: 'button',
+      class: 'button button-secondary online-only',
+      onClick: async () => {
+        error.textContent = '';
+        button.disabled = true;
+        try {
+          await cancel();
+        } catch (err) {
+          error.textContent =
+            err.status === 0 ? 'You are offline: try again once connected.' : err.message;
+        } finally {
+          button.disabled = false;
+          applyToPage(section);
+        }
+      },
+    },
+    'Cancel this request',
+  );
+  const section = h(
+    'div',
+    { class: 'request-cancel' },
+    h(
+      'p',
+      { class: 'field-hint' },
+      'Not needed any more? You can cancel it until a technician starts the work.',
+    ),
+    button,
+    error,
+  );
+  applyToPage(section);
+  return section;
+}
 
 /**
  * A request: progress, next step, what was asked, what was done, and the conversation.
  * @param {HTMLElement} container
  * @param {{ request: object, viewer: { id: number, role: string },
- *   sendComment: (body: string) => Promise<object> }} options
+ *   sendComment: (body: string) => Promise<object>, cancelRequest: () => Promise<void> }} options
  */
-export function renderRequestDetail(container, { request, viewer, sendComment }) {
+export function renderRequestDetail(container, { request, viewer, sendComment, cancelRequest }) {
   const progress = requestProgress(request);
   const finished = ['CLOSED', 'CANCELLED'].includes(request.status);
   const field = (label, value) =>
@@ -448,6 +505,7 @@ export function renderRequestDetail(container, { request, viewer, sendComment })
         h('p', { class: 'request-status-line' }, 'Status: ', stageBadge(progress)),
         progress.step === null ? null : stepList(progress),
         h('p', { class: 'request-next' }, h('strong', {}, 'Next step: '), progress.next),
+        canCancelRequest(request) ? cancelSection(cancelRequest) : null,
       ),
       request.status === 'CLOSED' && request.work_report
         ? h(

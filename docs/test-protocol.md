@@ -175,7 +175,7 @@ Expected status codes (200/201/204 = allowed; a 400 or 422 caused by a deliberat
 | API-06 | `GET /dashboards`, `GET /dashboard/widgets?keys=open_work_orders` | 403 | 403 | 200 | 200 |
 | API-07 | `GET /dashboards/widgets`, `PUT /dashboards/widgets/by_status` | 403 | 403 | 403 | 200 |
 | API-08 | `GET /reference-data` | 200 | 200 | 200 | 200 |
-| API-09 | `GET /requests`, `POST /requests` | 200/201 | 403 | 403 | 403 |
+| API-09 | `GET /requests`, `POST /requests`, `POST /requests/:id/cancel` (with an unknown field: 400 for ST, nothing cancelled) | 200/201 | 403 | 403 | 403 |
 | API-10 | `GET /users` | 403 | 403 | 200 | 200 |
 | API-11 | `GET /audit-log` | 403 | 403 | 200 (no `users` entries) | 200 |
 | API-12 | `GET /audit-log?entity_type=users` | 403 | 403 | 403 | 200 |
@@ -205,7 +205,7 @@ Expected status codes (200/201/204 = allowed; a 400 or 422 caused by a deliberat
 | API-31 | TE1 | `PUT /work-orders/:id` on a work order assigned to TE2 or unassigned | 403. |
 | API-32 | TE1 | `PUT /work-orders/:id` on his own work order with `priority`, `assignee_id`, `due_on` or `planned_week` | 403 with `details.fields`. With `status`, `started_on`, `actual_hours`, `work_report`: allowed. |
 | API-33 | any | `PUT` with `id`, `number`, `code`, `version` only, `created_at`, `has_conflict`, `review_status`, `plan_id` | 403 or 400 as documented; never applied. |
-| API-34 | ST | `GET /requests/:id` of a work order ST did not create (try a few ids, including one of a maintenance work order) | 404 (not 403: existence not revealed). |
+| API-34 | ST | `GET /requests/:id` and `POST /requests/:id/cancel` of a work order ST did not create (try a few ids, including one of a maintenance work order) | 404 (not 403: existence not revealed); nothing cancelled. |
 | API-35 | ST | `POST /requests` with `type`, `assignee_id` or `asset_id` | 400 unknown field. |
 | API-36 | SU2 | `GET/PUT/DELETE /dashboards/<SU1's id>` | 404. |
 | API-37 | any | Every response checked so far | Never contains `password_hash`: `grep -c password_hash` on saved bodies = 0. |
@@ -363,6 +363,9 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-13 | Rejected request | Danger badge "Rejected", the reason quoted in the next step. |
 | R-14 | Approved request | "Approved" and the assignee's name. |
 | R-15 | Team comment | Shown as "Name (maintenance team)". |
+| R-16 | Open a request waiting for review, then an approved one not started | Both offer "Cancel this request"; an in-progress, on-hold or finished request does not. |
+| R-17 | Cancel this request → Keep it; then Cancel the request | Nothing changes; then the page shows "Cancelled by you", the history ends with "Cancelled by you", and the request moves to All my requests. SU: the "Staff requests to review" count goes down; the work order shows the review status Withdrawn and user1 in its history. |
+| R-18 | Have TE start an approved request while ST has its page open, then click Cancel this request | Refused with a sentence asking to add a comment; nothing changes. |
 
 ### 7.2 Review by the maintenance team
 

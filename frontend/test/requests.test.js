@@ -9,6 +9,7 @@ import {
   renderConversation,
 } from '../assets/js/comments.js';
 import {
+  canCancelRequest,
   checkRequest,
   renderRequestDetail,
   renderRequestForm,
@@ -110,6 +111,59 @@ describe('requestProgress', () => {
       stage: 'CANCELLED',
       step: null,
     });
+  });
+});
+
+describe('cancellation by the requester (BR-R10, D79)', () => {
+  it('is offered until work starts, reviewed or not', () => {
+    expect(canCancelRequest(request({ review_status: 'PENDING' }))).toBe(true);
+    expect(canCancelRequest(request({ review_status: 'APPROVED', assignee: karim }))).toBe(true);
+    for (const status of ['IN_PROGRESS', 'ON_HOLD', 'CLOSED', 'CANCELLED']) {
+      expect(canCancelRequest(request({ status }))).toBe(false);
+    }
+  });
+
+  it('says the requester cancelled it, even after an approval', () => {
+    expect(
+      requestProgress(
+        request({ status: 'CANCELLED', review_status: 'WITHDRAWN', assignee: karim }),
+      ),
+    ).toMatchObject({ stage: 'WITHDRAWN', label: 'Cancelled by you', step: null });
+  });
+
+  it('shows the button on an open request only, and the error when it fails', async () => {
+    const container = document.createElement('div');
+    const cancelRequest = vi.fn(async () => {
+      throw Object.assign(new Error('Work on this request has started.'), { status: 422 });
+    });
+    renderRequestDetail(container, { request: request(), viewer: staff, cancelRequest });
+    const button = container.querySelector('.request-cancel button');
+    expect(button.textContent).toBe('Cancel this request');
+    button.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('.request-cancel .field-error').textContent).toBe(
+        'Work on this request has started.',
+      ),
+    );
+    expect(cancelRequest).toHaveBeenCalledOnce();
+    expect(button.disabled).toBe(false);
+
+    renderRequestDetail(container, {
+      request: request({
+        status: 'CANCELLED',
+        review_status: 'WITHDRAWN',
+        status_history: [
+          { status: 'OPEN', at: '2026-10-07T08:00:00.000Z' },
+          { status: 'WITHDRAWN', at: '2026-10-07T09:00:00.000Z' },
+        ],
+      }),
+      viewer: staff,
+      cancelRequest,
+    });
+    expect(container.querySelector('.request-cancel')).toBeNull();
+    expect(container.querySelectorAll('.timeline-head strong')[1].textContent).toBe(
+      'Cancelled by you',
+    );
   });
 });
 

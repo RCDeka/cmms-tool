@@ -1072,6 +1072,15 @@ a.button {
   font-size: var(--font-size-base);
 }
 
+/* Cancelling a request that has not started (BR-R10), set apart from the status. */
+.request-cancel {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
 .request-report {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

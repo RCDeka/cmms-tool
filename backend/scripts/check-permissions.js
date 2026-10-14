@@ -205,6 +205,8 @@ async function main() {
   await matrix('API-08', 'GET', '/reference-data', EVERYONE);
   await matrix('API-09', 'GET', '/requests?size=1', STAFF);
   await matrix('API-09', 'POST', '/requests', STAFF, {});
+  // An unknown field: the requester's call is refused with 400, so nothing is cancelled.
+  await matrix('API-09', 'POST', `/requests/${ids.request ?? wo}/cancel`, STAFF, { x: 1 });
   await matrix('API-10', 'GET', '/users', SUP);
   await matrix('API-11', 'GET', '/audit-log?size=1', SUP);
   await single('API-11', 'SU', 'GET', '/audit-log?size=100', 200, {
@@ -381,6 +383,7 @@ async function main() {
   }
   if (ids.request) await single('API-34', 'ST', 'GET', `/requests/${ids.request}`, 200);
   await single('API-34', 'ST', 'GET', `/requests/${wo}`, 404);
+  await single('API-34', 'ST', 'POST', `/requests/${wo}/cancel`, 404, { body: {} });
   await single('API-35', 'ST', 'POST', '/requests', 400, {
     body: {
       client_id: crypto.randomUUID(),

@@ -27,8 +27,8 @@ export const TERMINAL_WORK_ORDER_STATUSES = ['CLOSED', 'CANCELLED'];
 
 export const WORK_ORDER_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 
-/** Review of a staff request by a supervisor (D47). */
-export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+/** Review of a staff request by a supervisor (D47); WITHDRAWN: cancelled by the requester (D79). */
+export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'];
 
 /** Preventive maintenance (D48). */
 export const PLAN_TYPES = ['PREVENTIVE', 'REGULATORY'];

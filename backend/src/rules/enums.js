@@ -36,8 +36,11 @@ export const CONFLICT_RESOLUTIONS = ['A', 'B', 'MERGE'];
 
 export const CONFLICT_ENTITY_TYPES = ['assets', 'work_orders'];
 
-/** Review of a staff request by a supervisor (D47); NULL for other work orders. */
-export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+/**
+ * Review of a staff request by a supervisor (D47); WITHDRAWN when the requester cancelled it
+ * (D79). NULL for other work orders.
+ */
+export const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'];
 
 export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];
 

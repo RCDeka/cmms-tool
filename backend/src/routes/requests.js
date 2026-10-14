@@ -42,6 +42,16 @@ export function requestsRouter({ requests, comments, timeZone, now }) {
     res.json(item);
   });
 
+  router.post(
+    '/:id/cancel',
+    validate({ params: idParams, body: z.strictObject({}) }),
+    (req, res) => {
+      const item = requests.cancel(req.valid.params.id, req.user, { now: now() });
+      if (!item) throw new HttpError(404, 'Request not found');
+      res.json({ item });
+    },
+  );
+
   router.post('/:id/comments', validate({ params: idParams }), (req, res) => {
     const { id } = req.valid.params;
     if (!requests.getOwn(id, req.user.id)) throw new HttpError(404, 'Request not found');

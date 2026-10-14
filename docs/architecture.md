@@ -288,6 +288,7 @@ stateDiagram-v2
     state "Done" as done
     state "Rejected" as rejected
     state "Cancelled" as cancelled
+    state "Cancelled by you" as withdrawn
     [*] --> waiting: staff member sends the request
     waiting --> approved: supervisor approves and assigns
     waiting --> rejected: supervisor rejects with a reason
@@ -298,10 +299,13 @@ stateDiagram-v2
     approved --> cancelled
     progress --> cancelled
     hold --> cancelled
+    waiting --> withdrawn: requester cancels
+    approved --> withdrawn: requester cancels
 ```
 
-- The status shown to staff is computed by `requestProgress()` in `requests.js`: Waiting for review → Approved (and assigned) → In progress / On hold → Done, or Rejected (with the supervisor's reason) or Cancelled, each with a "next step" sentence naming the technician and the planned date when known.
+- The status shown to staff is computed by `requestProgress()` in `requests.js`: Waiting for review → Approved (and assigned) → In progress / On hold → Done, or Rejected (with the supervisor's reason), Cancelled (by the maintenance team) or Cancelled by you (`WITHDRAWN`, D79), each with a "next step" sentence naming the technician and the planned date when known.
 - Review (D47): a request waiting for review opens in the work order panel with a **review box** on top for supervisors and admins (approve with an assignee, or reject with a reason, `PUT /api/work-orders/:id/review`, online only); technicians see a notice instead. The edit form leaves out status and assignee until the review. The reviewed record is stored in IndexedDB and replaces the row on screen. The dashboard tile "Staff requests to review" opens `/work-orders?to_review=true`.
+- Cancellation (D79): until work starts, the request page offers **Cancel this request** (online only) under the next step; after a confirmation it calls `POST /api/requests/:id/cancel` and reloads the page. The maintenance team sees the review status **Withdrawn** and the requester in the history.
 - The open-request list is fetched again when the window gets the focus back (at most every 10 s), so a staff member coming back to the tab sees the latest status.
 - The work order panel of the maintenance team shows the same conversation (`comments.js`, loaded when the panel opens, online only) above the history, with the requester's comments marked.
 

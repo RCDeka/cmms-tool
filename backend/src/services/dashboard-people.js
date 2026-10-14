@@ -104,7 +104,8 @@ export function peopleWidgets(db) {
       }));
   }
   const requestSummary = (list) => {
-    const reviewed = list.filter((r) => r.review_status !== 'PENDING');
+    // A request withdrawn before its review was never reviewed (D79).
+    const reviewed = list.filter((r) => r.reviewed_at !== null);
     const rejected = list.filter((r) => r.review_status === 'REJECTED').length;
     return {
       count: list.length,

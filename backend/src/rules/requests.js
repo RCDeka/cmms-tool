@@ -15,7 +15,8 @@ export const REQUEST_SCOPES = ['open', 'all'];
 /**
  * Steps of a work order from its audit entries, oldest first: the creation, the review of a
  * staff request (APPROVED or REJECTED, D47), then each applied status change. Rejected edits
- * (CONFLICT) changed nothing and are skipped. A rejection is one step, not also CANCELLED.
+ * (CONFLICT) changed nothing and are skipped. A rejection is one step, not also CANCELLED;
+ * so is a withdrawal by the requester (WITHDRAWN, D79).
  * @param {{ action: string, changes: Record<string, { from: unknown, to: unknown }>,
  *   note?: { review?: string } | null, at: string }[]} entries audit entries, oldest first
  * @returns {{ status: string, at: string }[]}
@@ -24,7 +25,8 @@ export function statusTimeline(entries) {
   const steps = [];
   for (const entry of entries) {
     if (entry.action === 'CONFLICT') continue;
-    const review = entry.note?.review;
+    const review =
+      entry.note?.review ?? (entry.changes.review_status?.to === 'WITHDRAWN' ? 'WITHDRAWN' : null);
     const to = review ?? entry.changes.status?.to;
     if (!to || steps.at(-1)?.status === to) continue;
     steps.push({ status: to, at: entry.at });
@@ -72,6 +74,34 @@ export function reviewBlocker(current, version) {
       status: 409,
       rule: 'BR-V1',
       message: 'This request changed since you opened it: reload it and review it again.',
+    };
+  }
+  return null;
+}
+
+/**
+ * Why the requester cannot cancel their request, or null (BR-R10, D79): only until work
+ * starts, and not while a conflict waits for a supervisor (BR-V4). Pure.
+ * @param {{ status: string, has_conflict: number }} current
+ * @returns {{ status: number, rule: string, message: string } | null}
+ */
+export function withdrawalBlocker(current) {
+  if (current.status === 'CANCELLED' || current.status === 'CLOSED') {
+    return { status: 422, rule: 'BR-R10', message: 'This request is already finished.' };
+  }
+  if (current.status !== 'OPEN') {
+    return {
+      status: 422,
+      rule: 'BR-R10',
+      message:
+        'Work on this request has started: add a comment to ask the maintenance team to stop.',
+    };
+  }
+  if (current.has_conflict === 1) {
+    return {
+      status: 409,
+      rule: 'BR-V4',
+      message: 'The maintenance team is updating this request: try again later.',
     };
   }
   return null;

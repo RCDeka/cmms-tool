@@ -465,6 +465,21 @@ async function showRequest(route, isCurrent) {
     viewer: currentUser(),
     sendComment: async (body) =>
       (await apiFetch(`/requests/${request.id}/comments`, { method: 'POST', body: { body } })).item,
+    cancelRequest: async () => {
+      const answer = await confirmDialog({
+        title: 'Cancel this request?',
+        message:
+          'The maintenance team will not work on it, and this cannot be undone. To tell them why, add a comment. If the problem comes back, send a new request.',
+        actions: [
+          { value: 'withdraw', label: 'Cancel the request', primary: true },
+          { value: 'keep', label: 'Keep it' },
+        ],
+        cancelValue: 'keep',
+      });
+      if (answer !== 'withdraw') return;
+      await apiFetch(`/requests/${request.id}/cancel`, { method: 'POST', body: {} });
+      navigate(`/requests/${request.id}`, { replace: true, force: true });
+    },
   });
   tableContainer.querySelector('.placeholder-title')?.focus();
 }

@@ -266,6 +266,28 @@ describe('request_service', () => {
     expect(data.buckets.find((b) => b.key === '2026-W39')).toMatchObject({ count: 1, rejected: 1 });
   });
 
+  it('counts a request withdrawn before its review, but not as reviewed (D79)', async () => {
+    ctx.db
+      .prepare(
+        `INSERT INTO work_orders (id, number, type, status, priority, title, site, created_on,
+           review_status, created_by, created_at, updated_at)
+         VALUES (99, 'WO-2026-00099', 'CORRECTIVE', 'CANCELLED', 'NORMAL', 'Job', 'Paris',
+           '2026-10-02', 'WITHDRAWN', 6, '2026-10-02T08:00:00.000Z', '2026-10-02T09:00:00.000Z')`,
+      )
+      .run();
+    try {
+      expect(await widget('request_service')).toMatchObject({
+        count: 4,
+        reviewed: 2,
+        rejected: 1,
+        rejected_share: 0.5,
+        review_median: 14,
+      });
+    } finally {
+      ctx.db.prepare('DELETE FROM work_orders WHERE id = 99').run();
+    }
+  });
+
   it('lists the rejected requests', async () => {
     expect(await drill('request_service:rejected')).toEqual([6]);
     expect(await drill('request_service:pending')).toEqual([7]);

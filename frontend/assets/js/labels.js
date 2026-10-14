@@ -40,7 +40,12 @@ export const VALUE_LABELS = {
     CANCELLED: 'Cancelled',
   },
   work_order_priority: { LOW: 'Low', NORMAL: 'Normal', HIGH: 'High', URGENT: 'Urgent' },
-  review_status: { PENDING: 'To review', APPROVED: 'Approved', REJECTED: 'Rejected' },
+  review_status: {
+    PENDING: 'To review',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    WITHDRAWN: 'Withdrawn',
+  },
   // Preventive maintenance (D48).
   schedule_mode: { FIXED: 'Fixed calendar', FLOATING: 'From the last visit' },
   performed_by: { INTERNAL: 'Internal team', CONTRACTOR: 'Contractor' },
@@ -82,7 +87,12 @@ export const VALUE_TONES = {
     CANCELLED: 'neutral',
   },
   work_order_priority: { LOW: 'neutral', NORMAL: 'info', HIGH: 'warning', URGENT: 'danger' },
-  review_status: { PENDING: 'warning', APPROVED: 'success', REJECTED: 'neutral' },
+  review_status: {
+    PENDING: 'warning',
+    APPROVED: 'success',
+    REJECTED: 'neutral',
+    WITHDRAWN: 'neutral',
+  },
 };
 
 /** Label of an enum code; falls back to the code itself. */

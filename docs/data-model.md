@@ -43,7 +43,7 @@ erDiagram
 | Work order status | `OPEN` (Open), `IN_PROGRESS` (In progress), `ON_HOLD` (On hold), `CLOSED` (Closed), `CANCELLED` (Cancelled) |
 | Work order priority | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | Conflict status | `OPEN`, `RESOLVED` |
-| Review status (D47) | `PENDING` (To review), `APPROVED` (Approved), `REJECTED` (Rejected) |
+| Review status (D47) | `PENDING` (To review), `APPROVED` (Approved), `REJECTED` (Rejected), `WITHDRAWN` (Withdrawn: cancelled by the requester, D79) |
 | Conflict resolution | `A`, `B`, `MERGE` |
 | Plan type (D48) | `PREVENTIVE`, `REGULATORY` (the work order type of the visits) |
 | Schedule mode (D48) | `FIXED` (Fixed calendar), `FLOATING` (From the last visit) |
@@ -130,7 +130,7 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | actual_hours | REAL | yes | CHECK ≥ 0 | |
 | work_report | TEXT | yes | | |
 | created_by | INTEGER | no | FK → users.id | author **(added, D25)** |
-| review_status | TEXT | yes | CHECK Review status; `PENDING` only while `OPEN` and unassigned; `REJECTED` only when `CANCELLED` | NULL except for staff requests **(added, D47)** |
+| review_status | TEXT | yes | CHECK Review status; `PENDING` only while `OPEN` and unassigned; `REJECTED` and `WITHDRAWN` only when `CANCELLED` | NULL except for staff requests **(added, D47; `WITHDRAWN` added by 013, D79)** |
 | reviewed_by | INTEGER | yes | FK → users.id | supervisor or admin who reviewed **(added, D47)** |
 | reviewed_at | TEXT | yes | | datetime of the review **(added, D47)** |
 | review_note | TEXT | yes | | reason of a rejection, shown to the requester **(added, D47)** |
@@ -413,6 +413,7 @@ stateDiagram-v2
 - BR-R7: While `PENDING`, a regular update (or a conflict resolution) cannot change `status` or `assignee_id` (422): the request is assigned by approving it and cancelled by rejecting it.
 - BR-R8: Rejecting sets `status = CANCELLED`, `review_status = REJECTED` and `review_note` (the reason, 1 to 2000 characters, required).
 - BR-R9: Approving requires an `assignee_id` (BR-W3: an active technician or supervisor) and sets `review_status = APPROVED`; `supervisor_id` defaults to the reviewer. `type`, `priority`, `category` and `due_on` (BR-W8) may be set in the same request. Both decisions increment `version`, set `reviewed_by`, `reviewed_at`, `updated_by`, `updated_at`, and write one `UPDATE` audit entry with `note: { review: "APPROVED" | "REJECTED" }`, in one transaction.
+- BR-R10 (D79): The requester may cancel their own request while it is `OPEN`, reviewed or not (`POST /api/requests/:id/cancel`, no version: staff never see it). It sets `status = CANCELLED` and `review_status = WITHDRAWN`, keeps the review fields of an approved request, increments `version`, sets `updated_by` and `updated_at`, and writes one `UPDATE` audit entry, in one transaction. Refused with 422 once work has started (`IN_PROGRESS`, `ON_HOLD`) or when the request is finished, and with 409 (`BR-V4`) while a conflict is open. A maintenance edit made from an older version then becomes a conflict (BR-V3). The status steps (BR-R5) show it as one step, `WITHDRAWN`.
 
 ### Preventive maintenance (D48, D49)
 - BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
@@ -472,7 +473,7 @@ stateDiagram-v2
   - Contractors: the counted visits of contractor plans, per `supplier`, worst rate first.
 - Responsiveness, asset and people widgets (D59, Phase 24; pure rules in `rules/kpi-people.js`). Medians are the middle value (the mean of the two middle ones for an even count); the 90th percentile is by nearest rank (the smallest value with 90 % of the values at or below it).
   - Time to start and to close: from `created_at` to the first change to `IN_PROGRESS` (work orders started in the period) and to the last change to `CLOSED` (closed in the period), from the audit log; per priority.
-  - Staff requests: requests (`review_status` set) created in the period: time to review (`created_at` → `reviewed_at`), time to done (→ change to `CLOSED`), share rejected among those reviewed; also per bucket.
+  - Staff requests: requests (`review_status` set) created in the period: time to review (`created_at` → `reviewed_at`), time to done (→ change to `CLOSED`), share rejected among those reviewed (`reviewed_at` set: a request withdrawn before its review was never reviewed, D79); also per bucket.
   - Bad actors: corrective work orders (not cancelled) on an asset, created in the period, per asset: the 10 assets with the most, their share and the cumulative share; also for High and Critical assets only.
   - Repeat failures: corrective work orders (not cancelled) on an asset, created in the period, whose previous corrective work order on that asset (by creation date) was closed less than 30 days before (`created_on − closed_on` from 0 to 29 days); share of the period's corrective work on assets.
   - Critical assets out of service: High and Critical assets; days with a breakdown = calendar days in the period on which the asset was `BROKEN_DOWN` at some time (spells from the asset status changes in the audit log, in `APP_TIMEZONE`; one still going on counts until today; an asset without history counts from the period start when broken down now); per site, with the assets affected and those down today.

@@ -24,7 +24,7 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | Personal dashboards (`/dashboards`) and their widgets (`/dashboard/widgets…`) (D59) | no | no | yes | yes |
 | Switch dashboard widgets on or off for supervisors (`/dashboards/widgets`, D65) | no | no | no | yes |
 | Read reference data (`GET /reference-data`) | yes | yes | yes | yes |
-| `/requests` (own requests: list, create, read, comment; D46) | yes | no | no | no |
+| `/requests` (own requests: list, create, read, comment, cancel; D46, D79) | yes | no | no | no |
 | `GET/POST /work-orders/:id/comments` | no | yes | yes | yes |
 | `POST /assistant/find-work-order` (D67) | no | yes | yes | yes |
 | `PUT /work-orders/:id/review` (approve and assign, or reject a staff request; D47) | no | no | yes | yes |
@@ -264,6 +264,11 @@ All routes: role STAFF (403 otherwise). A request is a work order the user creat
 ### POST /api/requests/:id/comments
 - Body: `{ "body": string }` (1–2000 characters). `201 { "created": true, "item": Comment }`.
 - Errors: 400; 404 not found or someone else's.
+
+### POST /api/requests/:id/cancel (added, D79)
+- The requester cancels their request until work starts (BR-R10), whether it waits for review or was approved. Body: `{}` (no `version`: staff never see it). To say why, the page invites a comment.
+- `200 { "item": Request }` with `status = CANCELLED` and `review_status = WITHDRAWN`; the review fields of an approved request are kept.
+- Errors: 400 malformed id or any body field; 404 not found or someone else's; 409 `{ rule: "BR-V4" }` while a conflict on the work order waits for a supervisor; 422 `{ rule: "BR-R10" }` once work has started (`IN_PROGRESS`, `ON_HOLD`) or when the request is already finished (a second cancel included).
 
 ## Conflicts (added)
 
@@ -566,7 +571,7 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Assets | `GET/POST /api/assets`, `GET /api/assets/search`, `GET/PUT/DELETE /api/assets/:id`, `PUT /api/assets/:id/resolve-conflict` |
 | Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict`, `PUT /api/work-orders/:id/review`, `GET/POST /api/work-orders/:id/comments` |
-| Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments` |
+| Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments`, `POST /api/requests/:id/cancel` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
 | Reference | `GET /api/reference-data`, `GET /api/users` |
 | Dashboard | `GET /api/dashboard`, `GET/POST /api/dashboards`, `GET/PUT/DELETE /api/dashboards/:id`, `PUT /api/dashboards/order`, `GET /api/dashboard/widgets`, `GET /api/dashboard/widgets/:key/rows` |

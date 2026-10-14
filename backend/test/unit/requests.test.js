@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
-import { fieldsAwaitingReview, reviewBlocker, statusTimeline } from '../../src/rules/requests.js';
+import {
+  fieldsAwaitingReview,
+  reviewBlocker,
+  statusTimeline,
+  withdrawalBlocker,
+} from '../../src/rules/requests.js';
 import { defaultPowerUser } from '../../src/rules/users.js';
 
 const entry = (action, changes, at) => ({ action, changes, at });
@@ -54,6 +59,31 @@ describe('statusTimeline', () => {
     ).toEqual([
       { status: 'OPEN', at: 't1' },
       { status: 'REJECTED', at: 't2' },
+    ]);
+  });
+
+  it('shows a withdrawal by the requester as one step, after a review or not (D79)', () => {
+    const withdrawn = entry(
+      'UPDATE',
+      {
+        status: { from: 'OPEN', to: 'CANCELLED' },
+        review_status: { from: 'APPROVED', to: 'WITHDRAWN' },
+      },
+      't3',
+    );
+    expect(
+      statusTimeline([
+        entry('CREATE', { status: { from: null, to: 'OPEN' } }, 't1'),
+        {
+          ...entry('UPDATE', { assignee_id: { from: null, to: 4 } }, 't2'),
+          note: { review: 'APPROVED' },
+        },
+        withdrawn,
+      ]),
+    ).toEqual([
+      { status: 'OPEN', at: 't1' },
+      { status: 'APPROVED', at: 't2' },
+      { status: 'WITHDRAWN', at: 't3' },
     ]);
   });
 
@@ -112,5 +142,40 @@ describe('review rules (D47)', () => {
       rule: 'BR-V4',
     });
     expect(reviewBlocker(pending, 2)).toMatchObject({ status: 409, rule: 'BR-V1' });
+  });
+});
+
+describe('withdrawalBlocker (BR-R10, D79)', () => {
+  const request = (o = {}) => ({ status: 'OPEN', has_conflict: 0, ...o });
+
+  it('lets the requester cancel until work starts, reviewed or not', () => {
+    expect(withdrawalBlocker(request())).toBeNull();
+  });
+
+  it('refuses once work has started (422)', () => {
+    for (const status of ['IN_PROGRESS', 'ON_HOLD']) {
+      expect(withdrawalBlocker(request({ status }))).toMatchObject({
+        status: 422,
+        rule: 'BR-R10',
+        message: expect.stringMatching(/started/),
+      });
+    }
+  });
+
+  it('refuses a finished request (422)', () => {
+    for (const status of ['CLOSED', 'CANCELLED']) {
+      expect(withdrawalBlocker(request({ status }))).toMatchObject({
+        status: 422,
+        rule: 'BR-R10',
+        message: expect.stringMatching(/finished/),
+      });
+    }
+  });
+
+  it('waits for an open conflict to be resolved (409)', () => {
+    expect(withdrawalBlocker(request({ has_conflict: 1 }))).toMatchObject({
+      status: 409,
+      rule: 'BR-V4',
+    });
   });
 });

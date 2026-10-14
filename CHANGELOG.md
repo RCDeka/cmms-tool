@@ -4,6 +4,14 @@ One entry per release, newest first, written from the conventional commits since
 
 ## Unreleased
 
+### Added
+
+- A staff member can cancel their own request until work starts, whether it waits for review or was approved (D79). The maintenance team sees the new review status Withdrawn; the staff request widget does not count a request withdrawn before its review as reviewed.
+
+### Upgrade notes
+
+- Migration `013_request_withdrawal.sql` rebuilds the `work_orders` table; the service takes a backup before applying it (D74).
+
 ### Documentation
 
 - Screenshots of the main screens in the README, and diagrams of the tables, work order statuses, sync queue, staff requests and conflicts (D78).

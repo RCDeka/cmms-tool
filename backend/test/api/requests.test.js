@@ -555,6 +555,119 @@ describe('review by a supervisor (D47)', () => {
   });
 });
 
+describe('cancellation by the requester (BR-R10, D79)', () => {
+  const sendRequest = async () =>
+    (await send('post', 'user1', '/api/requests', newRequest()).expect(201)).body.item;
+  const cancel = (id, body = {}, username = 'user1') =>
+    send('post', username, `/api/requests/${id}/cancel`, body);
+  const approve = (id) =>
+    send('put', 'supervisor1', `/api/work-orders/${id}/review`, {
+      decision: 'APPROVE',
+      version: 1,
+      assignee_id: userId('technician1'),
+    }).expect(200);
+  const toReview = async () =>
+    (await get('supervisor1', '/api/dashboard').expect(200)).body.kpis.requests_to_review;
+
+  it('withdraws a request waiting for review: it leaves the review queue', async () => {
+    const { id } = await sendRequest();
+    const before = await toReview();
+    const res = await cancel(id).expect(200);
+    expect(Object.keys(res.body.item).sort()).toEqual(REQUEST_KEYS);
+    expect(res.body.item).toMatchObject({
+      status: 'CANCELLED',
+      review_status: 'WITHDRAWN',
+      reviewed_at: null,
+    });
+    expect(await toReview()).toBe(before - 1);
+    const open = await get('user1', '/api/requests?size=100').expect(200);
+    expect(open.body.items.map((r) => r.id)).not.toContain(id);
+    const seen = await get('user1', `/api/requests/${id}`).expect(200);
+    expect(seen.body.status_history.map((s) => s.status)).toEqual(['OPEN', 'WITHDRAWN']);
+    // The maintenance team sees who cancelled it, in the history.
+    const history = await get('supervisor1', `/api/work-orders/${id}/history`).expect(200);
+    expect(history.body.items[0]).toMatchObject({
+      action: 'UPDATE',
+      user: { id: userId('user1') },
+      version: 2,
+      changes: {
+        status: { from: 'OPEN', to: 'CANCELLED' },
+        review_status: { from: 'PENDING', to: 'WITHDRAWN' },
+      },
+    });
+  });
+
+  it('withdraws an approved request until work starts, keeping the review', async () => {
+    const { id } = await sendRequest();
+    await approve(id);
+    const res = await cancel(id).expect(200);
+    expect(res.body.item).toMatchObject({
+      status: 'CANCELLED',
+      review_status: 'WITHDRAWN',
+      assignee: { id: userId('technician1') },
+    });
+    expect(res.body.item.reviewed_at).toMatch(/^\d{4}-/);
+    const seen = await get('user1', `/api/requests/${id}`).expect(200);
+    expect(seen.body.status_history.map((s) => s.status)).toEqual([
+      'OPEN',
+      'APPROVED',
+      'WITHDRAWN',
+    ]);
+    // The technician's edit from the version before the cancellation becomes a conflict.
+    const stale = await send('put', 'technician1', `/api/work-orders/${id}`, {
+      status: 'IN_PROGRESS',
+      version: 2,
+    }).expect(409);
+    expect(stale.body.conflict).toBe(true);
+  });
+
+  it('refuses once work has started, or when the request is finished (422)', async () => {
+    const { id } = await sendRequest();
+    await approve(id);
+    await send('put', 'technician1', `/api/work-orders/${id}`, {
+      status: 'IN_PROGRESS',
+      version: 2,
+    }).expect(200);
+    const started = await cancel(id).expect(422);
+    expect(started.body.details.rule).toBe('BR-R10');
+    expect(started.body.message).toMatch(/comment/);
+
+    const other = await sendRequest();
+    await cancel(other.id).expect(200);
+    const again = await cancel(other.id).expect(422);
+    expect(again.body.details.rule).toBe('BR-R10');
+    expect(one('SELECT version FROM work_orders WHERE id = ?', other.id)).toBe(2);
+  });
+
+  it('waits while a conflict is open (409)', async () => {
+    const { id } = await sendRequest();
+    ctx.db.prepare('UPDATE work_orders SET has_conflict = 1 WHERE id = ?').run(id);
+    try {
+      const res = await cancel(id).expect(409);
+      expect(res.body.details.rule).toBe('BR-V4');
+      expect(one('SELECT status FROM work_orders WHERE id = ?', id)).toBe('OPEN');
+    } finally {
+      ctx.db.prepare('UPDATE work_orders SET has_conflict = 0 WHERE id = ?').run(id);
+    }
+  });
+
+  it('is for the requester only, on their own requests', async () => {
+    const { id } = await sendRequest();
+    const regular = one(
+      "SELECT id FROM work_orders WHERE review_status IS NULL AND status = 'OPEN' LIMIT 1",
+    );
+    await cancel(regular).expect(404);
+    await cancel(99999).expect(404);
+    await cancel('abc').expect(400);
+    await cancel(id, { reason: 'No longer needed' }).expect(400);
+    await cancel(id, {}, 'supervisor1').expect(403);
+    await cancel(id, {}, 'technician1').expect(403);
+    await request(ctx.app).post(`/api/requests/${id}/cancel`).expect(401);
+    expect(one('SELECT status FROM work_orders WHERE id = ?', regular)).toBe('OPEN');
+    expect(one('SELECT review_status FROM work_orders WHERE id = ?', id)).toBe('PENDING');
+  });
+});
+
 describe('staff accounts', () => {
   it('lets an admin create a staff member, without auto-save by default', async () => {
     const res = await send('post', 'admin', '/api/admin/users', {

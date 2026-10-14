@@ -7,10 +7,11 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/connection.js';
 import { listMigrations, runMigrations } from '../../src/db/migrate.js';
+import { seedDatabase } from '../../src/db/seed/index.js';
 
 const MIGRATIONS = path.join(import.meta.dirname, '../../src/db/migrations');
 import * as enums from '../../src/rules/enums.js';
-import { createTestDb } from '../helpers/db.js';
+import { TEST_PASSWORD, createTestDb } from '../helpers/db.js';
 
 let ctx;
 let db;
@@ -195,6 +196,69 @@ describe('migrations', () => {
     expect(() => insert('work_orders', workOrder(u, { review_status: 'MAYBE' }))).toThrow(
       /CHECK constraint failed/,
     );
+  });
+
+  it('keeps a withdrawn request cancelled (BR-R10)', () => {
+    const u = insert('users', user());
+    expect(() => insert('work_orders', workOrder(u, { review_status: 'WITHDRAWN' }))).toThrow(
+      /CHECK constraint failed/,
+    );
+    expect(() =>
+      insert('work_orders', workOrder(u, { review_status: 'WITHDRAWN', status: 'CANCELLED' })),
+    ).not.toThrow();
+  });
+
+  it('rebuilds work_orders in 013 without changing data, search or schema objects', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-012-'));
+    try {
+      // The demo database as it was after 012, then 013 applied to it.
+      for (const name of listMigrations().filter((n) => n < '013')) {
+        fs.copyFileSync(path.join(MIGRATIONS, name), path.join(dir, name));
+      }
+      const legacy = openDb(path.join(dir, 'legacy.sqlite'));
+      runMigrations(legacy, dir);
+      await seedDatabase(legacy, { password: TEST_PASSWORD, today: '2026-10-14' });
+      const state = () => ({
+        rows: legacy.prepare('SELECT * FROM work_orders ORDER BY id').all(),
+        found: legacy
+          .prepare(
+            "SELECT rowid FROM work_orders_fts WHERE work_orders_fts MATCH 'door' ORDER BY rowid",
+          )
+          .pluck()
+          .all(),
+        objects: legacy
+          .prepare(
+            "SELECT type || ' ' || name FROM sqlite_master WHERE tbl_name = 'work_orders' ORDER BY name",
+          )
+          .pluck()
+          .all(),
+        sequence: legacy
+          .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'work_orders'")
+          .pluck()
+          .get(),
+      });
+      const before = state();
+      fs.copyFileSync(
+        path.join(MIGRATIONS, '013_request_withdrawal.sql'),
+        path.join(dir, '013_request_withdrawal.sql'),
+      );
+      expect(runMigrations(legacy, dir)).toEqual(['013_request_withdrawal.sql']);
+      expect(before.found.length).toBeGreaterThan(0);
+      expect(state()).toEqual(before);
+      expect(legacy.pragma('foreign_key_check')).toEqual([]);
+      // The search triggers follow the new table.
+      const id = before.rows[0].id;
+      legacy.prepare("UPDATE work_orders SET title = 'Zeppelin hangar' WHERE id = ?").run(id);
+      expect(
+        legacy
+          .prepare("SELECT rowid FROM work_orders_fts WHERE work_orders_fts MATCH 'zeppelin'")
+          .pluck()
+          .all(),
+      ).toEqual([id]);
+      legacy.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('rolls back a migration that breaks a foreign key', () => {
