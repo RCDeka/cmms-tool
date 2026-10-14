@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Checks the disk space every 6 hours (install as /etc/systemd/system/tacto-disk-check.timer and
+# enable with: systemctl enable --now tacto-disk-check.timer). While a disk stays above the
+# threshold, the warning comes back at each check.
+[Unit]
+Description=Tacto disk space check every 6 hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+
+[Install]
+WantedBy=timers.target

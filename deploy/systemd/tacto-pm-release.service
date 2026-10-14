@@ -9,6 +9,7 @@
 [Unit]
 Description=Tacto release of preventive work orders
 After=tacto.service
+OnFailure=tacto-notify@%n.service
 
 [Service]
 Type=oneshot

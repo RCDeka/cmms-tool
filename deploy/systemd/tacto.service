@@ -6,6 +6,11 @@
 Description=Tacto API server
 Documentation=https://github.com/RCDeka/cmms-tool
 After=network.target
+# Alert on every crash (Phase 29). A crash loop stops after 5 starts in 10 minutes, so it
+# sends at most 5 alerts and then leaves the unit failed.
+OnFailure=tacto-notify@%n.service
+StartLimitIntervalSec=10min
+StartLimitBurst=5
 
 [Service]
 Type=simple

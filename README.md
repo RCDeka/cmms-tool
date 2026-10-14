@@ -155,6 +155,19 @@ sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic --no-cache init'
 
 Each night, once the backup has succeeded, `tacto-offsite-backup` sends it, reads it back to compare it with the original, keeps 14 daily, 8 weekly and 12 monthly copies, and checks the repository.
 
+**Alerts** (Phase 29, D75). Failures are pushed to an [ntfy](https://ntfy.sh) topic, which the people on call follow in the ntfy phone app (or by e-mail, from the ntfy settings). Three things are set up outside the VPS, so they still work when the VPS is down:
+
+1. **The ntfy topic.** On ntfy.sh, anyone who knows a topic's name can read it: pick an unguessable name (`echo tacto-$(openssl rand -hex 12)`), or reserve a protected topic and create an access token, or use your own ntfy server. Subscribe to it in the app.
+2. **The dead man's switch.** A check at a monitoring service that alerts when it is *not* pinged, e.g. [healthchecks.io](https://healthchecks.io) (free plan, or self-hosted): period 1 day, grace time 2 hours, with its ntfy integration pointing at your topic. The VPS pings it after each successful nightly backup, so a failed backup, a stopped timer or a VPS that is off are all noticed.
+3. **The uptime check.** An HTTP monitor that calls `https://cmms.example.com/api/health` every 5 minutes and alerts the topic when it does not answer `200` with `"status":"ok"`, e.g. [Uptime Kuma](https://github.com/louislam/uptime-kuma) on another machine (it has an ntfy notification), or a hosted uptime service.
+
+```bash
+sudo install -m 640 -o root -g tacto /opt/tacto/deploy/tacto-notify.env.example /etc/tacto/notify.env
+sudo nano /etc/tacto/notify.env      # NOTIFY_URL (+ NOTIFY_TOKEN), HEARTBEAT_URL
+```
+
+On the VPS, `tacto-notify@.service` sends an alert when the API, the backup, the off-server copy, the preventive release, the heartbeat or the disk check fails (`OnFailure=`), and `tacto-disk-check.timer` warns every 6 hours while the disk holding the database or the backups is 80 % full or more (`DISK_ALERT_PERCENT`). Alerts name the unit or the disk and the server, never any data.
+
 ### 4. Start the service, the backups and the daily release
 
 ```bash
@@ -163,7 +176,11 @@ sudo cp /opt/tacto/deploy/systemd/tacto.service \
         /opt/tacto/deploy/systemd/tacto-backup.timer \
         /opt/tacto/deploy/systemd/tacto-offsite-backup.service \
         /opt/tacto/deploy/systemd/tacto-pm-release.service \
-        /opt/tacto/deploy/systemd/tacto-pm-release.timer /etc/systemd/system/
+        /opt/tacto/deploy/systemd/tacto-pm-release.timer \
+        /opt/tacto/deploy/systemd/tacto-notify@.service \
+        /opt/tacto/deploy/systemd/tacto-heartbeat.service \
+        /opt/tacto/deploy/systemd/tacto-disk-check.service \
+        /opt/tacto/deploy/systemd/tacto-disk-check.timer /etc/systemd/system/
 
 # The timers run at local time in the zone they name (Europe/Paris in the files):
 # give them your APP_TIMEZONE, then check both times exist every day in that zone.
@@ -179,7 +196,11 @@ for TIME in 01:30:00 04:00:00; do
 done
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now tacto tacto-backup.timer tacto-pm-release.timer
+sudo systemctl enable --now tacto tacto-backup.timer tacto-pm-release.timer tacto-disk-check.timer
+
+# Alerts: a test message reaches the ntfy topic, then the disk check runs once.
+sudo systemctl start tacto-notify@test.service && journalctl -u tacto-notify@test.service -n 1 --no-pager   # "Notification sent: …"
+sudo systemctl start tacto-disk-check && journalctl -u tacto-disk-check -n 1 --no-pager   # "Disks below 80 %: …"
 
 systemctl status tacto --no-pager            # active (running)
 curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
@@ -187,6 +208,7 @@ curl -s http://127.0.0.1:3000/api/health         # {"status":"ok",…}
 # First backup, then its off-server copy (started by the backup when it succeeds):
 sudo systemctl start tacto-backup
 journalctl -u tacto-offsite-backup -n 3 --no-pager   # "Off-server copy of … stored and verified …"
+journalctl -u tacto-heartbeat -n 1 --no-pager         # "Heartbeat sent." (the check turns green at the monitoring service)
 ```
 
 The database is created and migrated when the service starts.
@@ -247,13 +269,33 @@ Then open `https://cmms.example.com`, log in, and in the browser's developer too
 | Update to a release, roll back | see below |
 | Backup now | `sudo systemctl start tacto-backup && ls /var/backups/tacto` |
 | Next scheduled backups | `systemctl list-timers tacto-backup` |
-| Last off-server copy | `journalctl -u tacto-offsite-backup -n 3` (a failure shows in `systemctl --failed`) |
+| Last off-server copy | `journalctl -u tacto-offsite-backup -n 3` (a failure sends an alert) |
 | List the off-server copies | `sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic snapshots'` |
+| Alerts sent, failed units | `journalctl -u 'tacto-notify@*' -n 10`, `systemctl --failed` |
+| Silence the alerts during maintenance | see Monitoring below |
 | Release preventive work orders now | `sudo systemctl start tacto-pm-release && journalctl -u tacto-pm-release -n 3` |
 | Restore a backup | see below |
 | Change the time zone | edit `APP_TIMEZONE` in `/etc/tacto/tacto.env`, run the `ZONE=…` and `sed` lines of step 4 again (with the old zone in place of `Europe/Paris`), then `sudo systemctl daemon-reload && sudo systemctl restart tacto` |
 
 Backups use SQLite's online backup API (consistent while the app runs), are checked with `PRAGMA integrity_check`, and kept 14 days (`BACKUP_KEEP_DAYS`) on the VPS. Each one is then copied off the server, encrypted, with restic (`tacto-offsite-backup`, D72): 14 daily, 8 weekly and 12 monthly copies.
+
+**Monitoring.** These checks send their alerts to the ntfy topic (step 3, Alerts):
+
+| Check | Where it runs | Alerts when | Silence it |
+|---|---|---|---|
+| Failed unit: `tacto` (every crash, at most 5 in 10 minutes), `tacto-backup`, `tacto-offsite-backup`, `tacto-pm-release`, `tacto-heartbeat`, `tacto-disk-check` | VPS, `tacto-notify@.service` | the unit fails | silence file, below |
+| Disk space of `/var/lib/tacto` and `/var/backups/tacto` | VPS, `tacto-disk-check.timer`, every 6 hours | 80 % full or more (`DISK_ALERT_PERCENT`); again at each check until space is freed | silence file, below |
+| Dead man's switch (`HEARTBEAT_URL`) | monitoring service, pinged after each successful backup | no ping for 1 day + 2 hours | pause the check at the service |
+| Uptime of `https://cmms.example.com/api/health` | uptime monitor outside the VPS | no `200` / `"status":"ok"` | pause the monitor |
+
+Before planned maintenance (an update, a restore, a reboot), silence the VPS alerts until a given time, and pause the uptime monitor (and the dead man's switch if the maintenance crosses the night backup) at their services:
+
+```bash
+date -d '+2 hours' -Is | sudo tee /run/tacto-silence-until     # VPS alerts only go to the journal until then
+sudo rm /run/tacto-silence-until                                 # end the silence early
+```
+
+The silence ends by itself at that time, or at the next reboot (`/run` is emptied). Alerts silenced are still written in the journal (`journalctl -u 'tacto-notify@*'`: "Silenced until …").
 
 **Update to a release.** The server runs a release tag (`v1.0.0`, …), never `main`. Read the release's entry in `CHANGELOG.md` first. Pending migrations are applied when the service starts, and a backup is written into `/var/backups/tacto` just before (the log names it); without migrations, no backup is written.
 
@@ -353,8 +395,10 @@ Then go on with step 4: the service starts on the restored database.
 │   └── test/
 └── deploy/
     ├── tacto.env.example production settings template
+    ├── tacto-offsite.env.example, tacto-offsite-backup.sh   off-server copies (restic)
+    ├── tacto-notify.env.example, tacto-monitor.sh           alerts (ntfy), heartbeat, disk check
     ├── nginx/                site config + security headers snippet
-    └── systemd/              API service, backup, off-server copy and preventive release services with their timers
+    └── systemd/              API service, backup, off-server copy, preventive release, alert and disk check units with their timers
 ```
 
 ## License

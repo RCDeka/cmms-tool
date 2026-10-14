@@ -8,6 +8,7 @@
 Description=Tacto off-server backup copy
 Wants=network-online.target
 After=network-online.target tacto-backup.service
+OnFailure=tacto-notify@%n.service
 
 [Service]
 Type=oneshot

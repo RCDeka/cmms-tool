@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Alert sent when a Tacto unit fails (Phase 29, D75; install as
+# /etc/systemd/system/tacto-notify@.service). Started by the OnFailure= line of each unit, with
+# the failed unit as instance; try it with: systemctl start tacto-notify@test.service
+[Unit]
+Description=Tacto alert: %i failed
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=tacto
+Group=tacto
+# ntfy topic and token: root-owned, readable by the group.
+EnvironmentFile=/etc/tacto/notify.env
+ExecStart=/bin/bash /opt/tacto/deploy/tacto-monitor.sh failed %i
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

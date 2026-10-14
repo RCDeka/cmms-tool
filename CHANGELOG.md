@@ -2,6 +2,16 @@
 
 One entry per release, newest first, written from the conventional commits since the previous tag (`git log --oneline v1.0.0..HEAD`). Each release is a git tag `vX.Y.Z`; the server runs a tag, not `main` (README → Operations). Versions follow semantic versioning: a new migration or an API change that the previous frontend cannot use is at least a minor version.
 
+## Unreleased
+
+### Added
+
+- Monitoring and alerts (Phase 29, D75): a failure of the API, the backup, the off-server copy or the preventive release is pushed to an ntfy topic; a dead man's switch is pinged after each nightly backup; a warning when the disk holding the database or the backups is 80 % full; an external uptime check of `/api/health`; a silence for planned maintenance.
+
+### Upgrade notes
+
+- Create `/etc/tacto/notify.env` and the external checks (README → Deployment, step 3, Alerts), copy the four new units and the four changed ones (`tacto`, `tacto-backup`, `tacto-offsite-backup`, `tacto-pm-release`) to `/etc/systemd/system/`, then `sudo systemctl daemon-reload && sudo systemctl enable --now tacto-disk-check.timer`.
+
 ## 1.0.0 — 2026-10-14
 
 First release. It includes everything built since the project started (Phases 0 to 24, 26 and 27 of `docs/roadmap.md`).

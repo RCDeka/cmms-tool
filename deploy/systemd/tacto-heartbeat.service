@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Dead man's switch (Phase 29, D75; install as /etc/systemd/system/tacto-heartbeat.service).
+# Started by tacto-backup.service when the backup succeeds (OnSuccess=): the monitoring service
+# of HEARTBEAT_URL alerts when a night passes without a ping (backup failed, timer stopped,
+# server down).
+[Unit]
+Description=Tacto backup heartbeat
+Wants=network-online.target
+After=network-online.target tacto-backup.service
+OnFailure=tacto-notify@%n.service
+
+[Service]
+Type=oneshot
+User=tacto
+Group=tacto
+EnvironmentFile=/etc/tacto/notify.env
+ExecStart=/bin/bash /opt/tacto/deploy/tacto-monitor.sh heartbeat
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

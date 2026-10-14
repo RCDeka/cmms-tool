@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Disk space warning (Phase 29, D75; install as /etc/systemd/system/tacto-disk-check.service).
+# Started by tacto-disk-check.timer; run it by hand with: systemctl start tacto-disk-check
+[Unit]
+Description=Tacto disk space check
+Wants=network-online.target
+After=network-online.target
+OnFailure=tacto-notify@%n.service
+
+[Service]
+Type=oneshot
+User=tacto
+Group=tacto
+EnvironmentFile=/etc/tacto/notify.env
+ExecStart=/bin/bash /opt/tacto/deploy/tacto-monitor.sh disk
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
