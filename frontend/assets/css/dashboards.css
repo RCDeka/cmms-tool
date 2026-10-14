@@ -645,21 +645,40 @@
 
 /* --- Dashboard widgets (administrators, D65) -------------------------------------------- */
 
+/* One card per group, packed in as many columns as the width allows (feedback #1). */
+.settings-page.widget-settings-page {
+  max-width: none;
+}
+
+.widget-settings-page > p {
+  max-width: 44rem;
+}
+
 .widget-settings {
-  display: grid;
-  gap: var(--space-3);
+  columns: 18rem;
+  column-gap: var(--space-3);
 }
 
 .widget-settings-group {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  display: block;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  break-inside: avoid;
 }
 
+/* Floated so the legend sits inside the card instead of on its border. */
 .widget-settings-group legend {
-  padding-bottom: var(--space-1);
+  float: left;
+  width: 100%;
+  padding: 0 0 var(--space-1);
   font-weight: 600;
+}
+
+.widget-setting {
+  clear: both;
 }
 
 .widget-setting-label {

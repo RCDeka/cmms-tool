@@ -58,7 +58,7 @@ export function renderWidgetSettings(container, { items, onToggle }) {
     container,
     h(
       'div',
-      { class: 'settings-page' },
+      { class: 'settings-page widget-settings-page' },
       h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Dashboard widgets'),
       h(
         'p',
@@ -70,7 +70,7 @@ export function renderWidgetSettings(container, { items, onToggle }) {
         { class: 'muted', role: 'status' },
         off ? `${off} of ${items.length} widgets switched off.` : 'Every widget is switched on.',
       ),
-      h('div', { class: 'settings-form widget-settings' }, groups),
+      h('div', { class: 'widget-settings' }, groups),
     ),
   );
 }
