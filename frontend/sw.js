@@ -82,7 +82,7 @@ const SHELL_FILES = [
   '/assets/js/widgets.js',
   '/assets/js/work-order-schedule.js',
   '/assets/vendor/chart.js-4.5.1/chart.umd.min.js',
-  '/assets/vendor/idb-8.0.3/index.js',
+  '/assets/vendor/idb-8.0.4/index.js',
 ];
 
 self.addEventListener('install', (event) => {

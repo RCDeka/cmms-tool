@@ -6,21 +6,17 @@ let cursorAdvanceMethods;
 function getIdbProxyableTypes() {
     return (idbProxyableTypes ||
         (idbProxyableTypes = [
-            IDBDatabase,
-            IDBObjectStore,
             IDBIndex,
+            IDBObjectStore,
             IDBCursor,
+            IDBDatabase,
             IDBTransaction,
         ]));
 }
 // This is a function to prevent it throwing up in node environments.
 function getCursorAdvanceMethods() {
     return (cursorAdvanceMethods ||
-        (cursorAdvanceMethods = [
-            IDBCursor.prototype.advance,
-            IDBCursor.prototype.continue,
-            IDBCursor.prototype.continuePrimaryKey,
-        ]));
+        (cursorAdvanceMethods = ['advance', 'continue', 'continuePrimaryKey'].map((method) => IDBCursor.prototype[method])));
 }
 const transactionDoneMap = new WeakMap();
 const transformCache = new WeakMap();
@@ -149,7 +145,7 @@ function wrap(value) {
     const newValue = transformCachableValue(value);
     // Not all types are transformed.
     // These may be primitive types, so they can't be WeakMap keys.
-    if (newValue !== value) {
+    if (!Object.is(newValue, value)) {
         transformCache.set(value, newValue);
         reverseTransformCache.set(newValue, value);
     }
@@ -205,15 +201,15 @@ function deleteDB(name, { blocked } = {}) {
 
 const readMethods = ['get', 'getKey', 'getAll', 'getAllKeys', 'count'];
 const writeMethods = ['put', 'add', 'delete', 'clear'];
-const cachedMethods = new Map();
+const cachedMethods = {};
 function getMethod(target, prop) {
     if (!(target instanceof IDBDatabase &&
         !(prop in target) &&
         typeof prop === 'string')) {
         return;
     }
-    if (cachedMethods.get(prop))
-        return cachedMethods.get(prop);
+    if (cachedMethods[prop])
+        return cachedMethods[prop];
     const targetFuncName = prop.replace(/FromIndex$/, '');
     const useIndex = prop !== targetFuncName;
     const isWrite = writeMethods.includes(targetFuncName);
@@ -239,8 +235,7 @@ function getMethod(target, prop) {
             isWrite && tx.done,
         ]))[0];
     };
-    cachedMethods.set(prop, method);
-    return method;
+    return (cachedMethods[prop] = method);
 }
 replaceTraps((oldTraps) => ({
     ...oldTraps,
@@ -248,7 +243,7 @@ replaceTraps((oldTraps) => ({
     has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop),
 }));
 
-const advanceMethodProps = ['continue', 'continuePrimaryKey', 'advance'];
+const advanceMethodProps = ['advance', 'continue', 'continuePrimaryKey'];
 const methodMap = {};
 const advanceResults = new WeakMap();
 const ittrProxiedCursorToOriginalProxy = new WeakMap();

@@ -390,7 +390,7 @@ Then go on with step 4: the service starts on the restored database.
 │   ├── assets/
 │   │   ├── css/
 │   │   ├── js/
-│   │   ├── vendor/           idb 8.0.3, Chart.js 4.5.1 (with their licenses)
+│   │   ├── vendor/           idb 8.0.4, Chart.js 4.5.1 (with their licenses)
 │   │   └── img/              logo, icons
 │   └── test/
 └── deploy/

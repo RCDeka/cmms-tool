@@ -3,7 +3,7 @@
 
 // IndexedDB access (brief → IndexedDB module; docs/architecture.md → IndexedDB).
 // All IndexedDB access goes through this module.
-import { openDB } from '../vendor/idb-8.0.3/index.js';
+import { openDB } from '../vendor/idb-8.0.4/index.js';
 import { ENTITIES } from './entities.js';
 
 const DB_NAME = 'cmms';

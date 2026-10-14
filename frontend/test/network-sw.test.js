@@ -75,6 +75,6 @@ describe('index.html', () => {
       .readdirSync(path.join(FRONTEND, 'assets/js'))
       .filter((f) => f.endsWith('.js') && f !== 'app.js')
       .map((f) => `/assets/js/${f}`);
-    expect(preloaded).toEqual([...modules, '/assets/vendor/idb-8.0.3/index.js'].sort());
+    expect(preloaded).toEqual([...modules, '/assets/vendor/idb-8.0.4/index.js'].sort());
   });
 });
