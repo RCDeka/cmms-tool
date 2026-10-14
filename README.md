@@ -150,7 +150,8 @@ sudo nano /etc/tacto/offsite.env     # RESTIC_REPOSITORY, RESTIC_PASSWORD, the s
 sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic --no-cache init'
 ```
 
-- `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. **Store it outside the VPS too** (password manager): if the VPS is lost, it is the only way to read the copies.
+- `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. It is the only way to read the copies.
+- **Store the whole file outside the VPS too** (one entry in a password manager, D77): if the VPS is lost, restoring needs the repository address, the storage keys and the password, and `/etc/tacto/offsite.env` is lost with it. At least two people should be able to open that entry; one of them runs the restore drill below without help (test protocol OPS-07).
 - SFTP only: give the `tacto` user an SSH key and trust the backup server once: `sudo install -d -m 750 -o tacto -g tacto /var/lib/tacto && sudo -u tacto ssh-keygen -t ed25519 -N '' -f /var/lib/tacto/.ssh/id_ed25519`, add the public key to the backup account, then `sudo -u tacto ssh backup@backup.example.com exit` to record its host key.
 
 Each night, once the backup has succeeded, `tacto-offsite-backup` sends it, reads it back to compare it with the original, keeps 14 daily, 8 weekly and 12 monthly copies, and checks the repository.
@@ -346,7 +347,7 @@ sudo rm -f /var/lib/tacto/cmms.sqlite-wal /var/lib/tacto/cmms.sqlite-shm
 sudo systemctl start tacto
 ```
 
-**Restore from the off-server copies** (VPS lost: on the new server, after steps 1 to 3 with the same `offsite.env` and `RESTIC_PASSWORD`):
+**Restore from the off-server copies** (VPS lost: on the new server, follow steps 1 to 3, writing `/etc/tacto/offsite.env` from the copy kept in the password manager; skip `restic init`, the repository exists; for SFTP, add the new server's `tacto` key to the backup account):
 
 ```bash
 sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic snapshots'      # pick one, or "latest"
