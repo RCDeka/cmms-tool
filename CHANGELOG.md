@@ -4,6 +4,8 @@ One entry per release, newest first, written from the conventional commits since
 
 ## Unreleased
 
+## 1.1.0 — 2026-10-14
+
 ### Added
 
 - Monitoring and alerts (Phase 29, D75): a failure of the API, the backup, the off-server copy or the preventive release is pushed to an ntfy topic; a dead man's switch is pinged after each nightly backup; a warning when the disk holding the database or the backups is 80 % full; an external uptime check of `/api/health`; a silence for planned maintenance.
