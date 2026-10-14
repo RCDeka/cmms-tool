@@ -76,7 +76,7 @@ Check these on every screen without repeating them in each test; any breach is a
 
 | ID | Steps | Expected |
 |---|---|---|
-| P-01 | `cd backend && npm test` | All tests pass (baseline 2026-10-14: 50 files, 760 tests). |
+| P-01 | `cd backend && npm test` | All tests pass (baseline 2026-10-14: 51 files, 772 tests). |
 | P-02 | `cd frontend && npm test` | All tests pass (baseline: 35 files, 476 tests). |
 | P-03 | `npm run lint` in `backend` and in `frontend` | No error, no Prettier difference. |
 | P-04 | `npm audit --omit=dev` in `backend`; `npm audit` in `frontend` | No high or critical vulnerability in production dependencies. |
