@@ -4,6 +4,10 @@ One entry per release, newest first, written from the conventional commits since
 
 ## Unreleased
 
+### Documentation
+
+- Screenshots of the main screens in the README, and diagrams of the tables, work order statuses, sync queue, staff requests and conflicts (D78).
+
 ## 1.1.0 — 2026-10-14
 
 ### Added

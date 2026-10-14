@@ -13,21 +13,22 @@ Conventions:
 
 ## Entity overview
 
-```
-users 1───* work_orders (assignee_id)
-users 1───* work_orders (supervisor_id)
-users 1───* work_orders (created_by)
-users 1───* assets / work_orders (updated_by)
-work_orders 1───* work_order_comments (work_order_id)
-users 1───* work_order_comments (user_id)
-assets 1───* work_orders (asset_id, optional)
-assets / work_orders 1───* conflicts (entity_type + entity_id)
-assets 1───* maintenance_plans (asset_id, optional)
-maintenance_plans 1───* plan_occurrences (plan_id)
-maintenance_plans 1───* work_orders (plan_id, optional)
-plan_occurrences 0..1───1 work_orders (work_order_id, set by the release)
-work_orders 1───* allocations (work_order_id, WORK blocks)
-users 1───* allocations (technician_id) / capacity_overrides (technician_id)
+```mermaid
+erDiagram
+    users ||--o{ work_orders : "assignee_id, supervisor_id, created_by, updated_by"
+    users ||--o{ assets : "updated_by"
+    work_orders ||--o{ work_order_comments : "work_order_id"
+    users ||--o{ work_order_comments : "user_id"
+    assets |o--o{ work_orders : "asset_id (optional)"
+    assets ||--o{ conflicts : "entity_type + entity_id"
+    work_orders ||--o{ conflicts : "entity_type + entity_id"
+    assets |o--o{ maintenance_plans : "asset_id (optional)"
+    maintenance_plans ||--o{ plan_occurrences : "plan_id"
+    maintenance_plans |o--o{ work_orders : "plan_id (optional)"
+    plan_occurrences |o--o| work_orders : "work_order_id (set by the release)"
+    work_orders ||--o{ allocations : "work_order_id (WORK blocks)"
+    users ||--o{ allocations : "technician_id"
+    users ||--o{ capacity_overrides : "technician_id"
 ```
 
 ## Enumerated values
@@ -375,6 +376,20 @@ Rules: BR-K1 a dashboard is only seen and changed by its owner (404 for others);
 | ON_HOLD | IN_PROGRESS, CANCELLED |
 | CLOSED | (terminal) |
 | CANCELLED | (terminal) |
+
+```mermaid
+stateDiagram-v2
+    [*] --> OPEN: created
+    OPEN --> IN_PROGRESS: sets started_on (BR-W5)
+    OPEN --> CANCELLED
+    IN_PROGRESS --> ON_HOLD
+    IN_PROGRESS --> CLOSED: needs a work report (BR-W6)
+    IN_PROGRESS --> CANCELLED
+    ON_HOLD --> IN_PROGRESS
+    ON_HOLD --> CANCELLED
+    CLOSED --> [*]
+    CANCELLED --> [*]
+```
 
 - BR-W5: Entering `IN_PROGRESS` for the first time sets `started_on` to today if it is empty.
 - BR-W6: Entering `CLOSED` requires a non-empty `work_report` (already stored or sent in the same request) and sets `closed_on` to today if empty.

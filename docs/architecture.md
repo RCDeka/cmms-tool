@@ -254,6 +254,19 @@ Both modes write through the same queue (D11). They differ only in what triggers
 - Flush: FIFO, one request at a time. Runs on enqueue (if online), on reconnect, at startup, and every 30 s while the queue isn't empty.
 - Display: queued edits are shown immediately in the detail panel, marked "Pending sync". The status bar shows the number of pending writes.
 
+```mermaid
+flowchart LR
+    edit["Edit in the detail panel"] --> drafts[("drafts")]
+    drafts -->|"Save, or leaving the record (power user)"| queue[("sync_queue")]
+    queue -->|"flush: FIFO, one at a time"| api["PUT / POST /api/…"]
+    api -->|"200 / 201"| ok["store the record, delete entry and draft"]
+    api -->|"409"| conflict["store the server version, mark in conflict"]
+    api -->|"400 / 403 / 404 / 422"| failed["keep the edits as a draft, show the error"]
+    api -->|"401"| login["pause, log in again, resume"]
+    api -->|"network error / 5xx"| retry["retry with backoff"]
+    retry --> queue
+```
+
 | Server response | Client action |
 |---|---|
 | 200 / 201 | Store the returned `item` as the record (for a `create`, replacing the temporary record, see Work order creation), update its row, delete the queue entry and the draft. |
@@ -266,6 +279,27 @@ Both modes write through the same queue (D11). They differ only in what triggers
 ## Staff requests (D46)
 
 - A request is a work order created by a `STAFF` user. Staff pages read `/api/requests` and need a connection: nothing is cached in IndexedDB for them (the request form and unsent comments keep their text while the app is open; the form reuses its `client_id` until the request is sent, so a retry after a lost answer never creates two).
+```mermaid
+stateDiagram-v2
+    state "Waiting for review" as waiting
+    state "Approved" as approved
+    state "In progress" as progress
+    state "On hold" as hold
+    state "Done" as done
+    state "Rejected" as rejected
+    state "Cancelled" as cancelled
+    [*] --> waiting: staff member sends the request
+    waiting --> approved: supervisor approves and assigns
+    waiting --> rejected: supervisor rejects with a reason
+    approved --> progress
+    progress --> hold
+    hold --> progress
+    progress --> done
+    approved --> cancelled
+    progress --> cancelled
+    hold --> cancelled
+```
+
 - The status shown to staff is computed by `requestProgress()` in `requests.js`: Waiting for review → Approved (and assigned) → In progress / On hold → Done, or Rejected (with the supervisor's reason) or Cancelled, each with a "next step" sentence naming the technician and the planned date when known.
 - Review (D47): a request waiting for review opens in the work order panel with a **review box** on top for supervisors and admins (approve with an assignee, or reject with a reason, `PUT /api/work-orders/:id/review`, online only); technicians see a notice instead. The edit form leaves out status and assignee until the review. The reviewed record is stored in IndexedDB and replaces the row on screen. The dashboard tile "Staff requests to review" opens `/work-orders?to_review=true`.
 - The open-request list is fetched again when the window gets the focus back (at most every 10 s), so a staff member coming back to the tab sees the latest status.
@@ -273,10 +307,23 @@ Both modes write through the same queue (D11). They differ only in what triggers
 
 ## Conflicts
 
-```
-client A (v3) ─PUT v3─► server: v3 == v3 → apply, v4
-client B (v3) ─PUT v3─► server: v3 != v4 → conflicts row (A = server v4, B = client changes), has_conflict = 1 → 409
-supervisor   ─resolve─► apply A | B | MERGE → v5, has_conflict = 0, conflict RESOLVED
+```mermaid
+sequenceDiagram
+    participant A as Client A
+    participant B as Client B
+    participant S as Server
+    participant V as Supervisor
+    A->>S: PUT, version 3
+    Note over S: 3 = 3: apply, version 4
+    S-->>A: 200, version 4
+    B->>S: PUT, version 3
+    Note over S: 3 ≠ 4: conflicts row (A = server v4, B = client changes), has_conflict = 1
+    S-->>B: 409 conflict
+    B->>S: PUT, version 4
+    S-->>B: 409 locked (BR-V4)
+    V->>S: PUT …/resolve-conflict: A, B or MERGE
+    Note over S: version 5, has_conflict = 0, conflict RESOLVED
+    S-->>V: 200, version 5
 ```
 
 - Display (accessibility: never color alone): amber row background + ⚠ icon + text badge "Conflict" in the table. Banner and badge in the detail panel.

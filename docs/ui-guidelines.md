@@ -197,3 +197,23 @@ Every column title of the asset and work order tables is a button. A click sorts
 - **Panel**: one sentence saying how many visits could move and within which rules ("Nothing is saved until you accept"), then a before → after table (*Peak week load*, *Weeks over capacity*, *Tight weeks*, *Busiest week of one trade*; lower values in green bold with "(lower)" for screen readers), **Tick all** / **Untick all**, and the moves, each a checkbox (ticked at first) with "PM-0011 · Week 46 → Week 47", the plan's title, trade, hours and "§ regulatory", and "Due Week 46. Load now: Week 46 107%, Week 47 27%." Then **Accept N moves** (primary, disabled when none is ticked) and **Discard**. Without any possible move, a sentence says the weeks are already as smooth as the plans allow.
 - **On the grid**: each ticked move shows a dashed ghost chip in the week it would go to and fades the visit leaving; the tiles (dashed frame) and the load strip ("Load (preview)") show the figures with the ticked moves. Unticking a move updates all three at once.
 - **Accept**: the moves are sent one by one; the message line then says "Balancing: 29 visits moved." (and how many were refused, with the first reason), the panel closes, and **Undo** ("Undo: Balancing: 29 visits moved") puts them all back in one step.
+
+## Screenshots
+
+The README shows the main screens with pictures from `docs/img/` (D78). Take them again when a screen they show changes visibly, in the same commit as the change if possible.
+
+- **Data**: a separate copy of the mock data, never a real database: `DATABASE_PATH=<temporary file> npm run db:reset -- --with-conflicts`, then the server on that file. The pictures only ever show mock names and sites.
+- **Browser**: in English (the browser's own week and date fields follow its language, see Language), no extensions, scrollbars hidden, after the page has finished loading.
+- **Sizes**: computers 1440 × 900 at 1×; phones 402 × 874 (iPhone 17) at 2×, to keep the files small.
+- **Pictures** (PNG, named after the screen):
+
+| File | User | Page | Size |
+|---|---|---|---|
+| `dashboard.png` | `supervisor1` | `/dashboard` | computer |
+| `work-orders.png` | `supervisor1` | `/work-orders/40` (table + detail panel) | computer |
+| `conflict.png` | `supervisor1` | `/conflicts/3` (the work order conflict) | computer |
+| `year-planner.png` | `supervisor1` | `/planning` | computer |
+| `week-scheduler.png` | `supervisor1` | `/schedule` | computer |
+| `my-week-phone.png` | `technician1` | `/my-week` | phone |
+| `requests-phone.png` | `user1` | `/requests` | phone |
+| `request-phone.png` | `user1` | `/requests/164` (a request in progress) | phone |

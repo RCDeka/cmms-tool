@@ -36,6 +36,40 @@ It started as an MVP (phases 0–7, brief in `docs/SPEC_MVP_CMMS.md`), the first
 
 Out of scope: deleting work orders (they are cancelled), inventory, attachments (see the backlog in `docs/roadmap.md`). The AI assistant (D66) only finds work orders by search until a model provider is chosen. Preventive maintenance (a 52-week year planner and a weekly scheduler per technician) is specified in `docs/spec-preventive-maintenance.md`: Phases 17–20 are built.
 
+## Screenshots
+
+Taken with the mock data (`npm run db:reset -- --with-conflicts`); how to take them again is in `docs/ui-guidelines.md` → Screenshots.
+
+**Dashboard** (supervisor): KPI tiles that open the matching list, charts, widgets ticked in the sidebar.
+
+![Supervisor dashboard with KPI tiles and charts](docs/img/dashboard.png)
+
+**Work orders**: filters, paginated table and the detail panel side by side.
+
+![Work order table with the detail panel open](docs/img/work-orders.png)
+
+**Conflict arbitration**: two people edited the same work order; the supervisor keeps version A, version B or a field-by-field merge.
+
+![Side-by-side conflict arbitration](docs/img/conflict.png)
+
+**Year planner**: preventive visits over 52 weeks, the load per week against capacity and the balance figures.
+
+![Year planner with load strip and visits](docs/img/year-planner.png)
+
+**Week scheduler**: work orders to schedule on the left, dragged onto each person's day.
+
+![Week scheduler with the tray and the team's days](docs/img/week-scheduler.png)
+
+**On a phone**: a technician's week, then a staff member's open requests and one request's progress.
+
+<table>
+  <tr>
+    <td><img src="docs/img/my-week-phone.png" alt="My week on a phone" width="260"></td>
+    <td><img src="docs/img/requests-phone.png" alt="Staff member's open requests on a phone" width="260"></td>
+    <td><img src="docs/img/request-phone.png" alt="Progress of a staff request on a phone" width="260"></td>
+  </tr>
+</table>
+
 ## Run locally
 
 Prerequisites: Node.js 24 LTS and npm.
