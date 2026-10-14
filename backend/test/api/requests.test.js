@@ -56,6 +56,7 @@ const REQUEST_KEYS = [
   'created_at',
   'updated_at',
   'assignee',
+  'room',
   'comment_count',
   'last_comment_at',
 ].sort();

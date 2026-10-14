@@ -20,6 +20,7 @@ import {
   SITES,
   SUPPLIERS,
   WORK_REPORTS,
+  roomCatalog,
 } from './catalog.js';
 
 const RANDOM_SEED = 20261004;
@@ -111,7 +112,8 @@ const STAFF_REQUESTS = [
     title: 'Office too cold since this morning',
     description:
       'It is very cold in the open space: several colleagues are working in their coats.',
-    location: 'Tower A, floor 12, open space by the windows (desks 12-40 to 12-48)',
+    room: ['Tower A', 'L12', 'Open space 12 West'],
+    location: 'By the windows, desks 12-40 to 12-48',
     comments: [],
   },
   {
@@ -121,7 +123,8 @@ const STAFF_REQUESTS = [
     category: 'ELECTRICAL',
     title: 'Light flickering in meeting room 8.03',
     description: 'The ceiling light above the table flickers all the time; it gives headaches.',
-    location: 'Tower B, floor 8, meeting room 8.03',
+    room: ['Tower B', 'L8', 'Meeting room 8.03'],
+    location: null,
     assignee: 'technician1',
     due: 2,
     comments: [
@@ -140,7 +143,8 @@ const STAFF_REQUESTS = [
     category: null,
     title: 'Strange noise in the ceiling',
     description: 'A loud rattling noise comes from the ceiling, mostly in the afternoon.',
-    location: 'Tower A, floor 12, above desk 12-15',
+    room: ['Tower A', 'L12', 'Open space 12 East'],
+    location: 'Above desk 12-15',
     assignee: 'technician1',
     started: -4,
     comments: [
@@ -181,7 +185,8 @@ const STAFF_REQUESTS = [
     category: null,
     title: 'Repaint my office in blue',
     description: 'The walls of my office are beige; a light blue would be nicer.',
-    location: 'Tower A, floor 12, office 12.07',
+    room: ['Tower A', 'L12', 'Office 12.07'],
+    location: null,
     rejected: { day: -5, hour: 9 },
     reason:
       'Decoration is not maintenance work: please ask your manager to contact the workplace team.',
@@ -194,7 +199,8 @@ const STAFF_REQUESTS = [
     category: 'PLUMBING',
     title: 'Water leak under the kitchen sink',
     description: 'There is water on the floor under the sink every morning.',
-    location: 'Tower A, floor 12, kitchen',
+    room: ['Tower A', 'L12', 'Kitchen 12'],
+    location: 'Under the sink',
     assignee: 'technician1',
     started: -13,
     closed: -13,
@@ -209,7 +215,8 @@ const STAFF_REQUESTS = [
     category: 'NETWORK_CABLING',
     title: 'Network socket not working at my desk',
     description: 'My computer has no network when plugged into the wall socket.',
-    location: 'Tower A, floor 12, desk 12-21',
+    room: ['Tower A', 'L12', 'Open space 12 West'],
+    location: 'Desk 12-21',
     assignee: 'technician1',
     started: -23,
     closed: -22,
@@ -253,7 +260,8 @@ export async function seedDatabase(
     const users = insertUsers(db, USERS, hashes, timestamp, today);
     const staff = insertUsers(db, STAFF_USERS, staffHashes, requestTimestamp, today);
     const assets = insertAssets(db, rng, timestamp, today);
-    const requests = requestDrafts([...users, ...staff], requestTimestamp, today);
+    const roomIds = insertRooms(db, today);
+    const requests = requestDrafts([...users, ...staff], requestTimestamp, today, roomIds);
     const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests);
     insertRequestComments(db, [...users, ...staff], today, now);
     insertHistory(db);
@@ -274,6 +282,7 @@ export async function seedDatabase(
       pastWorkOrders: past.workOrders,
       pastBlocks: past.blocks,
       requests: requests.length,
+      rooms: roomIds.size,
       plans,
       allocations: allocations + past.blocks,
       conflicts,
@@ -393,8 +402,23 @@ function insertAssets(db, rng, timestamp, today) {
   return assets;
 }
 
+const roomKey = (site, building, floor, name) => [site, building, floor, name].join('|');
+
+/** The room list (D81), created before the requests that name a room. Returns key → id. */
+function insertRooms(db, today) {
+  const stmt = db.prepare(`INSERT INTO rooms (site, building, floor, name, created_at, updated_at)
+    VALUES (@site, @building, @floor, @name, @stamp, @stamp)`);
+  const stamp = `${addDays(today, -120)}T08:00:00.000Z`;
+  const ids = new Map();
+  for (const room of roomCatalog()) {
+    const key = roomKey(room.site, room.building, room.floor, room.name);
+    ids.set(key, Number(stmt.run({ ...room, stamp }).lastInsertRowid));
+  }
+  return ids;
+}
+
 /** Work order rows of STAFF_REQUESTS, in the shape insertWorkOrders inserts. */
-function requestDrafts(users, timestamp, today) {
+function requestDrafts(users, timestamp, today, roomIds) {
   const id = (username) => users.find((u) => u.username === username).id;
   const requester = id('user1');
   return STAFF_REQUESTS.map((r) => {
@@ -419,6 +443,7 @@ function requestDrafts(users, timestamp, today) {
       asset_id: null,
       site: 'Paris La Défense Headquarters',
       location: r.location,
+      room_id: r.room ? roomIds.get(roomKey('Paris La Défense Headquarters', ...r.room)) : null,
       category: r.category,
       assignee_id: assignee,
       supervisor_id: assignee ? id('supervisor1') : null,
@@ -582,12 +607,12 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
   drafts.sort((a, b) => a.created_at.localeCompare(b.created_at));
   const sequence = new Map();
   const stmt = db.prepare(`INSERT INTO work_orders
-    (number, type, status, priority, title, description, asset_id, site, location, category,
-     assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
+    (number, type, status, priority, title, description, asset_id, site, location, room_id,
+     category, assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
      actual_hours, work_report, created_by, updated_by, review_status, reviewed_by, reviewed_at,
      review_note, created_at, updated_at)
     VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site, @location,
-     @category,
+     @room_id, @category,
      @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on, @estimated_hours,
      @actual_hours, @work_report, @created_by, @updated_by, @review_status, @reviewed_by,
      @reviewed_at, @review_note, @created_at, @updated_at)`);
@@ -595,7 +620,7 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests) {
     const year = wo.created_on.slice(0, 4);
     const n = (sequence.get(year) ?? 0) + 1;
     sequence.set(year, n);
-    stmt.run({ ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
+    stmt.run({ room_id: null, ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
   }
   return drafts.length;
 }

@@ -48,11 +48,20 @@ describe('seedDatabase', () => {
       pastWorkOrders: 113,
       pastBlocks: 59,
       requests: 7,
+      rooms: 333,
       plans: 62,
       allocations: 68,
       conflicts: 0,
     });
     expect(count('SELECT count(*) FROM conflicts')).toBe(0);
+  });
+
+  it('gives a room to the staff requests sent from a listed room (D81)', () => {
+    expect(
+      count(`SELECT count(*) FROM work_orders w JOIN rooms r ON r.id = w.room_id
+             WHERE r.site = w.site AND w.review_status IS NOT NULL`),
+    ).toBe(6);
+    expect(count('SELECT count(*) FROM work_orders WHERE room_id IS NOT NULL')).toBe(6);
   });
 
   it('creates the documented users, with power_user for supervisors and the admin (D21)', async () => {

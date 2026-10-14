@@ -20,6 +20,7 @@ erDiagram
     work_orders ||--o{ work_order_comments : "work_order_id"
     users ||--o{ work_order_comments : "user_id"
     assets |o--o{ work_orders : "asset_id (optional)"
+    rooms |o--o{ work_orders : "room_id (staff requests, optional)"
     assets ||--o{ conflicts : "entity_type + entity_id"
     work_orders ||--o{ conflicts : "entity_type + entity_id"
     assets |o--o{ maintenance_plans : "asset_id (optional)"
@@ -118,7 +119,8 @@ Indexes: `code` (unique), `site`, `category`, `status`, `updated_at`.
 | description | TEXT | yes | | |
 | asset_id | INTEGER | yes | FK → assets.id | optional (brief) |
 | site | TEXT | no | | equals the asset's site when `asset_id` is set |
-| location | TEXT | yes | | where exactly, free text ("Tower A, floor 12, desk 12-21"); given by staff requests **(added, D46)** |
+| location | TEXT | yes | | where exactly, free text ("Tower A, floor 12, desk 12-21"); given by staff requests **(added, D46)**; with a room, only the details ("desk 12-21") |
+| room_id | INTEGER | yes | FK → rooms.id | the room a staff request was sent from; NULL when none was picked **(added, D81, `014`)**; read-only for the team |
 | category | TEXT | yes | CHECK Category | technical trade |
 | assignee_id | INTEGER | yes | FK → users.id | (D5) |
 | supervisor_id | INTEGER | yes | FK → users.id | (D5) |
@@ -223,6 +225,22 @@ The conversation of a work order between the requester and the maintenance team 
 Index: (`work_order_id`, `created_at`).
 
 Migration `006` also rebuilt `users` and `feedback` to add `STAFF` to their role `CHECK` (SQLite cannot alter a constraint), and added `location` to the work order search index. The migration runner turns foreign keys off while migrations run and runs `PRAGMA foreign_key_check` before each commit.
+
+### rooms (added, D81)
+The rooms staff pick from when they send a request (migration `014_rooms.sql`). Kept by supervisors and admins; never deleted, only taken out of use.
+
+| Column | Type | Null | Constraints / default | Notes |
+|---|---|---|---|---|
+| id | INTEGER | no | PK | |
+| site | TEXT | no | 1 to 200 characters | set at creation, never changed (BR-RM2) |
+| building | TEXT | no | 1 to 100 characters | e.g. `Tower A` |
+| floor | TEXT | no | 1 to 50 characters | same convention as the assets: `B1` (first basement), `L0` (ground floor), `L12` |
+| name | TEXT | no | 1 to 100 characters | e.g. `Meeting room 12.02` |
+| is_active | INTEGER | no | 0/1, default 1 | 0 = no longer offered to staff (BR-RM3) |
+| created_by, updated_by | INTEGER | yes | FK → users.id | NULL for the seeded rooms |
+| created_at, updated_at | TEXT | no | | |
+
+Index: unique (`site`, `building`, `floor`, `name`), case-insensitive (BR-RM1). Room changes are not in the audit log: like the widget settings, the list is reference data, and a work order keeps the room it names. Room names are not in the work order search index.
 
 ### schema_migrations
 | Column | Type | Notes |
@@ -404,7 +422,7 @@ stateDiagram-v2
 - BR-W13: BR-W2, BR-W3 and BR-W8 apply at creation (so `due_on` can't be earlier than `created_on`).
 
 ### Staff requests (D46)
-- BR-R1: A request is a work order created by a `STAFF` user through `POST /api/requests`. Required: `client_id`, `title`, `site`, `location`. Optional: `description`, `category`, `priority` ("I don't know" in the form = left out: no category, priority `NORMAL`). The server sets `type = CORRECTIVE`, no assignee, no supervisor, no asset; BR-W9 to BR-W11 apply (number, creation date, idempotent `client_id`).
+- BR-R1: A request is a work order created by a `STAFF` user through `POST /api/requests`. Required: `client_id`, `title`, `site`, and a place: a room of the list (`room_id`), a `location` in words, or both (D81). Optional: `description`, `category`, `priority` ("I don't know" in the form = left out: no category, priority `NORMAL`). The server sets `type = CORRECTIVE`, no assignee, no supervisor, no asset; BR-W9 to BR-W11 apply (number, creation date, idempotent `client_id`).
 - BR-R2: Staff see only the work orders they created (`created_by`); another work order answers 404, so its existence is not revealed. They cannot read or write any other business data (403), except the reference data (site list), their account and suggestions.
 - BR-R3: Staff are never assignees or supervisors (BR-W3 already limits these to maintenance roles).
 - BR-R4: Comments: the requester comments on their own requests; maintenance roles comment on any work order. 1 to 2000 characters. A comment does not change the work order (`version`, `updated_at`), so it never causes a conflict.
@@ -415,6 +433,10 @@ stateDiagram-v2
 - BR-R9: Approving requires an `assignee_id` (BR-W3: an active technician or supervisor) and sets `review_status = APPROVED`; `supervisor_id` defaults to the reviewer. `type`, `priority`, `category` and `due_on` (BR-W8) may be set in the same request. Both decisions increment `version`, set `reviewed_by`, `reviewed_at`, `updated_by`, `updated_at`, and write one `UPDATE` audit entry with `note: { review: "APPROVED" | "REJECTED" }`, in one transaction.
 - BR-R10 (D79): The requester may cancel their own request while it is `OPEN`, reviewed or not (`POST /api/requests/:id/cancel`, no version: staff never see it). It sets `status = CANCELLED` and `review_status = WITHDRAWN`, keeps the review fields of an approved request, increments `version`, sets `updated_by` and `updated_at`, and writes one `UPDATE` audit entry, in one transaction. Refused with 422 once work has started (`IN_PROGRESS`, `ON_HOLD`) or when the request is finished, and with 409 (`BR-V4`) while a conflict is open. A maintenance edit made from an older version then becomes a conflict (BR-V3). The status steps (BR-R5) show it as one step, `WITHDRAWN`.
 
+- BR-RM1: A room has a building, a floor and a name; two rooms of a site cannot share them, whatever the case (409).
+- BR-RM2: A room's site is set at creation and never changes: a room on another site is a new room.
+- BR-RM3: Rooms are never deleted. A room taken out of use (`is_active = 0`) is no longer offered to staff; the requests sent from it keep it.
+- BR-RM4: A request may only name an active room of its own site (422 otherwise).
 ### Preventive maintenance (D48, D49)
 - BR-P1: A plan's visits fall in `anchor_week + k × frequency_weeks` (k ≥ 0), up to `end_week` if set. Occurrences are stored from the current week to 104 weeks ahead; the daily release tops them up.
 - BR-P2 (D51): Changing the series (anchor, frequency, end) or reactivating a plan replaces the occurrences still `PLANNED` and never moved. When the anchor moves at the same frequency, the series **shifts**: a visit moved by hand moves by the same number of weeks (keeping its own offset); a visit with a work order, or skipped, keeps its week but its `due_week` follows the series when it is still to come, so it holds its slot and no second visit is planned next to it. A moved visit whose due week leaves the series, lands in the past or meets a taken slot is removed. When the frequency changes, the series is rebuilt (no shift). A `FLOATING` restart (BR-P5) is a rebuild too. Deactivating removes every `PLANNED` occurrence.
@@ -489,11 +511,12 @@ stateDiagram-v2
 Generated by `backend/src/db/seed/` with a fixed random seed (the output is the same on every run). All names are fictional (Q5).
 
 - **5 sites**: Paris La Défense Headquarters, Saclay Data Center, Lyon Part-Dieu Branch, Marseille Prado Branch, Lille Grand Place Branch. Each has buildings, floors and exact locations.
+- **333 rooms** (D81, `roomCatalog()` in `seed/catalog.js`): on the headquarters towers, every office floor has two open spaces, three meeting rooms and a kitchen (plus a lobby and a reception on L0, and office 12.07); branches have a banking hall, offices, meeting rooms and a kitchen; the data center its halls, offices and control room. Basements of the towers have none, so places there are described in words.
 - **6 users**: 1 `ADMIN`, 2 `SUPERVISOR`, 2 `TECHNICIAN`, 1 `STAFF`. Usernames: `admin`, `supervisor1`, `supervisor2`, `technician1`, `technician2`, `user1` (staff member Emma Rousseau, Paris headquarters). The password is `SEED_PASSWORD` for all of them. `power_user = 1` for the admin and supervisors.
 - **500 assets**, spread across all sites and categories, with realistic subcategories, brands and models per category (e.g. HVAC → air handling unit, fan coil unit, chiller). About 3–5 % are `BROKEN_DOWN`.
 - **207 work orders**: 200 generated ones and 7 requests of `user1` (D46), and about 115 more for the past plan visits (see the history below; 113 when today is 2026-10-04): every work order is numbered in creation order, the history's included (D64).
 - The **200 generated work orders**: `created_on` spread over the last 30 days, every status, type and priority represented, about 90 % linked to an asset, `created_by` set to a supervisor or the admin, `client_id` empty. Dates and fields follow BR-W4 to BR-W8 (e.g. closed work orders have a `work_report` and a `closed_on`), and some are overdue.
-- The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), with a location, some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
+- The **7 requests of `user1`**: one waiting for review, one rejected (with its reason), and approved ones at each later stage (assigned, in progress, on hold, two done), six of them from a room of the list (one, the garage door, described in words only), some with "I don't know" answers, and a short conversation in `work_order_comments`. Their history shows the creation by `user1` (unassigned, `PENDING`) and the review by `supervisor1`. They use their own random stream, so the rest of the dataset did not change when they were added.
 - **62 maintenance plans** (D48), each on its own asset (site, building and trade follow it), from `PLAN_TEMPLATES` in `seed/catalog.js`: every trade, both calendar modes, regulatory plans, 8 contractor plans (fire safety, backflow tests, CCTV), visits above 3 h 30, two seasonal plans (one placed outside its season), and one contract ending in a little over a year. Most long-period plans start 5, 18, 31 or 44 weeks after the current week, so the year has visible peaks (one week over capacity, three tight, about 41 % on average); the first peak lies just beyond the release horizon, so the balancing assistant can still move its visits (D53). Occurrences are stored up to the horizon; no work order is released by the seed: the daily job or the first opening of the planner does it. The plans use their own random stream, so the rest of the dataset is unchanged.
 - **A week of the week scheduler** (D52), the current week: technician1 has a 6 h job split over Monday (3 h 30) and Tuesday (2 h 30), a 2 h appointment locked at 10:00 on Tuesday by supervisor1 ("Keys at reception"), and two sites on Wednesday with 1 h of travel between them; technician2 has preparation time and work on Monday and Tuesday, and is on leave on Thursday (capacity override 0 h). The work orders are open ones already assigned to them; they get the current week as planned week. 9 blocks, each with its creation in the audit log.
 - **History** (D64), its own random stream (`seed/history.js`), so the rest of the dataset is the same with or without it:

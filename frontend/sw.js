@@ -62,6 +62,7 @@ const SHELL_FILES = [
   '/assets/js/router.js',
   '/assets/js/requests.js',
   '/assets/js/review.js',
+  '/assets/js/rooms.js',
   '/assets/js/rules.js',
   '/assets/js/save-modes.js',
   '/assets/js/schedule.js',

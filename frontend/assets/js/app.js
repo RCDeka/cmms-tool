@@ -18,6 +18,7 @@ import { ASSISTANT_TIMEOUT_MS } from './config.js';
 import { currentUser, hasRole, isLoggedIn, logout } from './auth.js';
 import { renderArbitration, renderConflictList, resolutionSummary } from './conflicts.js';
 import { renderDashboard } from './dashboard.js';
+import { renderRoomCreate, renderRoomList, renderRoomPanel, roomsUrl } from './rooms.js';
 import {
   hasDashboards,
   initDashboardsPage,
@@ -242,6 +243,16 @@ async function render(route) {
       return hasRole('ADMIN')
         ? showUsers(route, isCurrent)
         : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+    case 'rooms':
+    case 'room':
+    case 'roomCreate':
+      return hasRole('SUPERVISOR', 'ADMIN')
+        ? showRooms(route, isCurrent)
+        : showPlaceholder(
+            null,
+            'Access denied',
+            'Only supervisors and administrators can open this page.',
+          );
     case 'account':
       return showAccount();
     case 'planning':
@@ -413,6 +424,7 @@ async function showRequestCreate(isCurrent) {
   renderRequestForm(tableContainer, {
     sites,
     defaultSite: currentUser().site,
+    loadRooms: async (site) => (await apiFetch(`/rooms?site=${encodeURIComponent(site)}`)).items,
     onSubmit: async (body, form) => {
       try {
         const { item } = await apiFetch('/requests', { method: 'POST', body });
@@ -727,6 +739,103 @@ async function showUsers(route, isCurrent) {
           form.reset();
           showErrors(form, {}, '');
           announce('New password set. Give it to the user privately.');
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+    });
+  }
+  detailContainer.querySelector('.detail-title')?.focus();
+}
+
+// --- Room list (supervisors and admins, online only, D81) -----------------------------------
+
+async function showRooms(route, isCurrent) {
+  leaveRecordViews('rooms', 'Rooms');
+  const filters = route.filters ?? {};
+  if (!tableContainer.querySelector('.rooms-table, .filter-bar')) {
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading rooms…'));
+  }
+  const query = new URLSearchParams({ page: String(route.page), size: '50' });
+  if (filters.q) query.set('q', filters.q);
+  if (filters.site) query.set('site', filters.site);
+  if (filters.active) query.set('is_active', filters.active);
+  let data;
+  let room = null;
+  let sites;
+  try {
+    [data, room, { sites }] = await Promise.all([
+      apiFetch(`/admin/rooms?${query}`),
+      route.name === 'room' ? apiFetch(`/admin/rooms/${route.id}`) : null,
+      getRefs(),
+    ]);
+  } catch (err) {
+    if (!isCurrent()) return;
+    if (err.status === 404) {
+      return showPlaceholder('rooms', 'Room not found', 'This room does not exist.');
+    }
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent =
+        'The room list needs a connection to the server.';
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+
+  const listUrlFor = (page) => roomsUrl({ ...filters, page });
+  const close = () => navigate(listUrlFor(route.page));
+  const onPage = (page, control) => {
+    pendingFocus = { type: 'pager', control };
+    navigate(listUrlFor(page));
+  };
+  renderRoomList(tableContainer, {
+    data,
+    filters,
+    sites,
+    selectedId: room?.id ?? null,
+    onFilter: (next, { typing = false } = {}) => {
+      if (typing) pendingFocus = { type: 'field', selector: '#rooms-q' };
+      navigate(roomsUrl({ ...next, page: 1 }));
+    },
+    pagination: renderPagination(data, onPage),
+    paginationTop: renderPagination(data, onPage, 'top'),
+  });
+
+  if (route.name === 'rooms') {
+    setSplitView(false);
+    replaceChildren(detailContainer);
+    restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+    return;
+  }
+  setSplitView(true);
+  if (route.name === 'roomCreate') {
+    renderRoomCreate(detailContainer, {
+      sites,
+      site: filters.site,
+      onClose: close,
+      onCreate: async (values, form) => {
+        try {
+          const { item } = await apiFetch('/admin/rooms', { method: 'POST', body: values });
+          announce(`Room ${item.name} created.`);
+          navigate(roomsUrl({ ...filters, page: route.page, id: item.id }), { force: true });
+        } catch (err) {
+          showErrors(form, apiFieldErrors(err), err.message);
+        }
+      },
+    });
+  } else {
+    renderRoomPanel(detailContainer, {
+      room,
+      onClose: close,
+      onSave: async (values, form) => {
+        try {
+          const { updated } = await apiFetch(`/admin/rooms/${room.id}`, {
+            method: 'PUT',
+            body: values,
+          });
+          announce(updated ? 'Changes saved.' : 'Nothing to save.');
+          render(currentRoute());
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
         }

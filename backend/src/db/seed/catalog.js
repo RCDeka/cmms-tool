@@ -379,3 +379,57 @@ export const PLAN_TEMPLATES = [
   },
   { sub: 'Access control reader', title: 'Access control check', every: 13, hours: 1.5, count: 2 },
 ];
+
+/** Office floors: open spaces east and west, three meeting rooms and a kitchen. */
+const officeFloorRooms = (floor) => {
+  const n = floor.slice(1);
+  return [
+    `Open space ${n} West`,
+    `Open space ${n} East`,
+    `Meeting room ${n}.01`,
+    `Meeting room ${n}.02`,
+    `Meeting room ${n}.03`,
+    `Kitchen ${n}`,
+  ];
+};
+
+/** Rooms of the branches, per floor. */
+const BRANCH_ROOMS = {
+  B1: ['Archive room', 'Staff changing room'],
+  L0: ['Banking hall', 'Reception', 'Meeting room 0.01', 'Meeting room 0.02'],
+  L1: ['Offices 1', 'Meeting room 1.01', 'Staff room', 'Kitchen'],
+  L2: ['Offices 2', 'Meeting room 2.01'],
+};
+
+/** Rooms of the data center buildings, per building and floor. */
+const DATA_CENTER_ROOMS = {
+  'Hall DC1': { L0: ['Data hall 1', 'Loading bay'], L1: ['Operations office 1'] },
+  'Hall DC2': { L0: ['Data hall 2'], L1: ['Operations office 2', 'Meeting room DC2'] },
+  'Utility building': { B1: ['Workshop'], L0: ['Control room', 'Break room', 'Reception'] },
+};
+
+/**
+ * The room list of the mock dataset (D81): `{ site, building, floor, name }`. Office towers
+ * have rooms on every office floor; technical floors (basements) have none, so staff
+ * describe those places in words.
+ */
+export function roomCatalog() {
+  const rooms = [];
+  for (const site of SITES) {
+    for (const building of site.buildings) {
+      for (const floor of building.floors) {
+        let names = [];
+        if (site.isDataCenter) names = DATA_CENTER_ROOMS[building.name]?.[floor] ?? [];
+        else if (building.name.startsWith('Tower')) {
+          if (floor === 'L0') names = ['Lobby', 'Reception'];
+          else if (floor.startsWith('L')) names = officeFloorRooms(floor);
+          if (building.name === 'Tower A' && floor === 'L12') names.push('Office 12.07');
+        } else names = BRANCH_ROOMS[floor] ?? [];
+        for (const name of names) {
+          rooms.push({ site: site.name, building: building.name, floor, name });
+        }
+      }
+    }
+  }
+  return rooms;
+}

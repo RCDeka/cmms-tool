@@ -94,6 +94,7 @@ frontend/
     export.js                 CSV text (BOM, RFC 4180, formula guard), file names, download, JPG painter
     requests.js               staff pages: open / all requests, request form, request page (D46)
     comments.js               work order conversation (staff request page, work order panel)
+    rooms.js                  room picker of the request form, room list /admin/rooms (D81)
     review.js                 review box of a staff request: approve and assign, or reject (D47)
     planning.js               year planner: filters in the URL, tiles, load strip, 52-week grid (D48)
     plan-panel.js             plan panel (the visit clicked: move, skip, restore; move the series;
@@ -149,6 +150,7 @@ export const ENTITIES = {
 | `/audit-log?type=…` | global audit log (SUPERVISOR, ADMIN; `users` for ADMIN) |
 | `/admin/users?q=…&role=…&active=…` | user administration (ADMIN, online only, D39) |
 | `/admin/users/new`, `/admin/users/:id` | list + creation form or user panel (split view) |
+| `/admin/rooms?q=…&site=…&active=…`, `/admin/rooms/new`, `/admin/rooms/:id` | room list (SUPERVISOR, ADMIN, online only, D81): list + creation form or room panel (split view) |
 | `/account` | change my password (every role) |
 | `/admin/feedback?status=…` | suggestions sent with the top bar button (ADMIN, online only, D40) |
 | `/requests?page=N` | staff home page: my open requests, with status and next step (STAFF, online only, D46) |
@@ -279,6 +281,7 @@ flowchart LR
 ## Staff requests (D46)
 
 - A request is a work order created by a `STAFF` user. Staff pages read `/api/requests` and need a connection: nothing is cached in IndexedDB for them (the request form and unsent comments keep their text while the app is open; the form reuses its `client_id` until the request is sent, so a retry after a lost answer never creates two).
+- The request form loads the active rooms of the chosen site (`GET /api/rooms?site=`) when the site is set or changed, and offers Building → Floor → Room, with "Not in the list" (D81). Without a room, or offline (the rooms cannot be loaded), the place in words is required; with a room it is optional. Choosing "Not in the list" starts the words with the building and floor already chosen.
 ```mermaid
 stateDiagram-v2
     state "Waiting for review" as waiting

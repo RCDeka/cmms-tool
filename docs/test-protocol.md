@@ -196,6 +196,8 @@ Expected status codes (200/201/204 = allowed; a 400 or 422 caused by a deliberat
 | API-27 | `PUT /schedule/day-order` for TE1's own day / for TE2's day | 403 | allowed / 403 | allowed | allowed |
 | API-28 | `POST /assistant/find-work-order` | 403 | allowed | allowed | allowed |
 | API-29 | ST: every method on every path under `/assets`, `/work-orders`, `/conflicts`, `/dashboard`, `/dashboards`, `/audit-log`, `/plans`, `/plan-occurrences`, `/planning`, `/schedule`, `/my-week`, `/assistant` | 403 | | | |
+| API-49 | `GET /rooms?site=…` (D81) | 200 | 200 | 200 | 200 |
+| API-50 | `GET /admin/rooms`, `POST /admin/rooms`, `PUT /admin/rooms/:id` (D81) | 403 | 403 | allowed | allowed |
 
 ### 3.2 Field-level and record-level permissions
 
@@ -351,7 +353,7 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-01 | Log in | "My open requests": cards with title, stage badge (text, not only color), next step, number, location, date, comment count. |
 | R-02 | All my requests | Finished and rejected ones too (7 seeded requests in total). |
 | R-03 | New request: check defaults | Site = user's site; "Kind of problem" and "How urgent" both on "I don't know". |
-| R-04 | Send without a title, then without a location | Field errors. |
+| R-04 | Send without a title, then with no room and no place in words | Field errors. |
 | R-05 | Send with "I don't know" twice | Request created, "Waiting for review"; the team sees it as corrective, no trade (Unspecified), priority Normal, unassigned. |
 | R-06 | Send with a trade and "Urgent" | Kept as chosen. |
 | R-07 | Cut the network after clicking Send but before the answer (DevTools: block the request once), then send again | Exactly one request created (same `client_id`). |
@@ -366,6 +368,7 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-16 | Open a request waiting for review, then an approved one not started | Both offer "Cancel this request"; an in-progress, on-hold or finished request does not. |
 | R-17 | Cancel this request → Keep it; then Cancel the request | Nothing changes; then the page shows "Cancelled by you", the history ends with "Cancelled by you", and the request moves to All my requests. SU: the "Staff requests to review" count goes down; the work order shows the review status Withdrawn and user1 in its history. |
 | R-18 | Have TE start an approved request while ST has its page open, then click Cancel this request | Refused with a sentence asking to add a comment; nothing changes. |
+| R-19 | New request at the headquarters: Building Tower A, Floor L12, Room Meeting room 12.02, send without words; then a second one with "Not in the list" (D81) | Building, floor, room offered in order (L2 before L12); with the room, "Where exactly?" loses its star and the request is sent; the card shows "Tower A, L12, Meeting room 12.02". "Not in the list" fills "Tower A, L12, " in "Where exactly?", which is required again. On a phone the three lists are stacked. |
 
 ### 7.2 Review by the maintenance team
 
@@ -383,6 +386,8 @@ Allowed transitions (BR-W4): Open → In progress, Cancelled; In progress → On
 | R-29 | SU | History of the reviewed request | One entry for the review with the decision. |
 | R-30 | ST, then SU and TE1 | ST comments on a request approved for TE1; SU and TE1 open the dashboard | SU, AD: tile "Requests waiting for a reply" (attention style; in Overview, or ticked in the sidebar for an Overview created before D80) opens `/work-orders?awaiting_reply=true`, which lists the request. TE1: tile "Requests waiting for my reply" opens `/work-orders?mine=true&awaiting_reply=true`; TE2's count does not change. |
 | R-31 | SU | Open that request | Under the comments: "The requester is waiting for a reply." After SU sends a comment, the notice goes away and both tiles go down by one (D80). |
+| R-32 | SU, AD (TE, ST) | Sidebar → Rooms; filter on Lyon Part-Dieu Branch; New room "Training room" on Main building, L1; create it again as "TRAINING ROOM" | Rooms page with 333 rooms; the new room is listed and offered to staff in R-19's form for Lyon; the second creation is refused (already in the list). TE and ST: no Rooms link, `/admin/rooms` says access denied (D81). |
+| R-33 | SU | Untick "In use" on Meeting room 12.02, then open the request of R-19 as SU | The room is no longer offered in the request form; the request still shows it, read-only in the work order panel (Room row). |
 
 ---
 

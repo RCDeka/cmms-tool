@@ -35,6 +35,8 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `GET /users` | no | no | yes | yes |
 | `GET /audit-log` | no | no | yes, without user accounts | yes |
 | `/admin/users` (user administration) | no | no | no | yes |
+| `GET /rooms?site=` (active rooms of a site, D81) | yes | yes | yes | yes |
+| `/admin/rooms` (the room list: list, create, change, take out of use; D81) | no | no | yes | yes |
 | `POST /auth/change-password` (own password) | yes | yes | yes | yes |
 | `POST /feedback` (suggest an improvement) | yes | yes | yes | yes |
 | `GET /feedback`, `PUT /feedback/:id` | no | no | no | yes |
@@ -52,7 +54,7 @@ Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
-- **Work orders**: every column except `id`, `number`, `client_id`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
+- **Work orders**: every column except `id`, `number`, `client_id`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`, the review fields, `plan_id` and `room_id` (set by the requester, D81).
 
 Sending a field the role may not edit → 403 with `details.fields`.
 
@@ -76,9 +78,12 @@ WorkOrder   { id, number, type, status, priority, title, description,
               client_id, created_by: UserRef,
               review_status, reviewed_by: UserRef|null, reviewed_at, review_note,
               plan_id, plan: { id, code, title } | null, planned_week,
+              room_id, room: RoomRef|null,
               version, has_conflict, updated_by: UserRef|null, created_at, updated_at }
 Page<T>     { total, page, pages, items: T[] }
-Request     { id, number, status, priority, title, description, site, location, category,
+Room        { id, site, building, floor, name, is_active, created_at, updated_at }
+RoomRef     { id, building, floor, name }
+Request     { id, number, status, priority, title, description, site, location, room: RoomRef|null, category,
               created_on, due_on, started_on, closed_on, work_report, client_id,
               review_status, review_note, reviewed_at, assignee: UserRef|null, comment_count, last_comment_at, created_at, updated_at }
 Comment     { id, work_order_id, body, user: UserRef, user_role, created_at }
@@ -253,10 +258,11 @@ All routes: role STAFF (403 otherwise). A request is a work order the user creat
 - `200 Page<Request>`: the user's requests, newest first.
 
 ### POST /api/requests
-- Body: `{ "client_id": uuid, "title": string, "site": string, "location": string, "description"?: string, "category"?: Category | null, "priority"?: WorkOrderPriority, "edited_at"?: ISO }`. Leaving out `category` or `priority` is the form's "I don't know".
+- Body: `{ "client_id": uuid, "title": string, "site": string, "room_id"?: id | null, "location"?: string, "description"?: string, "category"?: Category | null, "priority"?: WorkOrderPriority, "edited_at"?: ISO }`. Leaving out `category` or `priority` is the form's "I don't know".
 - `201 { "created": true, "item": Request }`; `200 { "created": false, "item": Request }` when the `client_id` was already used (BR-W11).
 - The work order gets `type = CORRECTIVE`, `status = OPEN`, `review_status = PENDING` (D47), no assignee, supervisor or asset.
-- Errors: 400 invalid body (missing `title`, `site` or `location`; any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9).
+- A room (`room_id`) or a `location` in words is required, or both: with a room, `location` holds the details ("desk 12-21") (BR-R1, D81).
+- Errors: 400 invalid body (missing `title` or `site`, neither `room_id` nor `location` (`details.fields.location`); any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9); 422 `BR-RM4` the room is unknown, out of use or on another site.
 
 ### GET /api/requests/:id
 - `200 { ...Request, "status_history": [{ "status", "at" }], "comments": [Comment] }`. `status_history` lists the creation (`OPEN`), the review (`APPROVED` or `REJECTED`) and each status change, oldest first (BR-R5).
@@ -370,6 +376,29 @@ All routes: role ADMIN (403 otherwise). Rules BR-U1 to BR-U8 in `docs/data-model
 
 ### POST /api/admin/users/:id/password
 - Body: `{ "password": string }` (at least 10 characters). `204`; the user's sessions end (BR-U8). Errors: 400; 404.
+
+## Rooms (added, D81)
+
+Rules BR-RM1 to BR-RM4 in `docs/data-model.md`.
+
+### GET /api/rooms
+- Every role. Query: `site` (required, 400 without).
+- `200 { "items": [RoomRef] }`: the active rooms of the site, by building, floor (`B2`, `B1`, `L0`, `L1` … `L12`, then other names) and name. Not paginated: one site's rooms.
+
+### GET /api/admin/rooms
+- SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `q?` (part of the name, building or floor), `site?`, `is_active?` (`true` | `false`).
+- `200 Page<Room>`: by site, building, floor and name.
+
+### POST /api/admin/rooms
+- Body: `{ site, building, floor, name }` (all required).
+- `201 { "created": true, "item": Room }`. Errors: 400; 409 `BR-RM1` (same building, floor and name on the site, whatever the case; `details.fields.name`).
+
+### GET /api/admin/rooms/:id
+- `200 Room`. Errors: 404.
+
+### PUT /api/admin/rooms/:id
+- Body: any of `building`, `floor`, `name`, `is_active` (the site cannot change: unknown field, 400, BR-RM2).
+- `200 { "updated": boolean, "item": Room }`. Errors: 400; 404; 409 `BR-RM1`.
 
 ## Dashboard (added)
 
@@ -574,7 +603,8 @@ Maintenance roles (staff: 403). Rules BR-S1 to BR-S10 in `docs/data-model.md`. D
 | Work orders | `GET/POST /api/work-orders`, `GET /api/work-orders/stats`, `GET/PUT /api/work-orders/:id`, `PUT /api/work-orders/:id/resolve-conflict`, `PUT /api/work-orders/:id/review`, `GET/POST /api/work-orders/:id/comments` |
 | Staff requests | `GET/POST /api/requests`, `GET /api/requests/:id`, `POST /api/requests/:id/comments`, `POST /api/requests/:id/cancel` |
 | Conflicts | `GET /api/conflicts`, `GET /api/conflicts/:id` |
-| Reference | `GET /api/reference-data`, `GET /api/users` |
+| Reference | `GET /api/reference-data`, `GET /api/users`, `GET /api/rooms` |
+| Rooms | `GET/POST /api/admin/rooms`, `GET/PUT /api/admin/rooms/:id` |
 | Dashboard | `GET /api/dashboard`, `GET/POST /api/dashboards`, `GET/PUT/DELETE /api/dashboards/:id`, `PUT /api/dashboards/order`, `GET /api/dashboard/widgets`, `GET /api/dashboard/widgets/:key/rows` |
 | History | `GET /api/assets/:id/history`, `GET /api/work-orders/:id/history`, `GET /api/audit-log` |
 | Preventive maintenance | `GET/POST /api/plans`, `GET/PUT /api/plans/:id`, `PUT /api/plans/:id/anchor`, `GET/PUT /api/plan-occurrences/:id`, `POST /api/plan-occurrences/:id/skip`, `POST /api/plan-occurrences/:id/restore`, `GET /api/planning/timeline`, `POST /api/planning/suggestions`, `POST /api/planning/release`, `GET/POST /api/planning/blocked-weeks`, `DELETE /api/planning/blocked-weeks/:id`, `GET/PUT /api/planning/settings` |

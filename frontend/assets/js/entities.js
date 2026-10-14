@@ -89,6 +89,8 @@ export const ENTITIES = {
       priority: { label: 'Priority', type: 'enum', enum: 'work_order_priority' },
       description: { label: 'Description' },
       location: { label: 'Location' },
+      // Picked by the requester from the room list (D81); read-only for the team.
+      room: { label: 'Room', type: 'room', editField: 'room_id' },
       // editField: the API field a row edits when it shows a nested object.
       asset: { label: 'Asset', type: 'asset', editField: 'asset_id' },
       assignee: { label: 'Assignee', type: 'user', editField: 'assignee_id' },
@@ -124,6 +126,7 @@ export const ENTITIES = {
       'type',
       'category',
       'site',
+      'room',
       'location',
       'asset',
       'plan',
@@ -153,6 +156,7 @@ export const ENTITIES = {
       'priority',
       'description',
       'site',
+      'room',
       'location',
       'asset',
       'due_on',

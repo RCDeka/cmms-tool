@@ -6,9 +6,10 @@
 import { commentForm, renderConversation } from './comments.js';
 import { badgeClass, h, replaceChildren } from './dom.js';
 import { CATEGORIES, WORK_ORDER_PRIORITIES } from './enums.js';
-import { formatDate, formatDateTime, personName } from './format.js';
+import { formatDate, formatDateTime, personName, roomLabel } from './format.js';
 import { valueLabel } from './labels.js';
 import { applyToPage } from './network.js';
+import { NOT_LISTED, placePrefix, roomPicker } from './rooms.js';
 
 export const REQUEST_SCOPES = ['open', 'all'];
 /** Steps shown above a request; "On hold" takes the place of "In progress". */
@@ -126,13 +127,27 @@ export function canCancelRequest(request) {
   return request.status === 'OPEN';
 }
 
+/** The room chosen in the form as an id, or null ("Not in the list", or none yet). Pure. */
+export const chosenRoomId = (values) =>
+  values.room_id && values.room_id !== NOT_LISTED ? Number(values.room_id) : null;
+
 /** Errors of the request form (the server checks again). Pure. */
 export function checkRequest(values) {
   const errors = {};
   if (!values.title.trim()) errors.title = 'Required';
   if (!values.site) errors.site = 'Required';
-  if (!values.location.trim()) errors.location = 'Required: say where the problem is.';
+  // A room of the list, or the place in words (BR-R1, D81).
+  if (chosenRoomId(values) === null && !values.location.trim()) {
+    errors.location = values.has_rooms
+      ? 'Required: pick a room, or say where the problem is.'
+      : 'Required: say where the problem is.';
+  }
   return errors;
+}
+
+/** Where a request comes from, in one line: the room, then the words about the place. Pure. */
+export function requestPlace(request) {
+  return [request.room && roomLabel(request.room), request.location].filter(Boolean).join(' — ');
 }
 
 /**
@@ -144,7 +159,8 @@ export function requestPayload(values, clientId) {
     client_id: clientId,
     title: values.title.trim(),
     site: values.site,
-    location: values.location.trim(),
+    ...(chosenRoomId(values) !== null && { room_id: chosenRoomId(values) }),
+    ...(values.location.trim() && { location: values.location.trim() }),
     ...(values.category && { category: values.category }),
     ...(values.priority && { priority: values.priority }),
     ...(values.description.trim() && { description: values.description.trim() }),
@@ -177,7 +193,7 @@ function requestCard(request) {
       { class: 'request-meta' },
       [
         request.number,
-        request.location,
+        requestPlace(request),
         `sent ${formatDate(request.created_on)}`,
         comments ? `${comments} comment${comments === 1 ? '' : 's'}` : null,
       ]
@@ -253,6 +269,24 @@ function formRow(name, label, control, { required = false, hint } = {}) {
   );
 }
 
+/** "Where exactly?": its star and hint change with the room choice (D81). */
+function placeRow(control, star, hint) {
+  Object.assign(control, { id: 'r-location', name: 'location' });
+  control.setAttribute('aria-describedby', 'r-location-hint r-location-error');
+  return h(
+    'div',
+    { class: 'form-row' },
+    h('label', { for: control.id }, 'Where exactly?', star),
+    h(
+      'div',
+      { class: 'form-control' },
+      control,
+      hint,
+      h('p', { id: 'r-location-error', class: 'field-error' }),
+    ),
+  );
+}
+
 /** Shows per-field errors and the summary; focuses the first field in error. */
 export function showRequestErrors(form, fields = {}, message = '') {
   for (const control of form.querySelectorAll('input, select, textarea')) {
@@ -271,9 +305,13 @@ export function showRequestErrors(form, fields = {}, message = '') {
  * same client_id is reused until the request is sent, so a retry never creates two.
  * @param {HTMLElement} container
  * @param {{ sites: string[], defaultSite: string | null,
+ *   loadRooms: (site: string) => Promise<object[]>,
  *   onSubmit: (body: object, form: HTMLFormElement) => Promise<boolean> }} options
  */
-export function renderRequestForm(container, { sites, defaultSite, onSubmit }) {
+export function renderRequestForm(
+  container,
+  { sites, defaultSite, loadRooms = async () => [], onSubmit },
+) {
   unsentRequest ??= { clientId: crypto.randomUUID(), values: {} };
   const kept = unsentRequest.values;
   const title = h('input', { type: 'text', maxlength: '200', autocomplete: 'off' });
@@ -305,8 +343,60 @@ export function renderRequestForm(container, { sites, defaultSite, onSubmit }) {
   category.value = kept.category ?? '';
   priority.value = kept.priority ?? '';
   description.value = kept.description ?? '';
-  const read = () =>
-    Object.fromEntries(Object.entries(controls).map(([name, el]) => [name, el.value]));
+  let hasRooms = false;
+  const read = () => {
+    const place = picker.value();
+    return {
+      ...Object.fromEntries(Object.entries(controls).map(([name, el]) => [name, el.value])),
+      room_id: hasRooms ? place.roomId : '',
+      building: place.building,
+      floor: place.floor,
+      has_rooms: hasRooms,
+    };
+  };
+
+  // The place: a room of the list (D81), or words when it is not there. The words are
+  // required only without a room.
+  const placeHint = h('p', { id: 'r-location-hint', class: 'field-hint' });
+  const placeStar = h('span', { class: 'required' }, ' *');
+  const showPlaceRule = () => {
+    const values = read();
+    const optional = chosenRoomId(values) !== null;
+    placeStar.hidden = optional;
+    location.toggleAttribute('aria-required', !optional);
+    placeHint.textContent = optional
+      ? 'Optional: anything that helps find the place, e.g. “desk 12-21” or “by the window”.'
+      : hasRooms
+        ? 'Required when the room is not in the list: building, floor and room or desk.'
+        : 'Building, floor and room or desk, e.g. “Tower A, floor 12, desk 12-21”.';
+  };
+  const picker = roomPicker({
+    onChange: ({ roomId, building, floor }) => {
+      if (roomId === NOT_LISTED && !location.value.trim()) {
+        location.value = placePrefix(building, floor);
+      }
+      showPlaceRule();
+      unsentRequest.values = read();
+    },
+  });
+  let roomsFor = null;
+  const showRooms = async (keep) => {
+    const chosen = site.value;
+    roomsFor = chosen;
+    let rooms = [];
+    if (chosen) {
+      try {
+        rooms = await loadRooms(chosen);
+      } catch {
+        rooms = []; // offline: the place in words still works
+      }
+    }
+    if (roomsFor !== chosen) return; // another site was chosen meanwhile
+    hasRooms = rooms.length > 0;
+    picker.setRooms(rooms, keep);
+    showPlaceRule();
+  };
+  site.addEventListener('change', () => showRooms({}));
 
   const submit = h(
     'button',
@@ -350,10 +440,8 @@ export function renderRequestForm(container, { sites, defaultSite, onSubmit }) {
       hint: 'A short summary, e.g. “Light flickering in meeting room 8.03”.',
     }),
     formRow('site', 'Site', site, { required: true }),
-    formRow('location', 'Where exactly?', location, {
-      required: true,
-      hint: 'Building, floor and room or desk, e.g. “Tower A, floor 12, desk 12-21”.',
-    }),
+    picker.element,
+    placeRow(location, placeStar, placeHint),
     formRow('category', 'Kind of problem', category, {
       hint: `Not sure? Keep “${DONT_KNOW}”: the maintenance team will decide.`,
     }),
@@ -379,6 +467,7 @@ export function renderRequestForm(container, { sites, defaultSite, onSubmit }) {
       form,
     ),
   );
+  showRooms({ building: kept.building, floor: kept.floor, roomId: kept.room_id });
   applyToPage(form);
 }
 
@@ -522,7 +611,7 @@ export function renderRequestDetail(container, { request, viewer, sendComment, c
         h(
           'dl',
           { class: 'detail-fields' },
-          field('Where', request.location),
+          field('Where', requestPlace(request)),
           field('Site', request.site),
           field(
             'Kind of problem',

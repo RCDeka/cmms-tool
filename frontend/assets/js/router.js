@@ -8,6 +8,7 @@ import { parseFeedbackFilters } from './feedback.js';
 import { filtersQuery, isPlainList, parseFilters } from './filters.js';
 import { AUDIT_TYPES } from './history.js';
 import { parsePlanningFilters } from './planning.js';
+import { parseRoomFilters } from './rooms.js';
 import { parseSchedulePanel } from './schedule.js';
 
 const ID = /^[1-9]\d{0,15}$/;
@@ -17,7 +18,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /**
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
- *   |'users'|'user'|'userCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
+ *   |'users'|'user'|'userCreate'|'rooms'|'room'|'roomCreate'|'account'|'feedback'|'requests'|'request'|'requestCreate'
  *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'schedule'|'myWeek'
  *   |'notFound'} name
  * @property {string | null} [week] week scheduler and My week: the week shown (current when null)
@@ -58,6 +59,17 @@ export function parseRoute(pathname, search = '') {
     if (third === 'new') return { name: 'userCreate', page, ...extra };
     return ID.test(third)
       ? { name: 'user', id: Number(third), page, ...extra }
+      : { name: 'notFound', page };
+  }
+  if (first === 'admin' && second === 'rooms' && rest.length <= 1) {
+    // The room list (D81): /admin/rooms, /admin/rooms/new, /admin/rooms/:id.
+    const filters = parseRoomFilters(query);
+    const extra = Object.keys(filters).length ? { filters } : {};
+    const [third] = rest;
+    if (!third) return { name: 'rooms', page, ...extra };
+    if (third === 'new') return { name: 'roomCreate', page, ...extra };
+    return ID.test(third)
+      ? { name: 'room', id: Number(third), page, ...extra }
       : { name: 'notFound', page };
   }
   if (first === 'admin' && second === 'planning' && !rest.length) {

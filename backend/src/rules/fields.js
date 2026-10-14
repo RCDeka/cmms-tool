@@ -151,6 +151,9 @@ export const READ_ONLY_FIELDS = {
     // Set by the release of a plan's visit (D48); planned_week is editable since D55.
     'plan_id',
     'plan',
+    // Picked by the requester (D81); the team corrects the place in `location`.
+    'room_id',
+    'room',
   ],
 };
 

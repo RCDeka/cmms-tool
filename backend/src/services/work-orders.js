@@ -19,7 +19,7 @@ import {
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
-import { toBool, userRef, userRefColumns } from './mappers.js';
+import { roomRef, roomRefColumns, toBool, userRef, userRefColumns } from './mappers.js';
 import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
 import { addInFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
@@ -96,6 +96,7 @@ const FIELDS = [
   'review_note',
   'plan_id',
   'planned_week',
+  'room_id',
   'created_at',
   'updated_at',
 ];
@@ -103,7 +104,7 @@ const FIELDS = [
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
     a.id AS a__id, a.code AS a__code, a.name AS a__name, a.site AS a__site, a.status AS a__status,
     ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')},
-    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title
+    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title, ${roomRefColumns('rm')}
   FROM work_orders w
   LEFT JOIN assets a ON a.id = w.asset_id
   LEFT JOIN users asg ON asg.id = w.assignee_id
@@ -111,7 +112,8 @@ const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
   LEFT JOIN users cb ON cb.id = w.created_by
   LEFT JOIN users ub ON ub.id = w.updated_by
   LEFT JOIN users rv ON rv.id = w.reviewed_by
-  LEFT JOIN maintenance_plans pl ON pl.id = w.plan_id`;
+  LEFT JOIN maintenance_plans pl ON pl.id = w.plan_id
+  LEFT JOIN rooms rm ON rm.id = w.room_id`;
 
 /** Whitelisted sort keys (docs/api-design.md → GET /api/work-orders). */
 export const WORK_ORDER_SORTS = {
@@ -160,6 +162,7 @@ export function toWorkOrder(row) {
   wo.reviewed_by = userRef(row, 'rv');
   wo.plan =
     row.plan_id === null ? null : { id: row.plan_id, code: row.pl__code, title: row.pl__title };
+  wo.room = roomRef(row, 'rm');
   return wo;
 }
 
@@ -330,6 +333,7 @@ export function createWorkOrderService(db) {
       client_id: null,
       plan_id: null,
       planned_week: null,
+      room_id: null,
       ...row,
       number: nextWorkOrderNumber(year, highestNumber.get(year)),
     };
@@ -339,11 +343,12 @@ export function createWorkOrderService(db) {
           `INSERT INTO work_orders
             (number, client_id, type, status, priority, title, description, asset_id, site,
              location, category, assignee_id, supervisor_id, created_on, due_on, estimated_hours,
-             created_by, updated_by, review_status, plan_id, planned_week, created_at, updated_at)
+             created_by, updated_by, review_status, plan_id, planned_week, room_id, created_at,
+             updated_at)
            VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
              @asset_id, @site, @location, @category, @assignee_id, @supervisor_id, @created_on,
              @due_on, @estimated_hours, @created_by, @updated_by, @review_status, @plan_id,
-             @planned_week, @stamp, @stamp)`,
+             @planned_week, @room_id, @stamp, @stamp)`,
         )
         .run({ ...values, stamp }).lastInsertRowid,
     );
@@ -450,7 +455,7 @@ export function createWorkOrderService(db) {
      * work order instead of creating a second one (BR-W11, D26).
      * @returns {{ created: boolean, item: object }}
      */
-    create(body, user, { now, timeZone }, { reviewStatus = null } = {}) {
+    create(body, user, { now, timeZone }, { reviewStatus = null, roomId = null } = {}) {
       const parsed = createSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
       const input = parsed.data;
@@ -490,6 +495,7 @@ export function createWorkOrderService(db) {
             created_by: user.id,
             updated_by: user.id,
             review_status: reviewStatus,
+            room_id: roomId,
           };
           if (user.role === 'TECHNICIAN') row.assignee_id = user.id;
           Object.assign(row, checkReferences(row, fields));

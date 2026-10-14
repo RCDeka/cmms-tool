@@ -60,6 +60,7 @@ export function displayValue(entityKey, apiField, value, lookups) {
     return asset ? `${asset.code} — ${asset.name}` : `Asset #${value}`;
   }
   if (def.type === 'plan') return `Plan #${value}`;
+  if (def.type === 'room') return `Room #${value}`;
   return renderValue(field, def, value);
 }
 

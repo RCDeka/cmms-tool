@@ -161,7 +161,7 @@ Work that makes the application safe to run for real users. Phase 31 is done at 
 3. ~~Work order status history and audit log~~ → Phase 9.
 4. ~~Filters and search on lists; full-text search~~ → Phase 10.
 5. ~~AI assistant endpoints (`format-report`, `find-work-order`)~~ → Phases 25–26 (D66, specified).
-6. Staff requests, next steps: ~~notify the maintenance team of new comments~~ (done: requests waiting for a reply, D80; new requests have their dashboard tile, D47), ~~let a requester cancel their own request~~ (done, D79), room list instead of the free-text location, photos.
+6. Staff requests, next steps: ~~notify the maintenance team of new comments~~ (done: requests waiting for a reply, D80; new requests have their dashboard tile, D47), ~~let a requester cancel their own request~~ (done, D79), ~~room list instead of the free-text location~~ (done, D81), photos.
 7. Adaptive home tiles, RAG copilot, natural-language work order creation, knowledge graph, IoT-triggered work orders, voice interface, BIM digital twin (product vision in the brief).
 8. ~~Demo data with history (D62)~~ → done (D64).
 9. ~~Mobile use (review of 2026-10-08, `docs/mobile-review.md`): findings M1 to M17 on current phones~~ → all fixed (M1, M2, then D68); the year planner is for tablets and computers only.
@@ -169,3 +169,4 @@ Work that makes the application safe to run for real users. Phase 31 is done at 
 11. ~~Before the first deployment to users: make the "Source code" link of the status bar reachable by every user (AGPL section 13, D57; DT2)~~ → done: the repository is public (2026-10-14).
 12. ~~Off-server backup storage, restore drill and failure test, before the first deployment to users~~ → Phase 31.
 13. End-to-end smoke tests (log in, open and edit a work order, save offline, sync): `AGENTS.md` excludes E2E tests; to decide once real users rely on the app, if a regression reaches production that unit and API tests could not catch.
+14. Import tools (product owner request, 2026-10-14): the production database starts empty, so supervisors or admins need a way, from their session, to load data on a large scale: rooms, assets, maintenance plans, users, and so on. To specify: the format (CSV is the obvious candidate; pasting rows into a text area avoids file uploads, a non-goal in `AGENTS.md`, while uploading a file needs that rule changed), validation and a preview with the errors per line before anything is written, all-or-nothing writes, what happens to rows that already exist (skip or update), the order between entities (rooms and users before assets, assets before plans), the audit trail, and the size limits (the JSON body limit is 100 kB).

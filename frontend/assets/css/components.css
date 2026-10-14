@@ -1288,3 +1288,36 @@ a.button {
 .asset-picker-table tr.is-broken-down td:first-child {
   box-shadow: inset 3px 0 0 var(--color-danger);
 }
+
+/* Room picker of the request form (D81): building, floor and room side by side, stacked on
+   narrow screens. */
+.room-picker[hidden] {
+  display: none;
+}
+
+.room-picker-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.room-picker-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.room-picker-label {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.room-picker-field select {
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .room-picker-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

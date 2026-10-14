@@ -32,6 +32,34 @@ const insert = (table, row) => {
   );
 };
 
+/**
+ * Copies the rows of the database file `source` into `target`, an older schema: the tables
+ * and columns `target` has. The search indexes follow through their triggers.
+ */
+function copyDemoData(target, source) {
+  const tables = target
+    .prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '%fts%'
+       AND name NOT IN ('schema_migrations', 'sqlite_sequence')`,
+    )
+    .pluck()
+    .all();
+  target.pragma('foreign_keys = OFF');
+  target.prepare('ATTACH DATABASE ? AS demo').run(source);
+  for (const table of tables) {
+    const columns = target
+      .pragma(`table_info(${table})`)
+      .map((c) => c.name)
+      .join(', ');
+    // Rows the migrations created (settings) are replaced by the demo ones.
+    target.exec(
+      `INSERT OR REPLACE INTO main.${table} (${columns}) SELECT ${columns} FROM demo.${table}`,
+    );
+  }
+  target.exec('DETACH DATABASE demo');
+  target.pragma('foreign_keys = ON');
+}
+
 let userSeq = 0;
 const user = (o = {}) => ({
   username: `user${++userSeq}`,
@@ -217,7 +245,10 @@ describe('migrations', () => {
       }
       const legacy = openDb(path.join(dir, 'legacy.sqlite'));
       runMigrations(legacy, dir);
-      await seedDatabase(legacy, { password: TEST_PASSWORD, today: '2026-10-14' });
+      // Today's seed needs later tables (rooms, D81): seed the current schema, then copy the
+      // columns the old schema has.
+      await seedDatabase(db, { password: TEST_PASSWORD, today: '2026-10-14' });
+      copyDemoData(legacy, db.name);
       const state = () => ({
         rows: legacy.prepare('SELECT * FROM work_orders ORDER BY id').all(),
         found: legacy
@@ -665,6 +696,29 @@ describe('integrity rules', () => {
       /CHECK/,
     );
     expect(() => insert('schedule_weeks', { ...week, week: 'W42' })).toThrow(/CHECK/);
+  });
+
+  it('keeps rooms unique per floor, whatever the case, and work orders on known rooms (D81)', () => {
+    const room = (o = {}) => ({
+      site: 'Test site',
+      building: 'Tower A',
+      floor: 'L12',
+      name: 'Meeting room 12.01',
+      created_at: '2026-10-14T08:00:00.000Z',
+      updated_at: '2026-10-14T08:00:00.000Z',
+      ...o,
+    });
+    const id = insert('rooms', room());
+    expect(() => insert('rooms', room({ name: 'MEETING ROOM 12.01' }))).toThrow(/UNIQUE/);
+    expect(() => insert('rooms', room({ building: 'tower a' }))).toThrow(/UNIQUE/);
+    insert('rooms', room({ floor: 'L13' }));
+    insert('rooms', room({ site: 'Other site' }));
+    for (const blank of [{ name: ' ' }, { building: '' }, { floor: '' }, { is_active: 2 }]) {
+      expect(() => insert('rooms', room({ name: 'Other', ...blank }))).toThrow(/CHECK/);
+    }
+    const u = insert('users', user());
+    insert('work_orders', workOrder(u, { room_id: id }));
+    expect(() => insert('work_orders', workOrder(u, { room_id: 9999 }))).toThrow(/FOREIGN KEY/);
   });
 
   it('keeps one row of planning settings with bounded values (P16)', () => {

@@ -25,6 +25,7 @@ import { planningRouter } from './routes/planning.js';
 import { plansRouter } from './routes/plans.js';
 import { referenceRouter } from './routes/reference.js';
 import { requestsRouter, workOrderCommentsRouter } from './routes/requests.js';
+import { adminRoomsRouter, roomsRouter } from './routes/rooms.js';
 import { myWeekRouter, scheduleRouter } from './routes/schedule.js';
 import { workOrdersRouter } from './routes/work-orders.js';
 import { createAssetService } from './services/assets.js';
@@ -42,6 +43,7 @@ import { createPlanService } from './services/plans.js';
 import { createPlanningService } from './services/planning.js';
 import { createReferenceDataService } from './services/reference-data.js';
 import { createRequestService } from './services/requests.js';
+import { createRoomService } from './services/rooms.js';
 import { createScheduleService } from './services/schedule.js';
 import { createUserService } from './services/users.js';
 import { createWidgetSettingsService } from './services/widget-settings.js';
@@ -110,7 +112,8 @@ export function createApp({
   const audit = createAuditService(db);
   const feedback = createFeedbackService(db);
   const comments = createCommentService(db);
-  const requests = createRequestService(db, { workOrders, comments });
+  const rooms = createRoomService(db);
+  const requests = createRequestService(db, { workOrders, comments, rooms });
   const plans = createPlanService(db);
   const planning = createPlanningService(db, { workOrders });
   const occurrences = createOccurrenceService(db);
@@ -182,6 +185,8 @@ export function createApp({
   );
   app.use('/api/audit-log', auditRouter({ audit }));
   app.use('/api/admin/users', adminUsersRouter({ users, now }));
+  app.use('/api/admin/rooms', adminRoomsRouter({ rooms, now }));
+  app.use('/api/rooms', roomsRouter({ rooms }));
   app.use('/api/feedback', feedbackRouter({ feedback, now, sendLimit: feedbackRateLimit }));
   app.use(
     '/api/assets',
