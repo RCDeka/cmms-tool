@@ -356,6 +356,33 @@ sudo -u tacto bash -c 'set -a; . /etc/tacto/offsite.env; restic --no-cache dump 
 
 Then go on with step 4: the service starts on the restored database.
 
+## Maintenance
+
+**Security reports** arrive privately through GitHub (`SECURITY.md`): acknowledge within 7 days. A critical or high severity issue gets its own release at once; it does not wait for the routine below.
+
+**Dependabot** (`.github/dependabot.yml`) opens its pull requests on the 1st of each month: one per package for the minor and patch updates, one per major update, one for the GitHub Actions. CI runs on each. A security update comes as soon as its advisory is published, outside the schedule.
+
+**Monthly routine**, in the first week of each month, on a development machine:
+
+```bash
+git switch main && git pull
+# 1. Dependabot: merge the pull requests whose CI passes (read the changelog of a major update first),
+#    then pull again.
+# 2. npm packages that Dependabot missed, and known vulnerabilities, in each package:
+cd backend && npm outdated; npm update && npm audit; cd ..
+cd frontend && npm outdated; npm update && npm audit; cd ..
+# 3. Vendored libraries (Dependabot does not see them): compare with frontend/assets/vendor/.
+npm view idb version; npm view chart.js version
+# 4. Lint and tests of both packages.
+(cd backend && npm run lint && npm test) && (cd frontend && npm run lint && npm test)
+```
+
+A newer vendored library: download its package (`npm pack idb@X.Y.Z`), copy `build/index.js` (idb) or `dist/chart.umd.min.js` (Chart.js) with its license into a new folder `frontend/assets/vendor/<name>-X.Y.Z/`, remove the old folder, and replace the old path everywhere (`grep -rn '<name>-' frontend --exclude-dir=node_modules`: `db.js` or `dashboard.js`, `index.html`, `sw.js`, the tests). Read the library's release notes for breaking changes; a new major version is a change of its own, tested in the browser.
+
+`npm audit` reporting a vulnerability that `npm update` cannot fix: check whether Tacto uses the affected code; if it does, update the package to the fixed major version (or replace it) before the release.
+
+Then record the routine under `## Unreleased` in `CHANGELOG.md` (section **Maintenance**: what was updated, the audit result, or "nothing to update"), release as in Phase 28 (version in both `package.json` files, changelog entry, tag `vX.Y.Z`) and install it on the server (Operations → Update to a release). A month without any change still gets its line in the changelog, released with the next version.
+
 ## Repository structure
 
 ```
@@ -363,8 +390,10 @@ Then go on with step 4: the service starts on the restored database.
 ├── README.md
 ├── LICENSE                   GNU AGPL v3
 ├── CHANGELOG.md              one entry per release (tag vX.Y.Z)
+├── SECURITY.md               how to report a vulnerability, supported version
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
 ├── .github/workflows/ci.yml  continuous integration: lint and tests of both packages
+├── .github/dependabot.yml    monthly dependency updates (npm, GitHub Actions)
 ├── docs/
 │   ├── SPEC_MVP_CMMS.md      original MVP brief (English translation of the French original)
 │   ├── decisions.md          open questions, glossary FR→EN, deviations from the brief

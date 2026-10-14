@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Dependabot version updates (roadmap Phase 30, D76). Pull requests are opened
+# once a month, before the monthly routine (README → Maintenance), and CI runs
+# on them. Minor and patch updates are grouped into one pull request per
+# package; a major update gets its own. Security updates are not limited by
+# this schedule: they come as soon as an advisory is published.
+# The vendored libraries (frontend/assets/vendor) are not seen by Dependabot:
+# the monthly routine checks them.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: monthly
+    # A version published less than a week ago is not proposed yet, so a
+    # compromised release has time to be found and withdrawn first.
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: chore
+      include: scope

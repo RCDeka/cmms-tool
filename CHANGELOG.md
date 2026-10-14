@@ -7,6 +7,11 @@ One entry per release, newest first, written from the conventional commits since
 ### Added
 
 - Monitoring and alerts (Phase 29, D75): a failure of the API, the backup, the off-server copy or the preventive release is pushed to an ntfy topic; a dead man's switch is pinged after each nightly backup; a warning when the disk holding the database or the backups is 80 % full; an external uptime check of `/api/health`; a silence for planned maintenance.
+- Security process (Phase 30, D76): `SECURITY.md` (private reporting through GitHub, supported version, response times), Dependabot for npm and GitHub Actions, and a monthly maintenance routine (README → Maintenance).
+
+### Maintenance
+
+- 2026-10 routine (the first): `npm audit` reports no vulnerability in either package. Updated within the current ranges: express 5.3.0, express-rate-limit 8.7.1, zod 4.6.7 (backend); vitest 5.0.4, prettier 3.9.10 (both packages). Vendored idb 8.0.3 → 8.0.4 (internal changes only, same API); Chart.js 4.5.1 is the latest.
 
 ### Upgrade notes
 
