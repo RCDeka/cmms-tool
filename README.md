@@ -4,7 +4,7 @@ Computerized Maintenance Management System (CMMS). It focuses on user experience
 
 It started as an MVP (phases 0–7, brief in `docs/SPEC_MVP_CMMS.md`), the first building block of a broader product vision: AI copilot, adaptive interface, IoT, digital twin. The MVP is complete and the project is now maintained as a production application (D73).
 
-> **Status:** phases 0–24 and 26 are built (see `docs/roadmap.md`): the MVP (phases 0–7: assets and work orders, local-first browsing and offline use, editing with conflicts and supervisor arbitration, the dashboard, hardening and deployment files), then asset creation, history and audit log, search and filters, user administration, staff requests, preventive maintenance (year planner, week scheduler, My week, balancing assistant), custom dashboards and the search part of the AI assistant. Deployment files and guide are ready; the HTTPS deployment waits for a VPS. The features are listed below.
+> **Status:** phases 0–24, 26 and 27 are built (see `docs/roadmap.md`): the MVP (phases 0–7: assets and work orders, local-first browsing and offline use, editing with conflicts and supervisor arbitration, the dashboard, hardening and deployment files), then asset creation, history and audit log, search and filters, user administration, staff requests, preventive maintenance (year planner, week scheduler, My week, balancing assistant), custom dashboards, the search part of the AI assistant and continuous integration. Deployment files and guide are ready; the HTTPS deployment waits for a VPS. The features are listed below.
 
 ## Tech stack
 
@@ -69,6 +69,8 @@ cd backend  && CHECK_URL=https://staging.example.com npm run check:permissions  
 cd backend  && npm run user:create-admin -- --username <name> --first-name <name> --last-name <name>   # first admin of an empty database (D70)
 cd frontend && npm install && npm test               # frontend logic tests
 ```
+
+Continuous integration (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint` and `npm test` in `backend/` and in `frontend/` on Node 24 for every push and pull request; a failing check marks the commit as failed on GitHub.
 
 ### Environment variables (`.env.example`)
 
@@ -275,6 +277,7 @@ Then go on with step 4: the service starts on the restored database.
 ├── README.md
 ├── LICENSE                   GNU AGPL v3
 ├── AGENTS.md                 rules for the coding agent (CLAUDE.md imports it)
+├── .github/workflows/ci.yml  continuous integration: lint and tests of both packages
 ├── docs/
 │   ├── SPEC_MVP_CMMS.md      original MVP brief (English translation of the French original)
 │   ├── decisions.md          open questions, glossary FR→EN, deviations from the brief
