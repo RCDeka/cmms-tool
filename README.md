@@ -264,3 +264,5 @@ If you run a modified version on a server, the AGPL requires you to offer its so
 ## Documentation
 
 Start with `docs/decisions.md`, then `docs/architecture.md`. Agents implementing the project follow `AGENTS.md`.
+
+Before a release, run the acceptance campaign in `docs/test-protocol.md` (every feature, every role, offline, security, deployment).
