@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Screenshots of the README (docs/ui-guidelines.md → Screenshots, D78): `npm run docs:screenshots`.
+// Screenshots of the README and of docs/showcase.md (docs/ui-guidelines.md → Screenshots, D78,
+// D84): `npm run docs:screenshots`, or `npm run docs:screenshots -- showcase/` for the pictures
+// whose name starts with `showcase/`.
 //
 // Creates a throwaway database with the mock data in a temporary folder, starts the server on
 // it, takes the pictures listed in SHOTS with a headless Chromium driven over the DevTools
@@ -28,15 +30,171 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const DEBUG_PORT = PORT + 1;
 
 const COMPUTER = { width: 1440, height: 900, dpr: 1, mobile: false };
+const TALL = { width: 1440, height: 2400, dpr: 1, mobile: false }; // a whole dashboard
 const PHONE = { width: 402, height: 874, dpr: 2, mobile: true }; // iPhone 17, at 2× to stay small
 
-/** The pictures, grouped by user (one login each). `url` may use the ids found in the data. */
+/** Fills a field of the page and tells the app (runs in the page). */
+const FILL = `const fill = (el, value) => {
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+};`;
+
+/** Opens the collapsed sections of the detail panel (history) and scrolls to the last one. */
+const OPEN_HISTORY = `(async () => {
+  const panel = document.getElementById('detail-container');
+  for (const details of panel.querySelectorAll('details')) details.open = true;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  panel.querySelector('details:last-of-type summary').scrollIntoView({ block: 'start' });
+})()`;
+
+/** Scrolls the dashboard to the widget titled `title` (runs in the page). */
+const scrollToWidget = (
+  title,
+) => `[...document.querySelectorAll('#table-container h2, #table-container h3')]
+  .find((el) => el.textContent.trim() === ${JSON.stringify(title)})
+  ?.closest('section, article, li, div')
+  .scrollIntoView({ block: 'start' });`;
+
+/**
+ * The pictures, grouped by user (one login each; the login is rate limited). `url(ids, call)`
+ * gives the page (none: stay on the previous one); `call(method, path, body)` calls the API as the logged-in user. `action` runs
+ * in the page once it has opened, `after` ms before the picture; `offline` cuts the network
+ * first. README pictures sit in docs/img/, the showcase ones (docs/showcase.md) in showcase/.
+ */
 const SHOTS = [
+  { name: 'showcase/login', user: null, url: () => '/login', size: COMPUTER },
+
   { name: 'dashboard', user: 'supervisor1', url: () => '/dashboard', size: COMPUTER },
+  {
+    name: 'showcase/dashboard-full',
+    user: 'supervisor1',
+    url: () => '/dashboard',
+    size: TALL,
+    wait: 5000,
+  },
+  {
+    name: 'showcase/dashboard-flow',
+    user: 'supervisor1',
+    url: () => '/dashboard',
+    size: COMPUTER,
+    wait: 4000,
+    // Ticks every widget of the sidebar, then shows the flow and backlog ones.
+    action: `(async () => {
+      // The sidebar is drawn again after each tick: look for the next box each time.
+      const next = () =>
+        document.querySelector('#widget-picker input[type=checkbox]:not(:checked)');
+      for (let box = next(), n = 0; box && n < 40; box = next(), n++) {
+        box.click();
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      ${scrollToWidget('Opened vs closed')}
+    })()`,
+  },
+  {
+    name: 'showcase/dashboard-compliance',
+    user: 'supervisor1',
+    url: null,
+    size: COMPUTER,
+    action: scrollToWidget('Preventive maintenance compliance'),
+  },
+  {
+    name: 'showcase/dashboard-assets',
+    user: 'supervisor1',
+    url: null,
+    size: COMPUTER,
+    action: scrollToWidget('Assets with the most breakdowns'),
+  },
+  {
+    name: 'showcase/dashboard-people',
+    user: 'supervisor1',
+    url: null,
+    size: COMPUTER,
+    action: scrollToWidget('Workload per person'),
+  },
+  {
+    name: 'showcase/dashboard-drill',
+    user: 'supervisor1',
+    url: () => '/work-orders?status=OPEN,IN_PROGRESS,ON_HOLD&overdue=true',
+    size: COMPUTER,
+  },
   {
     name: 'work-orders',
     user: 'supervisor1',
     url: (ids) => `/work-orders/${ids.workOrder}`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/work-order-history',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.workOrder}`,
+    size: COMPUTER,
+    action: OPEN_HISTORY,
+    after: 500,
+  },
+  {
+    name: 'showcase/review-request',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.toReview}?to_review=true`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/request-conversation',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.conversation}?awaiting_reply=true`,
+    size: COMPUTER,
+    action: `(() => {
+      const panel = document.getElementById('detail-container');
+      panel.scrollTop = panel.scrollHeight;
+      for (const el of panel.querySelectorAll('*')) el.scrollTop = el.scrollHeight;
+    })()`,
+  },
+  {
+    name: 'showcase/assets',
+    user: 'supervisor1',
+    url: () => '/assets?status=BROKEN_DOWN,OUT_OF_SERVICE',
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/asset',
+    user: 'supervisor1',
+    url: (ids) => `/assets/${ids.asset}`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/work-order-new',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/new?asset_id=${ids.asset}`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/find-work-order',
+    user: 'supervisor1',
+    url: () => '/work-orders',
+    size: COMPUTER,
+    action: `(() => {
+      ${FILL}
+      document.getElementById('find-button').click();
+      const dialog = document.getElementById('find-dialog');
+      fill(dialog.querySelector('textarea'), 'Air conditioning too noisy on the trading floor');
+      dialog.querySelector('form').requestSubmit();
+    })()`,
+    after: 2500,
+  },
+  {
+    name: 'showcase/conflicts',
+    user: 'supervisor1',
+    url: async (ids, call) => {
+      await postFeedback(call, 'supervisor1');
+      return '/conflicts';
+    },
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/conflict-locked',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.conflictWorkOrder}`,
     size: COMPUTER,
   },
   {
@@ -47,16 +205,206 @@ const SHOTS = [
   },
   { name: 'year-planner', user: 'supervisor1', url: () => '/planning', size: COMPUTER, wait: 4000 },
   {
+    name: 'showcase/plan',
+    user: 'supervisor1',
+    url: (ids) => `/planning/plans/${ids.plan}?occurrence=${ids.occurrence}`,
+    size: COMPUTER,
+    wait: 4000,
+  },
+  {
+    name: 'showcase/blocked-weeks',
+    user: 'supervisor1',
+    url: async (ids, call) => {
+      const blocks = [
+        [10, null, 'Year-end closure'],
+        [3, 'Saclay Data Center', 'Data center change freeze'],
+      ];
+      for (const [weeks, site, reason] of blocks) {
+        await call('POST', '/api/planning/blocked-weeks', { week: isoWeek(weeks), site, reason });
+      }
+      return '/planning/blocked-weeks';
+    },
+    size: COMPUTER,
+    wait: 4000,
+  },
+  {
+    name: 'showcase/suggestions',
+    user: 'supervisor1',
+    url: () => '/planning/suggestions',
+    size: COMPUTER,
+    wait: 6000,
+  },
+  {
     name: 'week-scheduler',
     user: 'supervisor1',
     url: () => '/schedule',
     size: COMPUTER,
     wait: 4000,
   },
+  {
+    name: 'showcase/schedule-work-order',
+    user: 'supervisor1',
+    url: async (ids, call) =>
+      `/schedule/work-orders/${(await call('GET', '/api/schedule')).tray[0].id}`,
+    size: COMPUTER,
+    wait: 4000,
+  },
+  { name: 'showcase/places', user: 'supervisor1', url: () => '/admin/locations', size: COMPUTER },
+  { name: 'showcase/audit-log', user: 'supervisor1', url: () => '/audit-log', size: COMPUTER },
+
+  {
+    name: 'showcase/dashboard-technician',
+    user: 'technician1',
+    url: () => '/dashboard',
+    size: COMPUTER,
+  },
   { name: 'my-week-phone', user: 'technician1', url: () => '/my-week', size: PHONE },
+  {
+    name: 'showcase/work-orders-phone',
+    user: 'technician1',
+    url: () => '/work-orders',
+    size: PHONE,
+  },
+  {
+    name: 'showcase/work-order-phone',
+    user: 'technician1',
+    url: (ids) => `/work-orders/${ids.technicianWorkOrder}`,
+    size: PHONE,
+  },
+  {
+    name: 'showcase/menu-phone',
+    user: 'technician1',
+    url: () => '/my-week',
+    size: PHONE,
+    action: `document.getElementById('menu-button').click()`,
+    after: 800,
+  },
+  {
+    name: 'showcase/feedback',
+    user: 'technician1',
+    url: async (ids, call) => {
+      await postFeedback(call, 'technician1');
+      return '/my-week';
+    },
+    size: COMPUTER,
+    action: `(() => {
+      ${FILL}
+      document.getElementById('feedback-button').click();
+      fill(
+        document.querySelector('#feedback-dialog textarea'),
+        'Could My week also show the access code of each plant room?',
+      );
+    })()`,
+    after: 800,
+  },
+  {
+    name: 'showcase/offline',
+    user: 'technician1',
+    url: (ids) => `/work-orders/${ids.technicianWorkOrder}`,
+    size: COMPUTER,
+    offline: true,
+    // A change saved offline waits in the queue.
+    action: `(() => {
+      ${FILL}
+      const panel = document.getElementById('detail-container');
+      fill(
+        panel.querySelector('[name=work_report]'),
+        'Access point replaced, PoE port tested. Network back up.',
+      );
+      [...panel.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Save').click();
+    })()`,
+    after: 2000,
+  },
+
   { name: 'requests-phone', user: 'user1', url: () => '/requests', size: PHONE },
   { name: 'request-phone', user: 'user1', url: (ids) => `/requests/${ids.request}`, size: PHONE },
+  {
+    name: 'showcase/request-new-phone',
+    user: 'user1',
+    url: async (ids, call) => {
+      await postFeedback(call, 'user1');
+      return '/requests/new';
+    },
+    size: PHONE,
+  },
+  { name: 'showcase/requests-all-phone', user: 'user1', url: () => '/requests/all', size: PHONE },
+  {
+    name: 'showcase/request-conversation-phone',
+    user: 'user1',
+    url: (ids) => `/requests/${ids.conversation}`,
+    size: PHONE,
+    action: `window.scrollTo(0, document.body.scrollHeight);
+      for (const el of document.querySelectorAll('*')) el.scrollTop = el.scrollHeight;`,
+  },
+
+  {
+    name: 'showcase/users',
+    user: 'admin',
+    url: (ids) => `/admin/users/${ids.technician}`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/place',
+    user: 'admin',
+    url: (ids) => `/admin/locations/${ids.site}`,
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/level-types',
+    user: 'admin',
+    url: () => '/admin/locations/types',
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/feedback-inbox',
+    user: 'admin',
+    url: () => '/admin/feedback',
+    size: COMPUTER,
+  },
+  {
+    name: 'showcase/planning-settings',
+    user: 'admin',
+    url: () => '/admin/planning',
+    size: COMPUTER,
+  },
+  { name: 'showcase/widget-settings', user: 'admin', url: () => '/admin/widgets', size: COMPUTER },
 ];
+
+/** Mock suggestions of the inbox picture, by user: message, page path, page title, width. */
+const FEEDBACK = {
+  technician1: [
+    'A filter on the contractor would help in the work order list.',
+    '/work-orders',
+    'Work orders',
+    402,
+  ],
+  supervisor1: [
+    'The week scheduler could warn when two people book the same room.',
+    '/schedule',
+    'Week scheduler',
+    1440,
+  ],
+  user1: ['Could I add a photo of the problem to my request?', '/requests/new', 'New request', 402],
+};
+
+/** Sends the user's mock suggestion, as the top bar button does. */
+async function postFeedback(call, user) {
+  const [message, page_path, page_title, viewport_width] = FEEDBACK[user];
+  await call('POST', '/api/feedback', { message, page_path, page_title, viewport_width });
+}
+
+/** ISO week (2026-W45) `weeks` weeks from now. */
+function isoWeek(weeks) {
+  const day = new Date(Date.now() + weeks * 7 * 86400000);
+  const date = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+const OFFLINE = { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
+const ONLINE = { ...OFFLINE, offline: false };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -103,6 +451,39 @@ function findIds(databasePath) {
       request: one(
         `SELECT w.id FROM work_orders w JOIN users u ON u.id = w.created_by
          WHERE u.username = 'user1' AND w.status = 'IN_PROGRESS' ORDER BY w.id LIMIT 1`,
+      ),
+      // Showcase (docs/showcase.md).
+      toReview: one(
+        `SELECT id FROM work_orders WHERE review_status = 'PENDING' ORDER BY id LIMIT 1`,
+      ),
+      conversation: one(
+        `SELECT w.id FROM work_orders w JOIN users u ON u.id = w.created_by
+         WHERE u.username = 'user1' AND w.status = 'ON_HOLD'
+         ORDER BY (SELECT count(*) FROM work_order_comments c WHERE c.work_order_id = w.id) DESC,
+         w.id LIMIT 1`,
+      ),
+      asset: one(
+        `SELECT asset_id FROM work_orders WHERE asset_id IS NOT NULL
+         GROUP BY asset_id ORDER BY count(*) DESC, asset_id LIMIT 1`,
+      ),
+      conflictWorkOrder: one(
+        `SELECT entity_id FROM conflicts WHERE status = 'OPEN' AND entity_type = 'work_orders'
+         LIMIT 1`,
+      ),
+      plan: one(
+        `SELECT plan_id FROM plan_occurrences WHERE status = 'PLANNED' ORDER BY week, id LIMIT 1`,
+      ),
+      occurrence: one(
+        `SELECT id FROM plan_occurrences WHERE status = 'PLANNED' ORDER BY week, id LIMIT 1`,
+      ),
+      technicianWorkOrder: one(
+        `SELECT id FROM work_orders WHERE status = 'IN_PROGRESS' AND has_conflict = 0
+         AND asset_id IS NOT NULL
+         AND assignee_id = (SELECT id FROM users WHERE username = 'technician1') ORDER BY id LIMIT 1`,
+      ),
+      technician: one(`SELECT id FROM users WHERE username = 'technician1'`),
+      site: one(
+        `SELECT site_id FROM locations GROUP BY site_id ORDER BY count(*) DESC, site_id LIMIT 1`,
       ),
     };
     for (const [key, value] of Object.entries(ids)) {
@@ -165,13 +546,31 @@ async function takeScreenshots(page, password, ids) {
     await sleep(wait);
   };
 
+  /** Calls the API as the logged-in user, from the page. */
+  const call = (method, url, body) =>
+    evaluate(`(async () => {
+      const response = await fetch(${JSON.stringify(url)}, {
+        method: ${JSON.stringify(method)},
+        headers: {
+          Authorization: 'Bearer ' + localStorage.getItem('tacto.token'),
+          'Content-Type': 'application/json',
+        },
+        body: ${JSON.stringify(body ? JSON.stringify(body) : null)},
+      });
+      if (!response.ok) throw new Error(${JSON.stringify(`${method} ${url}`)} + ': ' + response.status);
+      return response.json();
+    })()`);
+
   await send('Page.enable');
+  await send('Network.enable');
   await send('Emulation.setLocaleOverride', { locale: 'en-GB' });
   fs.mkdirSync(OUT, { recursive: true });
 
-  let currentUser = null;
+  const only = process.argv[2];
+  const shots = only ? SHOTS.filter((shot) => shot.name.startsWith(only)) : SHOTS;
+  let currentUser;
   const seen = new Map();
-  for (const shot of SHOTS) {
+  for (const shot of shots) {
     const { width, height, dpr, mobile } = shot.size;
     await send('Emulation.setDeviceMetricsOverride', {
       width,
@@ -180,7 +579,12 @@ async function takeScreenshots(page, password, ids) {
       mobile,
     });
     await send('Emulation.setTouchEmulationEnabled', { enabled: mobile });
-    if (shot.user !== currentUser) {
+    if (shot.user === null) {
+      // The login page: an empty session.
+      await go('/login');
+      await evaluate(`localStorage.clear()`);
+      currentUser = null;
+    } else if (shot.user !== currentUser) {
       // A new session: forget the previous user's token and local cache.
       await go('/login');
       await evaluate(`(async () => {
@@ -207,13 +611,24 @@ async function takeScreenshots(page, password, ids) {
       if (signedIn !== shot.user) throw new Error(`Logging in as ${shot.user} failed.`);
       currentUser = shot.user;
     }
-    await go(shot.url(ids), shot.wait ?? 2500);
+    // No `url`: the picture is taken on the page of the previous one.
+    if (shot.url) await go(await shot.url(ids, call), shot.wait ?? 2500);
+    if (shot.offline) {
+      await send('Network.emulateNetworkConditions', OFFLINE);
+      await sleep(1500);
+    }
+    if (shot.action) {
+      await evaluate(shot.action);
+      await sleep(shot.after ?? 1000);
+    }
     const { data } = await send('Page.captureScreenshot', { format: 'png' });
+    if (shot.offline) await send('Network.emulateNetworkConditions', ONLINE);
     // Two identical pictures mean a page did not open (e.g. a redirect): stop.
     const hash = crypto.createHash('sha256').update(data).digest('hex');
     if (seen.has(hash)) throw new Error(`${shot.name} is the same picture as ${seen.get(hash)}.`);
     seen.set(hash, shot.name);
     const file = path.join(OUT, `${shot.name}.png`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, Buffer.from(data, 'base64'));
     console.log(`Saved ${path.relative(process.cwd(), file)}`);
   }

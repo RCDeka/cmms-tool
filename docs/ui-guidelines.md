@@ -209,12 +209,13 @@ Every column title of the asset and work order tables is a button. A click sorts
 
 ## Screenshots
 
-The README shows the main screens with pictures from `docs/img/` (D78). Take them again when a screen they show changes visibly, in the same commit as the change if possible: `cd backend && npm run docs:screenshots` (Chromium needed, about a minute).
+The README shows the main screens with pictures from `docs/img/` (D78), and `docs/showcase.md` every feature with more pictures from `docs/img/showcase/` (D84). Take them again when a screen they show changes visibly, in the same commit as the change if possible: `cd backend && npm run docs:screenshots` (Chromium needed, about four minutes); `npm run docs:screenshots -- showcase/plan` takes only the pictures whose name starts with that prefix.
 
 - **Data**: the script (`backend/scripts/take-screenshots.js`) creates a throwaway database with the mock data and conflicts in a temporary folder and starts its own server on it (port 3100, `SHOTS_PORT`); the database of `.env` is never opened. The pictures only ever show mock names and sites.
-- **Browser**: headless Chromium (`SHOTS_CHROME` to choose another command) in English, since the browser's own week and date fields follow its language (see Language); scrollbars hidden. Each user starts from an empty session; the script stops if a login fails or two pictures come out identical.
-- **Sizes**: computers 1440 × 900 at 1×; phones 402 × 874 (iPhone 17) at 2×, to keep the files small.
-- **Pictures** (PNG, named after the screen; the list is `SHOTS` in the script):
+- **Browser**: headless Chromium (`SHOTS_CHROME` to choose another command) in English, since the browser's own week and date fields follow its language (see Language); scrollbars hidden. Each user starts from an empty session, and the pictures are grouped by user (the login is rate limited); the script stops if a login fails or two pictures come out identical.
+- **Sizes**: computers 1440 × 900 at 1× (the whole dashboard: 1440 × 2400); phones 402 × 874 (iPhone 17) at 2×, to keep the files small.
+- **Steps** (showcase): a shot may run a step in the page before the picture (open a dialog, tick every dashboard widget, scroll, type a work report), cut the network (offline), stay on the previous page, or call the API as the logged-in user to add mock records the seed lacks (three suggestions, two blocked weeks).
+- **Pictures** (PNG, named after the screen; the list is `SHOTS` in the script). README:
 
 | File | User | Page | Size |
 |---|---|---|---|
@@ -226,3 +227,45 @@ The README shows the main screens with pictures from `docs/img/` (D78). Take the
 | `my-week-phone.png` | `technician1` | `/my-week` | phone |
 | `requests-phone.png` | `user1` | `/requests` | phone |
 | `request-phone.png` | `user1` | a request of `user1` in progress | phone |
+
+Showcase (`showcase/` in `docs/img/`, in the order taken):
+
+| File | User | Page | Size |
+|---|---|---|---|
+| `login.png` | — | `/login`, no session | computer |
+| `dashboard-full.png` | `supervisor1` | `/dashboard`, the whole page | 1440 × 2400 |
+| `dashboard-flow.png` | `supervisor1` | `/dashboard` after ticking every widget, at Opened vs closed | computer |
+| `dashboard-compliance.png` | `supervisor1` | same page, at Preventive maintenance compliance | computer |
+| `dashboard-assets.png` | `supervisor1` | same page, at Assets with the most breakdowns | computer |
+| `dashboard-people.png` | `supervisor1` | same page, at Workload per person | computer |
+| `dashboard-drill.png` | `supervisor1` | `/work-orders` filtered on unfinished and overdue | computer |
+| `work-order-history.png` | `supervisor1` | the work order of `work-orders.png`, history opened | computer |
+| `review-request.png` | `supervisor1` | the staff request waiting for review | computer |
+| `request-conversation.png` | `supervisor1` | the on-hold request of `user1` with the most comments, at its comments | computer |
+| `assets.png` | `supervisor1` | `/assets` filtered on broken down and out of service | computer |
+| `asset.png` | `supervisor1` | the asset with the most work orders | computer |
+| `work-order-new.png` | `supervisor1` | `/work-orders/new` for that asset | computer |
+| `find-work-order.png` | `supervisor1` | Find a work order, a job typed and searched | computer |
+| `conflicts.png` | `supervisor1` | `/conflicts` | computer |
+| `conflict-locked.png` | `supervisor1` | the work order of the open conflict | computer |
+| `plan.png` | `supervisor1` | the plan of the first planned visit, that visit open | computer |
+| `blocked-weeks.png` | `supervisor1` | `/planning/blocked-weeks`, two weeks blocked first | computer |
+| `suggestions.png` | `supervisor1` | `/planning/suggestions` | computer |
+| `schedule-work-order.png` | `supervisor1` | the first work order of this week's tray | computer |
+| `places.png` | `supervisor1` | `/admin/locations` | computer |
+| `audit-log.png` | `supervisor1` | `/audit-log` | computer |
+| `dashboard-technician.png` | `technician1` | `/dashboard` | computer |
+| `work-orders-phone.png` | `technician1` | `/work-orders` | phone |
+| `work-order-phone.png` | `technician1` | a work order in progress assigned to `technician1` | phone |
+| `menu-phone.png` | `technician1` | `/my-week`, menu open | phone |
+| `feedback.png` | `technician1` | `/my-week`, Suggest an improvement with a text typed | computer |
+| `offline.png` | `technician1` | the work order of `work-order-phone.png`, offline, a work report saved | computer |
+| `request-new-phone.png` | `user1` | `/requests/new` | phone |
+| `requests-all-phone.png` | `user1` | `/requests/all` | phone |
+| `request-conversation-phone.png` | `user1` | the request of `request-conversation.png`, at its comments | phone |
+| `users.png` | `admin` | `/admin/users/:id` of `technician1` | computer |
+| `place.png` | `admin` | the site with the most places | computer |
+| `level-types.png` | `admin` | `/admin/locations/types` | computer |
+| `feedback-inbox.png` | `admin` | `/admin/feedback` | computer |
+| `planning-settings.png` | `admin` | `/admin/planning` | computer |
+| `widget-settings.png` | `admin` | `/admin/widgets` | computer |
