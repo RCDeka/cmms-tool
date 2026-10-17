@@ -8,6 +8,7 @@
 // chart) for two series or more, and a tooltip on every mark. Every chart has a table view
 // in its widget. A click on a mark calls `onPick`, which opens the records behind it.
 import { loadChartJs, numberFormat, percentFormat } from './dashboard.js';
+import { t, tn } from './i18n.js';
 
 /** Design tokens and shared options. */
 function theme() {
@@ -55,16 +56,20 @@ function baseOptions({ font, reduceMotion }, onPick) {
  */
 export async function drawPairedColumns(canvas, { labels, titles, series, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
-  const options = baseOptions(t, onPick);
+  const th = theme();
+  const options = baseOptions(th, onPick);
   options.interaction = { mode: 'index', intersect: false };
   options.plugins.tooltip.callbacks = {
     title: (items) => titles[items[0].dataIndex],
-    label: (item) => `${item.dataset.label}: ${numberFormat.format(item.parsed.y)}`,
+    label: (item) =>
+      t('{label}: {value}', {
+        label: item.dataset.label,
+        value: numberFormat.format(item.parsed.y),
+      }),
   };
   options.scales = {
-    x: t.axis({ grid: { display: false } }),
-    y: t.axis({ ticks: { precision: 0 }, rest: { beginAtZero: true } }),
+    x: th.axis({ grid: { display: false } }),
+    y: th.axis({ ticks: { precision: 0 }, rest: { beginAtZero: true } }),
   };
   return new Chart(canvas, {
     type: 'bar',
@@ -73,7 +78,7 @@ export async function drawPairedColumns(canvas, { labels, titles, series, onPick
       datasets: series.map((s) => ({
         label: s.label,
         data: s.values,
-        backgroundColor: t.token(`--color-chart-series-${s.slot}`),
+        backgroundColor: th.token(`--color-chart-series-${s.slot}`),
         borderRadius: { topLeft: 4, topRight: 4 },
         borderSkipped: 'start',
         maxBarThickness: 24,
@@ -92,17 +97,18 @@ export async function drawPairedColumns(canvas, { labels, titles, series, onPick
  */
 export async function drawLine(canvas, { labels, titles, label, values }) {
   const Chart = await loadChartJs();
-  const t = theme();
-  const options = baseOptions(t);
+  const th = theme();
+  const options = baseOptions(th);
   options.interaction = { mode: 'index', intersect: false };
   options.plugins.tooltip.callbacks = {
     title: (items) => titles[items[0].dataIndex],
-    label: (item) => `${label}: ${numberFormat.format(item.parsed.y)}`,
+    label: (item) =>
+      t('{label}: {value}', { label: label, value: numberFormat.format(item.parsed.y) }),
   };
   options.scales = {
     // Points sit in the middle of each week, under the columns of the chart above.
-    x: t.axis({ grid: { display: false }, rest: { offset: true } }),
-    y: t.axis({ ticks: { precision: 0 }, rest: { beginAtZero: true } }),
+    x: th.axis({ grid: { display: false }, rest: { offset: true } }),
+    y: th.axis({ ticks: { precision: 0 }, rest: { beginAtZero: true } }),
   };
   return new Chart(canvas, {
     type: 'line',
@@ -112,12 +118,12 @@ export async function drawLine(canvas, { labels, titles, label, values }) {
         {
           label,
           data: values,
-          borderColor: t.token('--color-chart-bar'),
-          backgroundColor: t.token('--color-chart-bar'),
+          borderColor: th.token('--color-chart-bar'),
+          backgroundColor: th.token('--color-chart-bar'),
           borderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
-          pointBorderColor: t.token('--color-surface'),
+          pointBorderColor: th.token('--color-surface'),
           pointBorderWidth: 2,
           tension: 0,
         },
@@ -136,7 +142,7 @@ export async function drawLine(canvas, { labels, titles, label, values }) {
  */
 export async function drawWeekBars(canvas, { labels, values, tips, band, tooltips, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
+  const th = theme();
   const plotted = values.map((v) => v ?? 0);
   const bandPlugin = {
     id: 'ruleOfThumb',
@@ -146,7 +152,7 @@ export async function drawWeekBars(canvas, { labels, values, tips, band, tooltip
       const to = Math.min(chartArea.right, scales.x.getPixelForValue(band[1]));
       if (to <= from) return;
       ctx.save();
-      ctx.fillStyle = t.token('--color-neutral-bg');
+      ctx.fillStyle = th.token('--color-neutral-bg');
       ctx.fillRect(from, chartArea.top, to - from, chartArea.bottom - chartArea.top);
       ctx.restore();
     },
@@ -156,27 +162,27 @@ export async function drawWeekBars(canvas, { labels, values, tips, band, tooltip
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
       ctx.save();
-      ctx.fillStyle = t.token('--color-text');
-      ctx.font = `600 13px ${t.font}`;
+      ctx.fillStyle = th.token('--color-text');
+      ctx.font = `600 13px ${th.font}`;
       ctx.textBaseline = 'middle';
       chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(tips[i], bar.x + 6, bar.y));
       ctx.restore();
     },
   };
-  const options = baseOptions(t, onPick);
+  const options = baseOptions(th, onPick);
   options.indexAxis = 'y';
   options.layout = { padding: { right: 96 } };
   options.interaction = { mode: 'nearest', axis: 'y', intersect: false };
   options.plugins.tooltip.displayColors = false;
   options.plugins.tooltip.callbacks = { label: (item) => tooltips[item.dataIndex] };
   options.scales = {
-    x: t.axis({
+    x: th.axis({
       rest: { beginAtZero: true, suggestedMax: band[1] + 1 },
-      ticks: { callback: (v) => `${v} wk` },
+      ticks: { callback: (v) => t('{v} wk', { v }) },
     }),
-    y: t.axis({
+    y: th.axis({
       grid: { display: false },
-      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+      ticks: { color: th.token('--color-text'), font: { family: th.font, size: 13 } },
     }),
   };
   return new Chart(canvas, {
@@ -185,10 +191,10 @@ export async function drawWeekBars(canvas, { labels, values, tips, band, tooltip
       labels,
       datasets: [
         {
-          label: 'Weeks of work',
+          label: t('Weeks of work'),
           data: plotted,
-          backgroundColor: t.token('--color-chart-bar'),
-          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          backgroundColor: th.token('--color-chart-bar'),
+          hoverBackgroundColor: th.token('--color-chart-bar-hover'),
           borderRadius: { topRight: 4, bottomRight: 4 },
           borderSkipped: 'start',
           maxBarThickness: 24,
@@ -211,21 +217,24 @@ export async function drawWeekBars(canvas, { labels, values, tips, band, tooltip
  */
 export async function drawShareColumns(canvas, { labels, titles, series, format, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
+  const th = theme();
   const totals = labels.map((_, i) => series.reduce((sum, s) => sum + s.values[i], 0));
   const share = (value, i) => (totals[i] ? value / totals[i] : 0);
-  const options = baseOptions(t, onPick);
+  const options = baseOptions(th, onPick);
   options.interaction = { mode: 'nearest', intersect: true };
   options.plugins.tooltip.callbacks = {
     title: (items) => titles[items[0].dataIndex],
     label: (item) => {
       const value = series[item.datasetIndex].values[item.dataIndex];
-      return `${item.dataset.label}: ${format(value)} (${percentFormat.format(share(value, item.dataIndex))})`;
+      return t('{label}: {value}', {
+        label: item.dataset.label,
+        value: `${format(value)} (${percentFormat.format(share(value, item.dataIndex))})`,
+      });
     },
   };
   options.scales = {
-    x: t.axis({ grid: { display: false }, rest: { stacked: true } }),
-    y: t.axis({
+    x: th.axis({ grid: { display: false }, rest: { stacked: true } }),
+    y: th.axis({
       rest: { stacked: true, min: 0, max: 1 },
       ticks: { callback: (v) => percentFormat.format(v), stepSize: 0.25 },
     }),
@@ -237,8 +246,8 @@ export async function drawShareColumns(canvas, { labels, titles, series, format,
       datasets: series.map((s) => ({
         label: s.label,
         data: s.values.map((v, i) => share(v, i)),
-        backgroundColor: t.token(`--color-chart-series-${s.slot}`),
-        borderColor: t.token('--color-surface'),
+        backgroundColor: th.token(`--color-chart-series-${s.slot}`),
+        borderColor: th.token('--color-surface'),
         borderWidth: { top: 2 },
         borderSkipped: 'start',
         maxBarThickness: 32,
@@ -257,33 +266,33 @@ export async function drawShareColumns(canvas, { labels, titles, series, format,
  */
 export async function drawRateBars(canvas, { labels, values, tips, tooltips, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
+  const th = theme();
   const tipPlugin = {
     id: 'rateTips',
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
       ctx.save();
-      ctx.fillStyle = t.token('--color-text');
-      ctx.font = `600 13px ${t.font}`;
+      ctx.fillStyle = th.token('--color-text');
+      ctx.font = `600 13px ${th.font}`;
       ctx.textBaseline = 'middle';
       chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(tips[i], bar.x + 6, bar.y));
       ctx.restore();
     },
   };
-  const options = baseOptions(t, onPick);
+  const options = baseOptions(th, onPick);
   options.indexAxis = 'y';
   options.layout = { padding: { right: 88 } };
   options.interaction = { mode: 'nearest', axis: 'y', intersect: false };
   options.plugins.tooltip.displayColors = false;
   options.plugins.tooltip.callbacks = { label: (item) => tooltips[item.dataIndex] };
   options.scales = {
-    x: t.axis({
+    x: th.axis({
       rest: { min: 0, max: 1 },
       ticks: { callback: (v) => percentFormat.format(v), stepSize: 0.25 },
     }),
-    y: t.axis({
+    y: th.axis({
       grid: { display: false },
-      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+      ticks: { color: th.token('--color-text'), font: { family: th.font, size: 13 } },
     }),
   };
   return new Chart(canvas, {
@@ -292,10 +301,10 @@ export async function drawRateBars(canvas, { labels, values, tips, tooltips, onP
       labels,
       datasets: [
         {
-          label: 'On time',
+          label: t('On time'),
           data: values.map((v) => v ?? 0),
-          backgroundColor: t.token('--color-chart-bar'),
-          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          backgroundColor: th.token('--color-chart-bar'),
+          hoverBackgroundColor: th.token('--color-chart-bar-hover'),
           borderRadius: { topRight: 4, bottomRight: 4 },
           borderSkipped: 'start',
           maxBarThickness: 24,
@@ -321,20 +330,23 @@ export async function drawShareWithLine(
   { labels, titles, columns, line, details, onPick },
 ) {
   const Chart = await loadChartJs();
-  const t = theme();
-  const options = baseOptions(t, onPick);
+  const th = theme();
+  const options = baseOptions(th, onPick);
   options.interaction = { mode: 'index', intersect: false };
   options.plugins.tooltip.callbacks = {
     title: (items) => titles[items[0].dataIndex],
     label: (item) => {
       const value = [columns, line][item.datasetIndex].values[item.dataIndex];
-      return `${item.dataset.label}: ${value === null ? 'no work scheduled' : percentFormat.format(value)}`;
+      return t('{label}: {value}', {
+        label: item.dataset.label,
+        value: value === null ? t('no work scheduled') : percentFormat.format(value),
+      });
     },
     afterBody: (items) => details[items[0].dataIndex],
   };
   options.scales = {
-    x: t.axis({ grid: { display: false } }),
-    y: t.axis({
+    x: th.axis({ grid: { display: false } }),
+    y: th.axis({
       rest: { min: 0, max: 1 },
       ticks: { callback: (v) => percentFormat.format(v), stepSize: 0.25 },
     }),
@@ -347,8 +359,8 @@ export async function drawShareWithLine(
           type: 'bar',
           label: columns.label,
           data: columns.values,
-          backgroundColor: t.token('--color-chart-bar'),
-          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          backgroundColor: th.token('--color-chart-bar'),
+          hoverBackgroundColor: th.token('--color-chart-bar-hover'),
           borderRadius: { topLeft: 4, topRight: 4 },
           borderSkipped: 'start',
           maxBarThickness: 32,
@@ -358,12 +370,12 @@ export async function drawShareWithLine(
           type: 'line',
           label: line.label,
           data: line.values,
-          borderColor: t.token(`--color-chart-series-${line.slot}`),
-          backgroundColor: t.token(`--color-chart-series-${line.slot}`),
+          borderColor: th.token(`--color-chart-series-${line.slot}`),
+          backgroundColor: th.token(`--color-chart-series-${line.slot}`),
           borderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
-          pointBorderColor: t.token('--color-surface'),
+          pointBorderColor: th.token('--color-surface'),
           pointBorderWidth: 2,
           spanGaps: false,
           order: 1,
@@ -386,15 +398,15 @@ export async function drawValueBars(
   { labels, values, tips, tooltips, tick, reference, onPick },
 ) {
   const Chart = await loadChartJs();
-  const t = theme();
+  const th = theme();
   const plugins = [
     {
       id: 'valueTips',
       afterDatasetsDraw(chart) {
         const { ctx } = chart;
         ctx.save();
-        ctx.fillStyle = t.token('--color-text');
-        ctx.font = `600 13px ${t.font}`;
+        ctx.fillStyle = th.token('--color-text');
+        ctx.font = `600 13px ${th.font}`;
         ctx.textBaseline = 'middle';
         chart.getDatasetMeta(0).data.forEach((bar, i) => ctx.fillText(tips[i], bar.x + 6, bar.y));
         ctx.restore();
@@ -408,7 +420,7 @@ export async function drawValueBars(
         const { ctx, chartArea, scales } = chart;
         const x = Math.round(scales.x.getPixelForValue(reference)) + 0.5;
         ctx.save();
-        ctx.strokeStyle = t.token('--color-text');
+        ctx.strokeStyle = th.token('--color-text');
         ctx.setLineDash([4, 3]);
         ctx.beginPath();
         ctx.moveTo(x, chartArea.top);
@@ -418,20 +430,20 @@ export async function drawValueBars(
       },
     });
   }
-  const options = baseOptions(t, onPick);
+  const options = baseOptions(th, onPick);
   options.indexAxis = 'y';
   options.layout = { padding: { right: 110 } };
   options.interaction = { mode: 'nearest', axis: 'y', intersect: false };
   options.plugins.tooltip.displayColors = false;
   options.plugins.tooltip.callbacks = { label: (item) => tooltips[item.dataIndex] };
   options.scales = {
-    x: t.axis({
+    x: th.axis({
       rest: { beginAtZero: true, suggestedMax: reference ? reference * 1.5 : undefined },
       ticks: tick ? { callback: tick } : { precision: 0 },
     }),
-    y: t.axis({
+    y: th.axis({
       grid: { display: false },
-      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+      ticks: { color: th.token('--color-text'), font: { family: th.font, size: 13 } },
     }),
   };
   return new Chart(canvas, {
@@ -440,10 +452,10 @@ export async function drawValueBars(
       labels,
       datasets: [
         {
-          label: 'Value',
+          label: t('Value'),
           data: values,
-          backgroundColor: t.token('--color-chart-bar'),
-          hoverBackgroundColor: t.token('--color-chart-bar-hover'),
+          backgroundColor: th.token('--color-chart-bar'),
+          hoverBackgroundColor: th.token('--color-chart-bar-hover'),
           borderRadius: { topRight: 4, bottomRight: 4 },
           borderSkipped: 'start',
           maxBarThickness: 24,
@@ -465,8 +477,8 @@ export async function drawValueBars(
  */
 export async function drawRanges(canvas, { labels, medians, p90s, counts, format, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
-  const options = baseOptions(t, onPick);
+  const th = theme();
+  const options = baseOptions(th, onPick);
   options.indexAxis = 'y';
   options.interaction = { mode: 'nearest', axis: 'y', intersect: false };
   options.plugins.tooltip.displayColors = false;
@@ -474,26 +486,29 @@ export async function drawRanges(canvas, { labels, medians, p90s, counts, format
   options.plugins.tooltip.callbacks = {
     label: (item) =>
       medians[item.dataIndex] === null
-        ? 'None in this period'
+        ? t('None in this period')
         : [
-            `Median: ${format(medians[item.dataIndex])}`,
-            `90% within: ${format(p90s[item.dataIndex])}`,
-            `${numberFormat.format(counts[item.dataIndex])} work orders`,
+            t('Median: {medians}', { medians: format(medians[item.dataIndex]) }),
+            t('90% within: {p90s}', { p90s: format(p90s[item.dataIndex]) }),
+            tn(counts[item.dataIndex], '{n} work order', '{n} work orders'),
           ],
   };
   // One unit for the whole axis: whole days from two days up, hours below.
   const longest = Math.max(0, ...p90s.filter((v) => v !== null));
   const inDays = longest >= 48;
   options.scales = {
-    x: t.axis({
+    x: th.axis({
       rest: { beginAtZero: true },
       ticks: inDays
-        ? { stepSize: longest > 24 * 20 ? 24 * 7 : 24, callback: (v) => `${Math.round(v / 24)} d` }
+        ? {
+            stepSize: longest > 24 * 20 ? 24 * 7 : 24,
+            callback: (v) => t('{days} d', { days: Math.round(v / 24) }),
+          }
         : { callback: (v) => `${v} h` },
     }),
-    y: t.axis({
+    y: th.axis({
       grid: { display: false },
-      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+      ticks: { color: th.token('--color-text'), font: { family: th.font, size: 13 } },
     }),
   };
   return new Chart(canvas, {
@@ -502,9 +517,9 @@ export async function drawRanges(canvas, { labels, medians, p90s, counts, format
       datasets: [
         {
           type: 'bar',
-          label: 'Up to the 90th percentile',
+          label: t('Up to the 90th percentile'),
           data: medians.map((m, i) => (m === null ? null : [m, p90s[i]])),
-          backgroundColor: t.token('--color-ordinal-1'),
+          backgroundColor: th.token('--color-ordinal-1'),
           borderRadius: 3,
           borderSkipped: false,
           barThickness: 8,
@@ -512,10 +527,10 @@ export async function drawRanges(canvas, { labels, medians, p90s, counts, format
         },
         {
           type: 'scatter',
-          label: 'Median',
+          label: t('Median'),
           data: medians.map((m, i) => (m === null ? null : { x: m, y: labels[i] })),
-          backgroundColor: t.token('--color-chart-bar'),
-          borderColor: t.token('--color-surface'),
+          backgroundColor: th.token('--color-chart-bar'),
+          borderColor: th.token('--color-surface'),
           borderWidth: 2,
           pointRadius: 6,
           pointHoverRadius: 7,
@@ -536,15 +551,15 @@ export async function drawRanges(canvas, { labels, medians, p90s, counts, format
  */
 export async function drawPriorityStack(canvas, { labels, series, tips, onPick }) {
   const Chart = await loadChartJs();
-  const t = theme();
+  const th = theme();
   const tipPlugin = {
     id: 'stackTips',
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
       const last = chart.getDatasetMeta(series.length - 1).data;
       ctx.save();
-      ctx.fillStyle = t.token('--color-text');
-      ctx.font = `600 13px ${t.font}`;
+      ctx.fillStyle = th.token('--color-text');
+      ctx.font = `600 13px ${th.font}`;
       ctx.textBaseline = 'middle';
       chart.getDatasetMeta(0).data.forEach((bar, i) => {
         const end = Math.max(...series.map((_, s) => chart.getDatasetMeta(s).data[i].x));
@@ -553,16 +568,16 @@ export async function drawPriorityStack(canvas, { labels, series, tips, onPick }
       ctx.restore();
     },
   };
-  const options = baseOptions(t, onPick);
+  const options = baseOptions(th, onPick);
   options.indexAxis = 'y';
   options.layout = { padding: { right: 150 } };
   options.interaction = { mode: 'nearest', axis: 'y', intersect: true };
   options.scales = {
-    x: t.axis({ rest: { stacked: true, beginAtZero: true }, ticks: { precision: 0 } }),
-    y: t.axis({
+    x: th.axis({ rest: { stacked: true, beginAtZero: true }, ticks: { precision: 0 } }),
+    y: th.axis({
       rest: { stacked: true },
       grid: { display: false },
-      ticks: { color: t.token('--color-text'), font: { family: t.font, size: 13 } },
+      ticks: { color: th.token('--color-text'), font: { family: th.font, size: 13 } },
     }),
   };
   return new Chart(canvas, {
@@ -572,8 +587,8 @@ export async function drawPriorityStack(canvas, { labels, series, tips, onPick }
       datasets: series.map((s) => ({
         label: s.label,
         data: s.values,
-        backgroundColor: t.token(`--color-ordinal-${s.step}`),
-        borderColor: t.token('--color-surface'),
+        backgroundColor: th.token(`--color-ordinal-${s.step}`),
+        borderColor: th.token('--color-surface'),
         borderWidth: { right: 2 },
         borderSkipped: 'start',
         maxBarThickness: 24,

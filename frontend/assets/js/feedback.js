@@ -6,10 +6,16 @@ import { badgeClass, h, replaceChildren } from './dom.js';
 import { formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { applyToPage } from './network.js';
+import { t, tn } from './i18n.js';
 
 export const MESSAGE_MAX_LENGTH = 2000;
 export const FEEDBACK_STATUSES = ['NEW', 'PLANNED', 'DONE', 'DECLINED'];
-const STATUS_LABELS = { NEW: 'New', PLANNED: 'Planned', DONE: 'Done', DECLINED: 'Declined' };
+const STATUS_LABELS = {
+  NEW: t('suggestion|New'),
+  PLANNED: t('suggestion|Planned'),
+  DONE: t('suggestion|Done'),
+  DECLINED: t('suggestion|Declined'),
+};
 const STATUS_TONES = { NEW: 'info', PLANNED: 'primary', DONE: 'success', DECLINED: 'neutral' };
 
 /** Text typed but not sent yet (dialog closed, or sending failed): offered again next time. */
@@ -34,8 +40,9 @@ export function feedbackPayload(message, { pathname, search }, pageTitle, viewpo
 /** Error of the message field, or '' when it can be sent. Pure. */
 export function checkFeedback(message) {
   const text = message.trim();
-  if (!text) return 'Describe what could be improved on this page.';
-  if (text.length > MESSAGE_MAX_LENGTH) return `At most ${MESSAGE_MAX_LENGTH} characters.`;
+  if (!text) return t('Describe what could be improved on this page.');
+  if (text.length > MESSAGE_MAX_LENGTH)
+    return t('At most {MESSAGE_MAX_LENGTH} characters.', { MESSAGE_MAX_LENGTH });
   return '';
 }
 
@@ -68,20 +75,24 @@ export function openFeedbackDialog(dialog, { pageTitle, send, onSent }) {
     rows: '6',
     maxlength: String(MESSAGE_MAX_LENGTH),
     'aria-describedby': 'feedback-hint feedback-count feedback-error',
-    placeholder:
+    placeholder: t(
       'Example: it would be interesting to include a pie chart of work orders by category.',
+    ),
   });
   textarea.value = unsentText;
   const count = h('p', { id: 'feedback-count', class: 'field-hint', 'aria-live': 'off' });
   const showCount = () => {
-    count.textContent = `${textarea.value.length} / ${MESSAGE_MAX_LENGTH} characters`;
+    count.textContent = t('{length} / {MESSAGE_MAX_LENGTH} characters', {
+      length: textarea.value.length,
+      MESSAGE_MAX_LENGTH,
+    });
   };
   showCount();
   const error = h('p', { id: 'feedback-error', class: 'field-error', role: 'alert' });
   const sendButton = h(
     'button',
     { type: 'submit', class: 'button button-primary online-only' },
-    'Send',
+    t('Send'),
   );
 
   const close = () => {
@@ -117,34 +128,40 @@ export function openFeedbackDialog(dialog, { pageTitle, send, onSent }) {
         } catch (err) {
           error.textContent =
             err.status === 0
-              ? 'You are offline: your text is kept, send it once connected.'
+              ? t('You are offline: your text is kept, send it once connected.')
               : err.message;
           sendButton.disabled = false;
           applyToPage(dialog);
         }
       },
     },
-    h('h2', { id: 'feedback-title', class: 'dialog-title' }, 'Suggest an improvement'),
+    h('h2', { id: 'feedback-title', class: 'dialog-title' }, t('Suggest an improvement')),
     h(
       'p',
       { id: 'feedback-hint', class: 'muted' },
-      'What should be updated or improved on this page? Your idea is saved with the page you are on, for the next updates of the tool.',
+      t(
+        'What should be updated or improved on this page? Your idea is saved with the page you are on, for the next updates of the tool.',
+      ),
     ),
     h(
       'p',
       { class: 'feedback-page' },
-      h('span', { class: 'field-label' }, 'Page: '),
+      h('span', { class: 'field-label' }, t('Page: ')),
       `${pageTitle} `,
       h('code', {}, `${where.pathname}${where.search}`),
     ),
-    h('label', { for: 'feedback-message', class: 'field-label' }, 'Your suggestion'),
+    h('label', { for: 'feedback-message', class: 'field-label' }, t('Your suggestion')),
     textarea,
     count,
     error,
     h(
       'div',
       { class: 'dialog-actions' },
-      h('button', { type: 'button', class: 'button button-secondary', onClick: close }, 'Cancel'),
+      h(
+        'button',
+        { type: 'button', class: 'button button-secondary', onClick: close },
+        t('Cancel'),
+      ),
       sendButton,
     ),
   );
@@ -175,7 +192,7 @@ export function renderFeedbackLog(
   const filter = h(
     'select',
     { id: 'feedback-status', onChange: (event) => onFilter(event.target.value || null) },
-    h('option', { value: '' }, 'All suggestions'),
+    h('option', { value: '' }, t('All suggestions')),
     FEEDBACK_STATUSES.map((s) => h('option', { value: s }, STATUS_LABELS[s])),
   );
   filter.value = filters.status ?? '';
@@ -185,7 +202,7 @@ export function renderFeedbackLog(
       'select',
       {
         class: 'feedback-status-select online-only',
-        'aria-label': `Status of suggestion ${item.id}`,
+        'aria-label': t('Status of suggestion {id}', { id: item.id }),
         onChange: (event) => onStatus(item.id, event.target.value, event.target),
       },
       FEEDBACK_STATUSES.map((s) => h('option', { value: s }, STATUS_LABELS[s])),
@@ -208,7 +225,11 @@ export function renderFeedbackLog(
         h('a', { href: item.page_path, 'data-link': true }, item.page_title || item.page_path),
         item.viewport_width ? h('br') : null,
         item.viewport_width
-          ? h('span', { class: 'muted' }, `${item.viewport_width} px wide`)
+          ? h(
+              'span',
+              { class: 'muted' },
+              t('{viewport_width} px wide', { viewport_width: item.viewport_width }),
+            )
           : null,
       ),
       h('td', { class: 'feedback-message' }, item.message),
@@ -218,17 +239,17 @@ export function renderFeedbackLog(
 
   replaceChildren(
     container,
-    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, 'Suggestions'),
+    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, t('Suggestions')),
     h(
       'div',
       { class: 'filter-row' },
-      h('label', { for: 'feedback-status' }, 'Show'),
+      h('label', { for: 'feedback-status' }, t('Show')),
       filter,
       paginationTop,
       h(
         'p',
         { class: 'table-count', role: 'status' },
-        `${data.total} suggestion${data.total === 1 ? '' : 's'}`,
+        tn(data.total, '{n} suggestion', '{n} suggestions'),
       ),
     ),
     data.items.length
@@ -241,7 +262,7 @@ export function renderFeedbackLog(
             h(
               'caption',
               { class: 'visually-hidden' },
-              `Suggestions, page ${data.page} of ${data.pages}`,
+              t('Suggestions, page {page} of {pages}', { page: data.page, pages: data.pages }),
             ),
             h(
               'thead',
@@ -249,15 +270,15 @@ export function renderFeedbackLog(
               h(
                 'tr',
                 {},
-                ['Sent', 'By', 'Page', 'Suggestion', 'Status'].map((t) =>
-                  h('th', { scope: 'col' }, t),
+                [t('Sent'), t('By'), t('Page'), t('Suggestion'), t('Status')].map((label) =>
+                  h('th', { scope: 'col' }, label),
                 ),
               ),
             ),
             h('tbody', {}, rows),
           ),
         )
-      : h('p', { class: 'empty-state' }, 'No suggestion yet.'),
+      : h('p', { class: 'empty-state' }, t('No suggestion yet.')),
     pagination,
   );
   applyToPage(container);

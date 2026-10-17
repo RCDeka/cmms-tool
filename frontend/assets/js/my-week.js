@@ -19,6 +19,7 @@ import {
   lockTimes,
   reorder,
 } from './schedule-rules.js';
+import { t } from './i18n.js';
 
 /** Config key of the weeks saved on the device. */
 export const MY_WEEK_CACHE = 'my_week';
@@ -82,15 +83,25 @@ function blockActions(block, day, { onMove, onLock, canChange }) {
         type: 'button',
         class: 'button button-secondary online-only',
         disabled: !canChange || index === -1 || !reorder(day.blocks, block.id, direction),
-        'aria-label': `${text}: ${block.kind === 'WORK' ? wo.number : valueLabel('allocation_kind', block.kind)}`,
+        'aria-label': t('{label}: {value}', {
+          label: text,
+          value: block.kind === 'WORK' ? wo.number : valueLabel('allocation_kind', block.kind),
+        }),
         onClick: () => onMove(day, block, direction),
       },
       text,
     );
   const time = h(
     'select',
-    { 'aria-label': `Start time of ${wo?.number ?? 'this block'}`, class: 'online-only' },
-    lockTimes(block.hours).map((t) => h('option', { value: t, selected: t === '09:00' }, t)),
+    {
+      'aria-label': wo?.number
+        ? t('Start time of {number}', { number: wo.number })
+        : t('Start time of this block'),
+      class: 'online-only',
+    },
+    lockTimes(block.hours).map((time) =>
+      h('option', { value: time, selected: time === '09:00' }, time),
+    ),
   );
   return h(
     'details',
@@ -98,7 +109,7 @@ function blockActions(block, day, { onMove, onLock, canChange }) {
     h(
       'summary',
       { class: 'button button-secondary' },
-      'Change…',
+      t('Change…'),
       h(
         'span',
         { class: 'visually-hidden' },
@@ -108,7 +119,7 @@ function blockActions(block, day, { onMove, onLock, canChange }) {
     h(
       'div',
       { class: 'my-block-actions' },
-      block.locked_start ? null : [moveButton(-1, 'Move up'), moveButton(1, 'Move down')],
+      block.locked_start ? null : [moveButton(-1, t('Move up')), moveButton(1, t('Move down'))],
       block.kind === 'WORK'
         ? block.locked_start
           ? h(
@@ -119,7 +130,7 @@ function blockActions(block, day, { onMove, onLock, canChange }) {
                 disabled: !canChange,
                 onClick: () => onLock(block, null),
               },
-              'Unlock the time',
+              t('Unlock the time'),
             )
           : [
               time,
@@ -131,7 +142,7 @@ function blockActions(block, day, { onMove, onLock, canChange }) {
                   disabled: !canChange,
                   onClick: () => onLock(block, time.value),
                 },
-                'Lock at this time',
+                t('Lock at this time'),
               ),
             ]
         : null,
@@ -157,7 +168,10 @@ function blockCard(block, day, { past, ...options }) {
       ? h(
           'p',
           { class: 'block-lock' },
-          `🔒 ${appointmentText(block.locked_start, block.hours)} · locked by ${personName(block.locked_by)}`,
+          t('🔒 {appointmentText} · locked by {locked_by}', {
+            appointmentText: appointmentText(block.locked_start, block.hours),
+            locked_by: personName(block.locked_by),
+          }),
         )
       : null,
     h('p', { class: 'my-block-title' }, title),
@@ -219,7 +233,7 @@ export function renderMyWeek(
         { id: `my-day-${day.day}`, tabindex: '-1' },
         longDayLabel(day.day),
         day.override ? ` · ${valueLabel('capacity_reason', day.override.reason)}` : '',
-        day.day === today ? [' ', h('span', { class: 'badge badge-tone-info' }, 'Today')] : null,
+        day.day === today ? [' ', h('span', { class: 'badge badge-tone-info' }, t('Today'))] : null,
       ),
       h(
         'p',
@@ -244,7 +258,7 @@ export function renderMyWeek(
               blockCard(b, day, { onMove, onLock, canChange, past: day.day < today }),
             ),
           )
-        : h('p', { class: 'muted' }, 'Nothing scheduled.'),
+        : h('p', { class: 'muted' }, t('Nothing scheduled.')),
     ),
   );
   replaceChildren(
@@ -258,23 +272,32 @@ export function renderMyWeek(
         h(
           'div',
           { class: 'schedule-weeks' },
-          link(addWeeks(data.week, -1), '← Previous', 'Previous week'),
+          link(addWeeks(data.week, -1), t('← Previous'), t('Previous week')),
           h('strong', { class: 'schedule-week-name' }, formatWeek(data.week)),
-          link(addWeeks(data.week, 1), 'Next →', 'Next week'),
+          link(addWeeks(data.week, 1), t('Next →'), t('Next week')),
           data.week === data.current_week
             ? null
-            : link(data.current_week, 'This week', 'Back to this week'),
+            : link(data.current_week, t('This week'), t('Back to this week')),
         ),
         h(
           'p',
           { class: 'muted' },
-          `${formatDuration(data.week_total)} scheduled of ${formatDuration(data.week_capacity)}. Appointments come first; order the rest of each day as you like.`,
+          t(
+            '{week_total} scheduled of {week_capacity}. Appointments come first; order the rest of each day as you like.',
+            {
+              week_total: formatDuration(data.week_total),
+              week_capacity: formatDuration(data.week_capacity),
+            },
+          ),
         ),
         savedOffline
           ? h(
               'p',
               { class: 'banner banner-info', role: 'note' },
-              `Offline: your week as saved on this device on ${formatDateTime(data.generated_at)}. Changes need a connection.`,
+              t(
+                'Offline: your week as saved on this device on {generated_at}. Changes need a connection.',
+                { generated_at: formatDateTime(data.generated_at) },
+              ),
             )
           : null,
         message,

@@ -7,12 +7,19 @@
 import { h, replaceChildren } from './dom.js';
 import { formatDateTime, personName } from './format.js';
 import { WIDGETS, WIDGET_GROUPS } from './widgets.js';
+import { t } from './i18n.js';
 
 /** "Switched off by Ada Admin on …", or null for a widget never switched. Pure. */
 export function settingNote(item) {
   if (!item.updated_at) return null;
-  const by = item.updated_by ? ` by ${personName(item.updated_by)}` : '';
-  return `${item.enabled ? 'Switched on' : 'Switched off'}${by} on ${formatDateTime(item.updated_at)}.`;
+  const at = formatDateTime(item.updated_at);
+  if (item.updated_by) {
+    const by = personName(item.updated_by);
+    return item.enabled
+      ? t('Switched on by {by} on {at}.', { by, at })
+      : t('Switched off by {by} on {at}.', { by, at });
+  }
+  return item.enabled ? t('Switched on on {at}.', { at }) : t('Switched off on {at}.', { at });
 }
 
 /**
@@ -59,16 +66,20 @@ export function renderWidgetSettings(container, { items, onToggle }) {
     h(
       'div',
       { class: 'settings-page widget-settings-page' },
-      h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Dashboard widgets'),
+      h('h2', { class: 'placeholder-title', tabindex: '-1' }, t('Dashboard widgets')),
       h(
         'p',
         {},
-        'Ticked widgets are offered to supervisors. Untick a widget still in development or not working: supervisors no longer see it in the sidebar or on their dashboards, and get it back, where it was, once it is ticked again. You keep seeing every widget, marked “Off” in the sidebar when it is switched off.',
+        t(
+          'Ticked widgets are offered to supervisors. Untick a widget still in development or not working: supervisors no longer see it in the sidebar or on their dashboards, and get it back, where it was, once it is ticked again. You keep seeing every widget, marked “Off” in the sidebar when it is switched off.',
+        ),
       ),
       h(
         'p',
         { class: 'muted', role: 'status' },
-        off ? `${off} of ${items.length} widgets switched off.` : 'Every widget is switched on.',
+        off
+          ? t('{off} of {length} widgets switched off.', { off, length: items.length })
+          : t('Every widget is switched on.'),
       ),
       h('div', { class: 'widget-settings' }, groups),
     ),

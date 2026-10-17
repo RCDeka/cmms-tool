@@ -5,6 +5,7 @@
 // Offline when the browser says so, or when an API call fails with a network error or a
 // timeout. While offline, /api/health is pinged until the server answers again.
 import { API_BASE, REQUEST_TIMEOUT_MS } from './config.js';
+import { t } from './i18n.js';
 
 const PING_INTERVAL_MS = 15_000;
 
@@ -78,19 +79,22 @@ export function applyToPage(root = document) {
   document.body.classList.toggle('is-offline', !online);
   const status = document.getElementById('network-status');
   if (status) {
-    status.textContent = online ? 'Online' : 'Offline mode — local data';
+    status.textContent = online ? t('Online') : t('Offline mode — local data');
     status.classList.toggle('is-offline', !online);
   }
   const needsServer = [
-    ['.ai-only', 'Not available offline: AI features need a connection.'],
-    ['.online-only', 'Not available offline: this action needs a connection.'],
+    ['.ai-only', t('Not available offline: AI features need a connection.')],
+    ['.online-only', t('Not available offline: this action needs a connection.')],
   ];
   for (const [selector, reason] of needsServer) {
     for (const button of root.querySelectorAll(selector)) {
       button.disabled = !online;
+      // A button's own tooltip (the top bar ones, D85) comes back once online.
+      if (!('onlineTitle' in button.dataset)) button.dataset.onlineTitle = button.title;
       if (online) {
         button.removeAttribute('aria-disabled');
-        button.removeAttribute('title');
+        if (button.dataset.onlineTitle) button.title = button.dataset.onlineTitle;
+        else button.removeAttribute('title');
       } else {
         button.setAttribute('aria-disabled', 'true');
         button.title = reason;

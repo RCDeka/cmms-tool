@@ -141,6 +141,11 @@ Type each URL in the address bar (then reload it) with each role that has no acc
 | NAV-25 | any | Click "AGPL-3.0" and "Source code" in the status bar, also in a private window not signed in to GitHub | The license and the public repository open (no sign-in, no 404). A deployment of a **modified** version links to its own source instead (README → License). |
 | NAV-26 | MAINT | Open any menu (dashboard ⋯, Dashboard ▾, multi-select filters) and press Escape | The menu closes and focus returns to its button. |
 | NAV-27 | MAINT | Open a record from My week, the dashboard, the scheduler, the conflicts or the audit log, then press "Back" in the panel | Returns to the page it was opened from, and the button is named after it. |
+| NAV-28 | any | Click the French flag in the top bar (or on the login page), browse every page of the role, open dialogs and panels, submit an empty form | The page reloads in French: sidebar, titles, buttons, labels, tooltips, messages, dates ("4 oct. 2026") and numbers ("3,5 h") are French; content (titles, comments, place names) stays as typed. The French flag is framed. |
+| NAV-29 | any | With French chosen: reload, log out, log in again (also another user on the same browser) | Still French: the choice belongs to the browser, not the account. Click the British flag: back to English. |
+| NAV-30 | MAINT | Change a field of a work order without saving, then click the other flag | The unsaved-changes question comes first; Cancel keeps the page and the language. |
+| NAV-31 | MAINT | In French, trigger a server refusal (a closing date before the start date, a duplicate asset code) | The message and the field message are in French. |
+| NAV-32 | any | In French, at 360 px, 820 px and 1180 px wide | No horizontal scroll of the page; under 960 px the top bar buttons show their icon only (tooltip on hover). |
 
 ---
 

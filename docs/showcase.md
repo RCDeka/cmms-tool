@@ -33,6 +33,10 @@ The mock users, one per role:
 
 One login page for everyone. The menu then depends on the role: staff see only their requests; technicians get the dashboard, assets, work orders, the planners and My week; supervisors add their own dashboards, conflicts, the audit log and places; administrators add users, suggestions and settings. The server checks every permission again: hiding a button is only for comfort.
 
+![The work orders in French](img/showcase/french.png)
+
+The flags at the end of the top bar, and in the corner of the login page, switch the interface between English and French (D85). The browser remembers the choice, even after logging out. Everything Tacto writes is translated, with the vocabulary of French maintenance teams (bon de travaux, équipement, domaine technique, compte rendu); what people typed (titles, reports, comments, names of places) stays as it was written. The other pictures of this page are in English.
+
 ## 2. Dashboards
 
 **Supervisor dashboard.** Key figures first (open, in progress, closed this month, overdue, assets broken down, staff requests to review, requests waiting for a reply, conflicts), with "Needs attention" when a figure calls for action. Then charts, "My work" and the latest activity. The period (30, 90 or 365 days), the sites and the trades filter the whole page. The sidebar lists the widgets: ticking one adds it; each widget can be dragged into place, shown as a table, or exported as CSV or a JPG image.

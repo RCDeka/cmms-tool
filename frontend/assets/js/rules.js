@@ -5,6 +5,7 @@
 // (backend/src/rules/work-order-status.js and permissions.js), checked equal by
 // test/rules.test.js. The server stays the authority: it checks everything again.
 import { TERMINAL_WORK_ORDER_STATUSES } from './enums.js';
+import { t } from './i18n.js';
 
 /** Allowed status transitions (BR-W4). */
 export const TRANSITIONS = {
@@ -157,9 +158,9 @@ export function editableFields(entity, user, record) {
 /** Checks of the review form before asking the server (D47). Pure. */
 export function checkReview(decision, values) {
   if (decision === 'APPROVE') {
-    return values.assignee_id ? {} : { assignee_id: 'Choose who will do the work' };
+    return values.assignee_id ? {} : { assignee_id: t('Choose who will do the work') };
   }
-  return String(values.reason ?? '').trim() ? {} : { reason: 'Say why the request is rejected' };
+  return String(values.reason ?? '').trim() ? {} : { reason: t('Say why the request is rejected') };
 }
 
 /**
@@ -171,17 +172,17 @@ export function checkBeforeSave(entity, record, changes) {
   const errors = {};
   const required = entity === 'assets' ? ['name', 'site'] : ['title', 'site'];
   for (const field of required) {
-    if (field in changes && !String(changes[field] ?? '').trim()) errors[field] = 'Required';
+    if (field in changes && !String(changes[field] ?? '').trim()) errors[field] = t('Required');
   }
   if (entity === 'work_orders') {
     if (changes.status === 'CLOSED' && !String(after.work_report ?? '').trim()) {
-      errors.work_report = 'A work report is required to close a work order.';
+      errors.work_report = t('A work report is required to close a work order.');
     }
     if (after.due_on && after.created_on && after.due_on < after.created_on) {
-      errors.due_on = 'The due date cannot be earlier than the creation date.';
+      errors.due_on = t('The due date cannot be earlier than the creation date.');
     }
     if (after.closed_on && after.started_on && after.closed_on < after.started_on) {
-      errors.closed_on = 'The closing date cannot be earlier than the start date.';
+      errors.closed_on = t('The closing date cannot be earlier than the start date.');
     }
   }
   return errors;
@@ -191,11 +192,11 @@ export function checkBeforeSave(entity, record, changes) {
 export function checkBeforeCreateAsset(values) {
   const errors = {};
   for (const field of ['name', 'category', 'criticality']) {
-    if (!String(values[field] ?? '').trim()) errors[field] = 'Required';
+    if (!String(values[field] ?? '').trim()) errors[field] = t('Required');
   }
-  if (!values.location_id) errors.location_id = 'Required';
+  if (!values.location_id) errors.location_id = t('Required');
   if (values.code && !/^[A-Z0-9][A-Z0-9-]{1,49}$/.test(values.code.trim().toUpperCase())) {
-    errors.code = 'Capitals, digits and hyphens only, 2 to 50 characters';
+    errors.code = t('Capitals, digits and hyphens only, 2 to 50 characters');
   }
   return errors;
 }
@@ -203,10 +204,10 @@ export function checkBeforeCreateAsset(values) {
 /** Checks of the creation form (BR-W9). */
 export function checkBeforeCreate(values) {
   const errors = {};
-  if (!String(values.title ?? '').trim()) errors.title = 'Required';
-  if (!values.type) errors.type = 'Required';
+  if (!String(values.title ?? '').trim()) errors.title = t('Required');
+  if (!values.type) errors.type = t('Required');
   if (!values.asset_id && !values.location_id) {
-    errors.location_id = 'Choose an asset or a place';
+    errors.location_id = t('Choose an asset or a place');
   }
   return errors;
 }

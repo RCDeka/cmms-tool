@@ -5,6 +5,7 @@
 // browser from the figures on screen or the records sent by the server. No library: CSV is
 // text, and the image is drawn on a canvas.
 import { h } from './dom.js';
+import { t } from './i18n.js';
 
 /**
  * Cells starting like a formula are prefixed with ' so a spreadsheet shows them as text
@@ -227,7 +228,7 @@ export function widgetImage({
 
   return new Promise((resolve, reject) =>
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('The image could not be created.'))),
+      (blob) => (blob ? resolve(blob) : reject(new Error(t('The image could not be created.')))),
       'image/jpeg',
       0.92,
     ),

@@ -8,6 +8,7 @@ import { h, replaceChildren } from './dom.js';
 import { formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { applyToPage } from './network.js';
+import { t } from './i18n.js';
 
 export const COMMENT_MAX_LENGTH = 2000;
 
@@ -17,8 +18,9 @@ const unsent = new Map();
 /** Error of a comment, or '' when it can be sent. Pure. */
 export function checkComment(text) {
   const value = text.trim();
-  if (!value) return 'Write your comment first.';
-  if (value.length > COMMENT_MAX_LENGTH) return `At most ${COMMENT_MAX_LENGTH} characters.`;
+  if (!value) return t('Write your comment first.');
+  if (value.length > COMMENT_MAX_LENGTH)
+    return t('At most {COMMENT_MAX_LENGTH} characters.', { COMMENT_MAX_LENGTH });
   return '';
 }
 
@@ -29,10 +31,10 @@ export function checkComment(text) {
  * @param {{ id: number, role: string }} viewer
  */
 export function commentAuthor(comment, viewer) {
-  if (comment.user.id === viewer.id) return 'You';
+  if (comment.user.id === viewer.id) return t('You');
   const name = personName(comment.user);
-  if (comment.user_role === 'STAFF') return `${name} (requester)`;
-  if (viewer.role === 'STAFF') return `${name} (maintenance team)`;
+  if (comment.user_role === 'STAFF') return t('{name} (requester)', { name });
+  if (viewer.role === 'STAFF') return t('{name} (maintenance team)', { name });
   return `${name} (${valueLabel('role', comment.user_role).toLowerCase()})`;
 }
 
@@ -41,7 +43,7 @@ export const awaitsReply = (comments) => comments.at(-1)?.user_role === 'STAFF';
 
 /** The conversation, oldest first. */
 export function renderConversation(comments, viewer) {
-  if (!comments.length) return h('p', { class: 'muted' }, 'No comment yet.');
+  if (!comments.length) return h('p', { class: 'muted' }, t('No comment yet.'));
   return h(
     'ol',
     { class: 'comment-list' },
@@ -81,7 +83,7 @@ export function commentForm({ key, label, hint, send, onSent }) {
   const button = h(
     'button',
     { type: 'submit', class: 'button button-primary online-only' },
-    'Send comment',
+    t('Send comment'),
   );
   textarea.addEventListener('input', () => {
     unsent.set(key, textarea.value);
@@ -110,7 +112,7 @@ export function commentForm({ key, label, hint, send, onSent }) {
         } catch (err) {
           error.textContent =
             err.status === 0
-              ? 'You are offline: your text is kept, send it once connected.'
+              ? t('You are offline: your text is kept, send it once connected.')
               : err.message;
         } finally {
           button.disabled = false;
@@ -140,12 +142,12 @@ export function commentsSection(workOrderId, viewer) {
       list,
       renderConversation(items, viewer),
       awaitsReply(items)
-        ? h('p', { class: 'banner banner-info' }, 'The requester is waiting for a reply.')
+        ? h('p', { class: 'banner banner-info' }, t('The requester is waiting for a reply.'))
         : null,
     );
   let items = [];
   const load = async () => {
-    replaceChildren(list, h('p', { class: 'muted' }, 'Loading the comments…'));
+    replaceChildren(list, h('p', { class: 'muted' }, t('Loading the comments…')));
     try {
       ({ items } = await apiFetch(`/work-orders/${workOrderId}/comments`));
       show(items);
@@ -155,7 +157,7 @@ export function commentsSection(workOrderId, viewer) {
         h(
           'p',
           { class: 'muted' },
-          err.status === 0 ? 'The comments need a connection to the server.' : err.message,
+          err.status === 0 ? t('The comments need a connection to the server.') : err.message,
         ),
       );
     }
@@ -163,12 +165,12 @@ export function commentsSection(workOrderId, viewer) {
   const section = h(
     'details',
     { class: 'comments', open: true },
-    h('summary', {}, 'Comments'),
+    h('summary', {}, t('Comments')),
     list,
     commentForm({
       key: `wo-${workOrderId}`,
-      label: 'Add a comment',
-      hint: 'The requester sees your comments: use them to give news or ask for details.',
+      label: t('Add a comment'),
+      hint: t('The requester sees your comments: use them to give news or ask for details.'),
       send: async (body) =>
         (await apiFetch(`/work-orders/${workOrderId}/comments`, { method: 'POST', body: { body } }))
           .item,

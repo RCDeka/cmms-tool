@@ -5,6 +5,7 @@
 // card by its handle with the mouse or a finger, or pick it up with the keyboard (Space),
 // move it with the arrow keys and drop it (Space; Escape cancels). The other cards make room
 // as it moves; the new order is given to `onOrder` once dropped.
+import { t } from './i18n.js';
 
 /** Moves `key` to position `toIndex` of the others (clamped). Pure. */
 export function moveKey(keys, key, toIndex) {
@@ -49,7 +50,11 @@ export function attachWidgetDrag(grid, { onOrder, announce, labelOf }) {
   let grabbed = null; // card picked up with the keyboard: { card, from: string[] }
 
   const position = (card) =>
-    `${labelOf(card.dataset.key)}, position ${cardsOf(grid).indexOf(card) + 1} of ${cardsOf(grid).length}`;
+    t('{key}, position {value} of {length}', {
+      key: labelOf(card.dataset.key),
+      value: cardsOf(grid).indexOf(card) + 1,
+      length: cardsOf(grid).length,
+    });
 
   const finish = (from, card) => {
     const keys = keysOf(grid);
@@ -194,10 +199,10 @@ export function attachWidgetDrag(grid, { onOrder, announce, labelOf }) {
     if (!commit) {
       for (const key of from) grid.append(grid.querySelector(`:scope > [data-key="${key}"]`));
       handle.focus();
-      announce(`${labelOf(card.dataset.key)}: move cancelled.`);
+      announce(t('{key}: move cancelled.', { key: labelOf(card.dataset.key) }));
       return;
     }
-    announce(`${position(card)}. Dropped.`);
+    announce(t('{position}. Dropped.', { position: position(card) }));
     finish(from, card);
   };
 
@@ -212,7 +217,10 @@ export function attachWidgetDrag(grid, { onOrder, announce, labelOf }) {
       card.classList.add('is-grabbed');
       handle.setAttribute('aria-pressed', 'true');
       announce(
-        `${position(card)}. Picked up: move it with the arrow keys, drop it with Space, or press Escape to cancel.`,
+        t(
+          '{position}. Picked up: move it with the arrow keys, drop it with Space, or press Escape to cancel.',
+          { position: position(card) },
+        ),
       );
       return;
     }

@@ -41,6 +41,7 @@ import {
   getDraft,
   saveDraft,
 } from './save-modes.js';
+import { t } from './i18n.js';
 
 const detailContainer = document.getElementById('detail-container');
 
@@ -122,7 +123,7 @@ async function userRefFor(id) {
   const user = (await refsPromise).users.find((u) => u.id === id);
   return user
     ? { id, first_name: user.first_name, last_name: user.last_name }
-    : { id, first_name: 'User', last_name: `#${id}` };
+    : { id, first_name: t('User'), last_name: `#${id}` };
 }
 
 /**
@@ -188,17 +189,17 @@ function onInput() {
 function draftNotice(draft, onRestore, onDiscard) {
   return notice(
     'info',
-    `Unsaved draft from ${formatDateTime(draft.updated_at)}. `,
+    t('Unsaved draft from {updated_at}. ', { updated_at: formatDateTime(draft.updated_at) }),
     h(
       'button',
       { type: 'button', class: 'button button-secondary', onClick: onRestore },
-      'Restore',
+      t('Restore'),
     ),
     ' ',
     h(
       'button',
       { type: 'button', class: 'button button-secondary', onClick: onDiscard },
-      'Discard',
+      t('Discard'),
     ),
   );
 }
@@ -233,7 +234,7 @@ export async function showRecord({ route, record, onClose, backLabel }) {
           })
         : notice(
             'info',
-            'This staff request is waiting for a supervisor’s review: it will then be assigned.',
+            t('This staff request is waiting for a supervisor’s review: it will then be assigned.'),
           ),
     );
   }
@@ -242,7 +243,7 @@ export async function showRecord({ route, record, onClose, backLabel }) {
       notice(
         'info',
         h('span', { 'aria-hidden': 'true' }, '⟳ '),
-        'Your changes are saved on this device and waiting to be sent to the server.',
+        t('Your changes are saved on this device and waiting to be sent to the server.'),
       ),
     );
   }
@@ -250,9 +251,9 @@ export async function showRecord({ route, record, onClose, backLabel }) {
     notices.push(
       notice(
         draft.error.locked ? 'warning' : 'danger',
-        h('strong', {}, 'Your last change was not saved. '),
+        h('strong', {}, t('Your last change was not saved. ')),
         draft.error.message,
-        editable.length ? ' Your edits are shown below.' : '',
+        editable.length ? t(' Your edits are shown below.') : '',
       ),
     );
   }
@@ -266,7 +267,7 @@ export async function showRecord({ route, record, onClose, backLabel }) {
           'data-link': true,
           class: 'button button-secondary',
         },
-        '+ New work order for this asset',
+        t('+ New work order for this asset'),
       ),
     );
     if (canManageAssets(user)) {
@@ -278,7 +279,7 @@ export async function showRecord({ route, record, onClose, backLabel }) {
             class: 'button button-danger online-only',
             onClick: () => deleteAsset(route, record),
           },
-          'Delete asset',
+          t('Delete asset'),
         ),
       );
     }
@@ -394,8 +395,8 @@ export async function saveRecord() {
   const { changes, invalid } = ed.handle.getChanges();
   if (invalid.length) {
     ed.handle.setErrors(
-      Object.fromEntries(invalid.map((f) => [f, 'Unknown asset code'])),
-      'Check the highlighted fields.',
+      Object.fromEntries(invalid.map((f) => [f, t('Unknown asset code')])),
+      t('Check the highlighted fields.'),
     );
     ed.handle.focusFirstError();
     return false;
@@ -403,7 +404,7 @@ export async function saveRecord() {
   if (!Object.keys(changes).length) return true;
   const errors = checkBeforeSave(ed.entity, ed.record, changes);
   if (Object.keys(errors).length) {
-    ed.handle.setErrors(errors, 'Check the highlighted fields.');
+    ed.handle.setErrors(errors, t('Check the highlighted fields.'));
     ed.handle.focusFirstError();
     return false;
   }
@@ -418,7 +419,9 @@ export async function saveRecord() {
   });
   await deleteDraft(ed.entity, ed.id);
   announce(
-    isOnline() ? 'Saving…' : 'Saved on this device. It will be sent when you are back online.',
+    isOnline()
+      ? t('Saving…')
+      : t('Saved on this device. It will be sent when you are back online.'),
   );
   if (editor === ed) rerender();
   return true;
@@ -432,11 +435,14 @@ export async function saveRecord() {
  */
 async function deleteAsset(route, record) {
   const choice = await confirmDialog({
-    title: 'Delete this asset?',
-    message: `${record.code} — ${record.name} will be deleted for good. Only assets without any work order can be deleted; otherwise set the status to Out of service.`,
+    title: t('Delete this asset?'),
+    message: t(
+      '{code} — {name} will be deleted for good. Only assets without any work order can be deleted; otherwise set the status to Out of service.',
+      { code: record.code, name: record.name },
+    ),
     actions: [
-      { value: 'delete', label: 'Delete', primary: true },
-      { value: 'cancel', label: 'Cancel' },
+      { value: 'delete', label: t('Delete'), primary: true },
+      { value: 'cancel', label: t('Cancel') },
     ],
   });
   if (choice !== 'delete') return;
@@ -444,8 +450,8 @@ async function deleteAsset(route, record) {
     await apiFetch(`/assets/${record.id}?version=${record.version}`, { method: 'DELETE' });
   } catch (err) {
     await confirmDialog({
-      title: 'The asset was not deleted',
-      message: err.status === 0 ? 'The server cannot be reached.' : err.message,
+      title: t('The asset was not deleted'),
+      message: err.status === 0 ? t('The server cannot be reached.') : err.message,
       actions: [{ value: 'ok', label: 'OK', primary: true }],
     });
     return;
@@ -454,7 +460,7 @@ async function deleteAsset(route, record) {
   await DB.remove(storesOf('assets').records, record.id);
   await deleteDraft('assets', record.id);
   await DB.evict(storesOf('assets').pages, []); // page contents changed: fetch them again
-  announce(`${record.code} was deleted.`);
+  announce(t('{code} was deleted.', { code: record.code }));
   navigate(listUrl('assets', route.page), { force: true });
 }
 
@@ -465,11 +471,13 @@ async function deleteAsset(route, record) {
 async function submitReview(record, body) {
   if (body.decision === 'REJECT') {
     const choice = await confirmDialog({
-      title: 'Reject this request?',
-      message: `${record.number} will be cancelled. The requester will see your reason.`,
+      title: t('Reject this request?'),
+      message: t('{number} will be cancelled. The requester will see your reason.', {
+        number: record.number,
+      }),
       actions: [
-        { value: 'reject', label: 'Reject', primary: true },
-        { value: 'cancel', label: 'Cancel' },
+        { value: 'reject', label: t('Reject'), primary: true },
+        { value: 'cancel', label: t('Cancel') },
       ],
     });
     if (choice !== 'reject') return null;
@@ -482,7 +490,9 @@ async function submitReview(record, body) {
     return {
       fields: fields && !Array.isArray(fields) ? fields : {},
       message:
-        err.status === 0 ? 'The server cannot be reached: try again once connected.' : err.message,
+        err.status === 0
+          ? t('The server cannot be reached: try again once connected.')
+          : err.message,
     };
   }
   await DB.saveRecord(storesOf('work_orders').records, item.id, {
@@ -494,8 +504,12 @@ async function submitReview(record, body) {
   serverRecordListener('work_orders', item);
   announce(
     body.decision === 'APPROVE'
-      ? `${item.number} approved and assigned to ${item.assignee.first_name} ${item.assignee.last_name}.`
-      : `${item.number} rejected.`,
+      ? t('{number} approved and assigned to {first_name} {last_name}.', {
+          number: item.number,
+          first_name: item.assignee.first_name,
+          last_name: item.assignee.last_name,
+        })
+      : t('{number} rejected.', { number: item.number }),
   );
   rerender();
   return null;
@@ -510,7 +524,7 @@ export async function showCreateAsset({ route, onClose }) {
     fields: ASSET_CREATION_FIELDS,
     values: {},
     ctx: await formCtx(),
-    submitLabel: 'Create asset',
+    submitLabel: t('Create asset'),
     onlineOnly: true,
     onSubmit: () => submitCreateAsset(),
   });
@@ -520,7 +534,10 @@ export async function showCreateAsset({ route, onClose }) {
   const notices = [];
   if (!isOnline()) {
     notices.push(
-      notice('warning', 'Creating an asset needs a connection. Your entries are kept as a draft.'),
+      notice(
+        'warning',
+        t('Creating an asset needs a connection. Your entries are kept as a draft.'),
+      ),
     );
   }
   if (draft && Object.keys(draft.changes ?? {}).length) {
@@ -544,7 +561,7 @@ export async function showCreateAsset({ route, onClose }) {
   renderDetail(detailContainer, {
     entity: 'assets',
     record: {},
-    title: 'New asset',
+    title: t('New asset'),
     onClose,
     notices,
     body: ed.handle.form,
@@ -558,7 +575,7 @@ async function submitCreateAsset() {
   const { values } = ed.handle.getValues();
   const errors = checkBeforeCreateAsset(values);
   if (Object.keys(errors).length) {
-    ed.handle.setErrors(errors, 'Check the highlighted fields.');
+    ed.handle.setErrors(errors, t('Check the highlighted fields.'));
     ed.handle.focusFirstError();
     return;
   }
@@ -570,7 +587,7 @@ async function submitCreateAsset() {
     ed.handle.setErrors(
       fields && !Array.isArray(fields) ? fields : {},
       err.status === 0
-        ? 'The server cannot be reached. Your entries are kept as a draft.'
+        ? t('The server cannot be reached. Your entries are kept as a draft.')
         : err.message,
     );
     ed.handle.focusFirstError();
@@ -584,7 +601,7 @@ async function submitCreateAsset() {
   });
   await DB.evict(storesOf('assets').pages, []); // the new asset changes the page contents
   editor = null;
-  announce(`Asset ${item.code} created.`);
+  announce(t('Asset {code} created.', { code: item.code }));
   navigate(detailUrl('assets', item.id, ed.route.page), { replace: true, force: true });
 }
 
@@ -627,7 +644,7 @@ export async function showCreate({ route, onClose }) {
     fields: CREATION_FIELDS[user.role],
     values: prefill,
     ctx: await formCtx(),
-    submitLabel: 'Create work order',
+    submitLabel: t('Create work order'),
     onSubmit: () => submitCreate(),
   });
   ed.initial = JSON.stringify(ed.handle.getValues().values);
@@ -662,7 +679,7 @@ export async function showCreate({ route, onClose }) {
   renderDetail(detailContainer, {
     entity: 'work_orders',
     record: {},
-    title: 'New work order',
+    title: t('New work order'),
     onClose,
     notices,
     body: ed.handle.form,
@@ -717,10 +734,10 @@ function readCreateForm(ed) {
   const { values, invalid } = ed.handle.getValues();
   const errors = {
     ...checkBeforeCreate(values),
-    ...Object.fromEntries(invalid.map((f) => [f, 'Unknown asset code'])),
+    ...Object.fromEntries(invalid.map((f) => [f, t('Unknown asset code')])),
   };
   if (Object.keys(errors).length) {
-    ed.handle.setErrors(errors, 'Check the highlighted fields.');
+    ed.handle.setErrors(errors, t('Check the highlighted fields.'));
     ed.handle.focusFirstError();
     return null;
   }
@@ -754,8 +771,8 @@ async function submitCreate() {
   editor = null;
   announce(
     isOnline()
-      ? 'Creating the work order…'
-      : 'Work order saved on this device. It will be created when you are back online.',
+      ? t('Creating the work order…')
+      : t('Work order saved on this device. It will be created when you are back online.'),
   );
   navigate(detailUrl('work_orders', tmpId, ed.route.page), { replace: true, force: true });
 }
@@ -780,13 +797,13 @@ export async function showPendingCreation({ route, onClose }) {
     renderDetail(detailContainer, {
       entity: 'work_orders',
       record: {},
-      title: 'New work order',
+      title: t('New work order'),
       onClose,
       notices: [
         notice(
           'info',
-          'This work order has been created or discarded. ',
-          h('a', { href: listUrl('work_orders'), 'data-link': true }, 'Back to the list'),
+          t('This work order has been created or discarded. '),
+          h('a', { href: listUrl('work_orders'), 'data-link': true }, t('Back to the list')),
         ),
       ],
     });
@@ -802,7 +819,7 @@ export async function showPendingCreation({ route, onClose }) {
     fields: CREATION_FIELDS[user.role],
     values,
     ctx: await formCtx(),
-    submitLabel: entry ? 'Update' : 'Retry creation',
+    submitLabel: entry ? t('Update') : t('Retry creation'),
     onSubmit: async () => {
       const next = readCreateForm(ed);
       if (!next) return;
@@ -822,7 +839,7 @@ export async function showPendingCreation({ route, onClose }) {
         changes,
       });
       await deleteDraft('work_orders', route.id);
-      announce('Saved. The work order will be created with these values.');
+      announce(t('Saved. The work order will be created with these values.'));
       rerender();
     },
   });
@@ -836,11 +853,11 @@ export async function showPendingCreation({ route, onClose }) {
       class: 'button button-secondary',
       onClick: async () => {
         const choice = await confirmDialog({
-          title: 'Discard this work order?',
-          message: 'It has not been created on the server. Its details will be lost.',
+          title: t('Discard this work order?'),
+          message: t('It has not been created on the server. Its details will be lost.'),
           actions: [
-            { value: 'discard', label: 'Discard', primary: true },
-            { value: 'cancel', label: 'Cancel' },
+            { value: 'discard', label: t('Discard'), primary: true },
+            { value: 'cancel', label: t('Cancel') },
           ],
         });
         if (choice !== 'discard') return;
@@ -848,11 +865,11 @@ export async function showPendingCreation({ route, onClose }) {
         await DB.remove(storesOf('work_orders').records, route.id);
         await deleteDraft('work_orders', route.id);
         editor = null;
-        announce('The work order was discarded.');
+        announce(t('The work order was discarded.'));
         navigate(listUrl('work_orders', route.page), { force: true });
       },
     },
-    'Discard this work order',
+    t('Discard this work order'),
   );
 
   const notices = [
@@ -860,15 +877,15 @@ export async function showPendingCreation({ route, onClose }) {
       ? notice(
           'info',
           h('span', { 'aria-hidden': 'true' }, '⟳ '),
-          'Waiting to be created on the server. It gets its number then.',
+          t('Waiting to be created on the server. It gets its number then.'),
         )
       : null,
     draft?.error
       ? notice(
           'danger',
-          h('strong', {}, 'The server refused this work order. '),
+          h('strong', {}, t('The server refused this work order. ')),
           draft.error.message,
-          ' Fix it below and retry, or discard it.',
+          t(' Fix it below and retry, or discard it.'),
         )
       : null,
   ].filter(Boolean);
@@ -877,7 +894,7 @@ export async function showPendingCreation({ route, onClose }) {
   renderDetail(detailContainer, {
     entity: 'work_orders',
     record,
-    title: 'New work order (pending creation)',
+    title: t('New work order (pending creation)'),
     onClose,
     notices,
     actions: [discardButton],
@@ -911,12 +928,12 @@ export async function leaveGuard(toUrl) {
   if (decision === 'leave') return true;
   if (decision === 'save') return saveRecord();
   const choice = await confirmDialog({
-    title: 'Unsaved changes',
-    message: 'You changed this record but did not save it.',
+    title: t('Unsaved changes'),
+    message: t('You changed this record but did not save it.'),
     actions: [
-      { value: 'save', label: 'Save', primary: true },
-      { value: 'discard', label: 'Discard' },
-      { value: 'cancel', label: 'Cancel' },
+      { value: 'save', label: t('Save'), primary: true },
+      { value: 'discard', label: t('Discard') },
+      { value: 'cancel', label: t('Cancel') },
     ],
   });
   if (choice === 'save') return saveRecord();

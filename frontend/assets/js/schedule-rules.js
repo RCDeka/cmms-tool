@@ -4,6 +4,7 @@
 // Week scheduler rules the interface needs before asking the server (D48, Phase 19): the split
 // proposal of a long job (BR-S1), hours left (BR-S2), durations and warnings as text. The
 // server stays the authority: it checks every block again.
+import { t } from './i18n.js';
 
 /** Hours rounded up to the next half hour (P4). Pure. */
 export function roundUpToHalfHour(hours) {
@@ -47,15 +48,16 @@ export function formatDuration(hours) {
   if (hours <= 0) return '0 h';
   const whole = Math.floor(hours + 1e-9);
   const minutes = Math.round((hours - whole) * 60);
-  if (!whole) return `${minutes} min`;
+  if (!whole) return t('{minutes} min', { minutes });
   return minutes ? `${whole} h ${String(minutes).padStart(2, '0')}` : `${whole} h`;
 }
 
 /** What a tray card says about its hours (BR-S2). Pure. */
 export function leftText(item) {
-  if (item.needed_hours === null) return 'No estimate yet';
-  if (item.hours_left > 0) return `${formatDuration(item.hours_left)} left`;
-  return 'Fully scheduled';
+  if (item.needed_hours === null) return t('No estimate yet');
+  if (item.hours_left > 0)
+    return t('{hours_left} left', { hours_left: formatDuration(item.hours_left) });
+  return t('Fully scheduled');
 }
 
 /**
@@ -64,12 +66,15 @@ export function leftText(item) {
  */
 export function dayWarningTexts(day, { canAddTravel = true } = {}) {
   const texts = {
-    OVER_CAPACITY: `Over capacity: ${formatDuration(day.total)} / ${formatDuration(day.capacity)}`,
-    ABSENT: 'Work on a day off',
-    WEEKEND_CLOSED: 'Weekend day not open',
+    OVER_CAPACITY: t('Over capacity: {total} / {capacity}', {
+      total: formatDuration(day.total),
+      capacity: formatDuration(day.capacity),
+    }),
+    ABSENT: t('Work on a day off'),
+    WEEKEND_CLOSED: t('Weekend day not open'),
     SEVERAL_SITES: canAddTravel
-      ? `${day.sites.length} sites: add travel time`
-      : `${day.sites.length} sites on this day`,
+      ? t('{length} sites: add travel time', { length: day.sites.length })
+      : t('{length} sites on this day', { length: day.sites.length }),
   };
   return day.warnings.map((w) => texts[w]);
 }

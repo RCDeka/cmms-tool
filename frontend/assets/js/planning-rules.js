@@ -5,6 +5,7 @@
 // by the year planner while a visit is dragged: which weeks are allowed (BR-P3) and the
 // figures as if it were dropped (BR-Y1 to BR-Y4, live impact). The server still decides;
 // test/planning-rules.test.js keeps both copies in step.
+import { t, tn } from './i18n.js';
 
 const DAY_MS = 86_400_000;
 const WEEK = /^(\d{4})-W(\d{2})$/;
@@ -76,34 +77,43 @@ export function allowedWeeks(plan, occurrence, currentWeek) {
   };
 }
 
-const weekWords = (week) => `week ${weekNumber(week)}`;
+const weekWords = (week) => t('week {weekNumber}', { weekNumber: weekNumber(week) });
 
 /** Why a visit cannot move to `week` (same messages as the server), or null. */
 export function moveBlocker(plan, occurrence, week, currentWeek) {
   if (occurrence.status === 'RELEASED') {
     return {
       rule: 'BR-P4',
-      message: 'This visit already has its work order: change the work order instead of the visit.',
+      message: t(
+        'This visit already has its work order: change the work order instead of the visit.',
+      ),
     };
   }
   if (occurrence.status === 'SKIPPED') {
-    return { rule: 'BR-P7', message: 'This visit is skipped: restore it first.' };
+    return { rule: 'BR-P7', message: t('This visit is skipped: restore it first.') };
   }
   if (week < currentWeek) {
-    return { rule: 'BR-P3', message: 'A visit cannot be moved into the past.' };
+    return { rule: 'BR-P3', message: t('A visit cannot be moved into the past.') };
   }
   const { from, to } = allowedWeeks(plan, occurrence, currentWeek);
   if (plan.type === 'REGULATORY' && week > occurrence.due_week) {
     return {
       rule: 'BR-P3',
-      message: `A regulatory visit can only move earlier: ${weekWords(occurrence.due_week)} is its deadline.`,
+      message: t('A regulatory visit can only move earlier: {weekWords} is its deadline.', {
+        weekWords: weekWords(occurrence.due_week),
+      }),
     };
   }
   if (week < from || week > to) {
     const w = weekWords(week);
     return {
       rule: 'BR-P3',
-      message: `${w[0].toUpperCase()}${w.slice(1)} is outside this visit's tolerance of ± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'} around ${weekWords(occurrence.due_week)}.`,
+      message: tn(
+        plan.tolerance_weeks,
+        "{week} is outside this visit's tolerance of ± {n} week around {due}.",
+        "{week} is outside this visit's tolerance of ± {n} weeks around {due}.",
+        { week: `${w[0].toUpperCase()}${w.slice(1)}`, due: weekWords(occurrence.due_week) },
+      ),
     };
   }
   return null;
@@ -112,7 +122,7 @@ export function moveBlocker(plan, occurrence, week, currentWeek) {
 /** Why the series cannot start its visits in `week`, or null (only the past is refused). */
 export function seriesBlocker(week, currentWeek) {
   return week < currentWeek
-    ? { rule: 'BR-P2', message: 'The series cannot be moved into the past.' }
+    ? { rule: 'BR-P2', message: t('The series cannot be moved into the past.') }
     : null;
 }
 

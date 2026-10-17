@@ -32,13 +32,14 @@ It started as an MVP (phases 0–7, brief in `docs/SPEC_MVP_CMMS.md`), the first
 - **Conflicts**: optimistic versioning, accessible conflict indicators, supervisor console with side-by-side arbitration (A / B / merge).
 - **Dashboard**: KPI tiles, work orders by category over 30 days, recent activity, "my work today". Supervisors and admins build their own named dashboards (D59): widgets ticked in the sidebar, arranged by drag and drop or the keyboard, filtered by period, sites and trades, each exported as CSV (figures or the records behind them) or as a JPG image; flow and backlog widgets show opened vs closed work, the backlog by age and priority and in weeks of work, and planned vs reactive work; compliance widgets show preventive and regulatory visits done on time, the week schedule kept and a contractor scorecard; responsiveness, asset and people widgets show response times by priority, staff request service, the assets with the most breakdowns, repeat failures, critical assets out of service, workload per person and estimate accuracy; every bar or cell opens the work orders it counts.
 - **Staff requests**: bank staff (role `STAFF`) submit requests ("I don't know" is accepted for the kind of problem and the urgency; the location is typed), follow their open requests with a plain-words status and next step, see all past requests, and exchange comments with the maintenance team, who handle each request as a work order. A supervisor or admin reviews each request first (dashboard tile "Staff requests to review"): approve it and assign a technician or supervisor, or reject it with a reason the requester sees.
+- **English or French**: each user picks the language of the interface with the flags of the top bar (or of the login page); the browser remembers it (D85). Content stays as people typed it.
 - **Roles**: `STAFF`, `TECHNICIAN`, `SUPERVISOR`, `ADMIN`.
 
 Out of scope: deleting work orders (they are cancelled), inventory, attachments (see the backlog in `docs/roadmap.md`). The AI assistant (D66) only finds work orders by search until a model provider is chosen. Preventive maintenance (a 52-week year planner and a weekly scheduler per technician) is specified in `docs/spec-preventive-maintenance.md`: Phases 17–20 are built.
 
 ## Screenshots
 
-Taken with the mock data (`npm run db:reset -- --with-conflicts`); `npm run docs:screenshots` takes them again (`docs/ui-guidelines.md` → Screenshots). **[The showcase](docs/showcase.md)** goes through every feature, role by role, in 44 pictures.
+Taken with the mock data (`npm run db:reset -- --with-conflicts`); `npm run docs:screenshots` takes them again (`docs/ui-guidelines.md` → Screenshots). **[The showcase](docs/showcase.md)** goes through every feature, role by role, in 45 pictures.
 
 **Dashboard** (supervisor): KPI tiles that open the matching list, charts, widgets ticked in the sidebar.
 

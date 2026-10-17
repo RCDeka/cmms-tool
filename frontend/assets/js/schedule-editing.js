@@ -6,6 +6,7 @@
 // length by half an hour. Pointer events, so mouse, pen and touch all work. A locked
 // appointment does not move (BR-S6): the drag is refused with the reason. The server decides
 // everything else; the keyboard path is the side panel (schedule-panel.js).
+import { t } from './i18n.js';
 
 /** Pixels the pointer must travel before a press becomes a drag (a shorter one is a click). */
 const DRAG_THRESHOLD = 6;
@@ -55,7 +56,9 @@ export function attachScheduleEditing(root, { data, onDrop, onResize, onRefuse, 
     return block?.locked_start ? block : null;
   };
   const lockedMessage = (block) =>
-    `This appointment is locked at ${block.locked_start}: unlock it before moving it.`;
+    t('This appointment is locked at {locked_start}: unlock it before moving it.', {
+      locked_start: block.locked_start,
+    });
 
   function setTarget(cell) {
     if (active.cell === cell) return;
@@ -161,7 +164,7 @@ export function attachScheduleEditing(root, { data, onDrop, onResize, onRefuse, 
     if (active && event.key === 'Escape') {
       event.preventDefault();
       end();
-      announce('Move cancelled.');
+      announce(t('Move cancelled.'));
       return;
     }
     const source = event.target.closest?.('.block[data-block]');
@@ -179,8 +182,8 @@ export function attachScheduleEditing(root, { data, onDrop, onResize, onRefuse, 
     if (hours < STEP || hours > max) {
       announce(
         hours < STEP
-          ? 'Half an hour is the shortest block: remove it from its panel instead.'
-          : `A block lasts ${max} h at most.`,
+          ? t('Half an hour is the shortest block: remove it from its panel instead.')
+          : t('A block lasts {max} h at most.', { max }),
       );
       return;
     }

@@ -6,14 +6,15 @@
 import { h, replaceChildren } from './dom.js';
 import { badge } from './format.js';
 import { applyToPage } from './network.js';
+import { t } from './i18n.js';
 
 export const FIND_TEXT_MAX_LENGTH = 2000;
 export const STRONG_MATCH = 0.7;
 
 const NOTICES = {
-  NOT_CONFIGURED: 'Search results: the assistant is not set up yet.',
-  UNAVAILABLE: 'Search results: the assistant is not available right now.',
-  UNUSABLE: 'Search results: the assistant’s answer could not be used.',
+  NOT_CONFIGURED: t('Search results: the assistant is not set up yet.'),
+  UNAVAILABLE: t('Search results: the assistant is not available right now.'),
+  UNUSABLE: t('Search results: the assistant’s answer could not be used.'),
 };
 
 /** Text typed but not used yet: offered again next time (as for suggestions). */
@@ -23,9 +24,10 @@ let keptText = '';
 export function checkFindText(text) {
   const trimmed = text.trim();
   if ((trimmed.match(/[\p{L}\p{N}]+/gu) ?? []).length < 3) {
-    return 'Describe the job in at least 3 words.';
+    return t('Describe the job in at least 3 words.');
   }
-  if (trimmed.length > FIND_TEXT_MAX_LENGTH) return `At most ${FIND_TEXT_MAX_LENGTH} characters.`;
+  if (trimmed.length > FIND_TEXT_MAX_LENGTH)
+    return t('At most {FIND_TEXT_MAX_LENGTH} characters.', { FIND_TEXT_MAX_LENGTH });
   return '';
 }
 
@@ -44,12 +46,12 @@ export function findPayload(text, context) {
 /** "Strong" or "Possible" for a score of the model, null for a search result. Pure. */
 export function matchLevel(score) {
   if (score === null || score === undefined) return null;
-  return score >= STRONG_MATCH ? 'Strong' : 'Possible';
+  return score >= STRONG_MATCH ? t('Strong') : t('Possible');
 }
 
 /** Line above the results saying where they come from, or '' for the assistant's. Pure. */
 export function resultsNotice({ mode, notice }) {
-  return mode === 'SEARCH' ? (NOTICES[notice] ?? 'Search results.') : '';
+  return mode === 'SEARCH' ? (NOTICES[notice] ?? t('Search results.')) : '';
 }
 
 function resultItem({ work_order: wo, score, reason }, onOpen) {
@@ -87,10 +89,10 @@ function resultItem({ work_order: wo, score, reason }, onOpen) {
       {
         type: 'button',
         class: 'button button-secondary',
-        'aria-label': `Open ${wo.number}`,
+        'aria-label': t('Open {number}', { number: wo.number }),
         onClick: () => onOpen(wo),
       },
-      'Open',
+      t('Open'),
     ),
   );
 }
@@ -111,12 +113,15 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
     rows: '4',
     maxlength: String(FIND_TEXT_MAX_LENGTH),
     'aria-describedby': 'find-hint find-count find-error',
-    placeholder: 'Example: replaced the burnt contactor coil of pump 2, motor tested, 1 h 30.',
+    placeholder: t('Example: replaced the burnt contactor coil of pump 2, motor tested, 1 h 30.'),
   });
   textarea.value = keptText;
   const count = h('p', { id: 'find-count', class: 'field-hint', 'aria-live': 'off' });
   const showCount = () => {
-    count.textContent = `${textarea.value.length} / ${FIND_TEXT_MAX_LENGTH} characters`;
+    count.textContent = t('{length} / {FIND_TEXT_MAX_LENGTH} characters', {
+      length: textarea.value.length,
+      FIND_TEXT_MAX_LENGTH,
+    });
   };
   showCount();
   const error = h('p', { id: 'find-error', class: 'field-error', role: 'alert' });
@@ -124,15 +129,15 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
   const findButton = h(
     'button',
     { type: 'submit', class: 'button button-primary ai-only' },
-    'Find',
+    t('Find'),
   );
 
   const contextRow = h('p', { class: 'find-context' });
   const showContext = () => {
     const label = context?.asset
-      ? `Asset: ${context.asset.code} ${context.asset.name}`
+      ? t('Asset: {code} {name}', { code: context.asset.code, name: context.asset.name })
       : context?.site
-        ? `Site: ${context.site}`
+        ? t('Site: {site}', { site: context.site })
         : null;
     contextRow.hidden = !label;
     if (!label) return replaceChildren(contextRow);
@@ -145,14 +150,16 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
         {
           type: 'button',
           class: 'button button-secondary',
-          'aria-label': `Remove the ${context.asset ? 'asset' : 'site'}: search everywhere`,
+          'aria-label': context.asset
+            ? t('Remove the asset: search everywhere')
+            : t('Remove the site: search everywhere'),
           onClick: () => {
             context = null;
             showContext();
             textarea.focus();
           },
         },
-        'Remove',
+        t('Remove'),
       ),
     );
   };
@@ -188,7 +195,7 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
         onCreate(text, context);
       },
     },
-    'New work order',
+    t('New work order'),
   );
 
   const showResults = (data) => {
@@ -199,11 +206,11 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
       data.candidates.length
         ? h(
             'ol',
-            { class: 'find-result-list', 'aria-label': 'Matching work orders' },
+            { class: 'find-result-list', 'aria-label': t('Matching work orders') },
             data.candidates.map((c) => resultItem(c, open)),
           )
-        : h('p', { class: 'empty-state' }, 'No open work order matches this job.'),
-      h('p', { class: 'find-none' }, 'None of these? ', createButton),
+        : h('p', { class: 'empty-state' }, t('No open work order matches this job.')),
+      h('p', { class: 'find-none' }, t('None of these? '), createButton),
     );
   };
 
@@ -219,37 +226,39 @@ export function openFindDialog(dialog, { context: initialContext, find, onOpen, 
         textarea.toggleAttribute('aria-invalid', Boolean(problem));
         if (problem) return textarea.focus();
         findButton.disabled = true;
-        findButton.textContent = 'Finding…';
+        findButton.textContent = t('Finding…');
         try {
           showResults(await find(findPayload(textarea.value, context)));
         } catch (err) {
           replaceChildren(results);
           error.textContent =
             err.status === 0
-              ? 'The server cannot be reached: your text is kept, try again once connected.'
+              ? t('The server cannot be reached: your text is kept, try again once connected.')
               : err.message;
         } finally {
-          findButton.textContent = 'Find';
+          findButton.textContent = t('Find');
           findButton.disabled = false;
           applyToPage(dialog);
         }
       },
     },
-    h('h2', { id: 'find-title', class: 'dialog-title' }, 'Find a work order'),
+    h('h2', { id: 'find-title', class: 'dialog-title' }, t('Find a work order')),
     h(
       'p',
       { id: 'find-hint', class: 'muted' },
-      'Describe the job you did or the fault you found: Tacto looks for the open work order it belongs to.',
+      t(
+        'Describe the job you did or the fault you found: Tacto looks for the open work order it belongs to.',
+      ),
     ),
     contextRow,
-    h('label', { for: 'find-text', class: 'field-label' }, 'What did you do?'),
+    h('label', { for: 'find-text', class: 'field-label' }, t('What did you do?')),
     textarea,
     count,
     error,
     h(
       'div',
       { class: 'dialog-actions' },
-      h('button', { type: 'button', class: 'button button-secondary', onClick: close }, 'Close'),
+      h('button', { type: 'button', class: 'button button-secondary', onClick: close }, t('Close')),
       findButton,
     ),
     results,

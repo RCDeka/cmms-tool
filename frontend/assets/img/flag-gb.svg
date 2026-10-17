@@ -1,0 +1,13 @@
+<!-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka) -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" width="30" height="15">
+  <clipPath id="frame"><rect width="60" height="30"/></clipPath>
+  <clipPath id="half"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
+  <g clip-path="url(#frame)">
+    <rect width="60" height="30" fill="#012169"/>
+    <path d="M0 0l60 30m0-30L0 30" stroke="#ffffff" stroke-width="6"/>
+    <path d="M0 0l60 30m0-30L0 30" stroke="#c8102e" stroke-width="4" clip-path="url(#half)"/>
+    <path d="M30 0v30M0 15h60" stroke="#ffffff" stroke-width="10"/>
+    <path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/>
+  </g>
+</svg>

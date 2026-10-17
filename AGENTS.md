@@ -20,14 +20,14 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, i18n (the UI is English only), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant is specified as a draft (D66, `docs/spec-ai-assistant.md`): finding the work order is implemented without a real model yet (Phase 26, D67); the report formatting (Phase 25) and the first provider wait for the provider decision. See the backlog in `docs/roadmap.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, interface languages other than English and French (D85), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Preventive maintenance (D48, `docs/spec-preventive-maintenance.md`) and custom dashboards (D59, `docs/spec-dashboards.md`) are implemented (Phases 17–24). The AI assistant is specified as a draft (D66, `docs/spec-ai-assistant.md`): finding the work order is implemented without a real model yet (Phase 26, D67); the report formatting (Phase 25) and the first provider wait for the provider decision. See the backlog in `docs/roadmap.md`.
 
 ## Code conventions
 
 ### General
 - JavaScript ES modules everywhere (`"type": "module"`), `const`/`let`, `async`/`await`. JSDoc types on exported functions.
 - ESLint + Prettier are mandatory; code must pass `npm run lint` in each package before commit.
-- **Language (D16)**: everything in English: code, comments, table/column/JSON names, URLs, UI text, docs and commits. Enumerated values are stored as `UPPER_SNAKE_CASE` codes; the UI shows labels from `labels.js`. The French terms of the original brief map to English through the glossary in `docs/decisions.md`.
+- **Language (D16)**: everything in English: code, comments, table/column/JSON names, URLs, UI text, docs and commits. The interface can be shown in French (D85): UI text is written in English inside `t()`, `tn()` or `tx()` (`i18n.js`) and its French text goes in `i18n-fr.js`; content typed by users is never translated. Enumerated values are stored as `UPPER_SNAKE_CASE` codes; the UI shows labels from `labels.js`. The French terms of the original brief map to English through the glossary in `docs/decisions.md`.
 - Small, pure functions for business rules; thin routes.
 
 ### Naming
@@ -49,6 +49,7 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 - Module layout as in `docs/architecture.md`. No global mutable state outside the module that owns it (`auth.js` owns the user, `router.js` the current route, etc.).
 - All HTTP goes through `api.js`; all IndexedDB access through `db.js`.
 - **Never insert unescaped data into HTML** (D12): use `textContent`, or `escapeHtml` from `dom.js` inside template strings.
+- **Every interface text goes through `t()`, `tn()` or `tx()`** with a constant English key and `{name}` placeholders (D85); write whole sentences (no English word order built from pieces), and add the French text to `i18n-fr.js`. `test/i18n.test.js` fails on a missing or unused entry. Never compare a server message to English text: `api.js` translates it.
 - No inline scripts, inline styles or inline event handlers (CSP).
 - Third-party libraries are vendored in `assets/vendor/` with their version in the file name or a header comment (D17). No CDN.
 - Hide actions the user cannot perform, but never rely on the UI for security.

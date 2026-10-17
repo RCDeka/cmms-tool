@@ -3,6 +3,7 @@
 
 // DOM helpers. Data is always inserted as text (D12): use h() or textContent, and
 // escapeHtml() if a template string is ever unavoidable.
+import { t } from './i18n.js';
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -80,7 +81,7 @@ export function pageMessage() {
       {
         type: 'button',
         class: 'icon-button planner-message-close',
-        'aria-label': 'Dismiss the message',
+        'aria-label': t('Dismiss the message'),
         onClick: () => say(''),
       },
       h('span', { 'aria-hidden': 'true' }, '×'),

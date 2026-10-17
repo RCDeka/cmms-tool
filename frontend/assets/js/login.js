@@ -5,14 +5,16 @@
 import { login } from './auth.js';
 import { APP_NAME } from './config.js';
 import { h, replaceChildren } from './dom.js';
+import { languageSwitch } from './layout.js';
+import { t } from './i18n.js';
 
 /** Message for a failed login, by status. */
 export function loginErrorMessage(error) {
-  if (error.status === 401) return 'Wrong username or password.';
-  if (error.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+  if (error.status === 401) return t('Wrong username or password.');
+  if (error.status === 429) return t('Too many attempts. Wait a few minutes and try again.');
   if (error.status === 0)
-    return 'The server cannot be reached. Check your connection and try again.';
-  return 'Login failed. Try again later.';
+    return t('The server cannot be reached. Check your connection and try again.');
+  return t('Login failed. Try again later.');
 }
 
 /**
@@ -36,7 +38,7 @@ export function renderLogin(container, { onLoggedIn }) {
     autocomplete: 'current-password',
     required: true,
   });
-  const submit = h('button', { type: 'submit', class: 'button button-primary' }, 'Log in');
+  const submit = h('button', { type: 'submit', class: 'button button-primary' }, t('Log in'));
 
   const form = h(
     'form',
@@ -48,12 +50,12 @@ export function renderLogin(container, { onLoggedIn }) {
         event.preventDefault();
         error.textContent = '';
         if (!username.value.trim() || !password.value) {
-          error.textContent = 'Enter your username and password.';
+          error.textContent = t('Enter your username and password.');
           (username.value.trim() ? password : username).focus();
           return;
         }
         submit.disabled = true;
-        submit.textContent = 'Logging in…';
+        submit.textContent = t('Logging in…');
         try {
           onLoggedIn(await login(username.value.trim(), password.value));
         } catch (err) {
@@ -62,12 +64,22 @@ export function renderLogin(container, { onLoggedIn }) {
           password.focus();
         } finally {
           submit.disabled = false;
-          submit.textContent = 'Log in';
+          submit.textContent = t('Log in');
         }
       },
     },
-    h('div', { class: 'form-field' }, h('label', { for: 'login-username' }, 'Username'), username),
-    h('div', { class: 'form-field' }, h('label', { for: 'login-password' }, 'Password'), password),
+    h(
+      'div',
+      { class: 'form-field' },
+      h('label', { for: 'login-username' }, t('Username')),
+      username,
+    ),
+    h(
+      'div',
+      { class: 'form-field' },
+      h('label', { for: 'login-password' }, t('Password')),
+      password,
+    ),
     error,
     submit,
   );
@@ -77,15 +89,20 @@ export function renderLogin(container, { onLoggedIn }) {
     h(
       'main',
       { class: 'login-card' },
-      h('img', {
-        src: '/assets/img/logo.svg',
-        alt: '',
-        width: '48',
-        height: '48',
-        class: 'login-logo',
-      }),
+      h(
+        'div',
+        { class: 'login-head' },
+        h('img', {
+          src: '/assets/img/logo.svg',
+          alt: '',
+          width: '48',
+          height: '48',
+          class: 'login-logo',
+        }),
+        languageSwitch(),
+      ),
       h('h1', { class: 'login-title' }, APP_NAME),
-      h('p', { class: 'login-subtitle' }, 'Maintenance management'),
+      h('p', { class: 'login-subtitle' }, t('Maintenance management')),
       form,
     ),
   );

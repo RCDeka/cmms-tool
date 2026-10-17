@@ -24,6 +24,7 @@ import {
 } from './schedule-panel.js';
 import { formatDuration, hoursToSchedule, reorder } from './schedule-rules.js';
 import { currentRoute, navigate } from './router.js';
+import { t, tn } from './i18n.js';
 
 const tableContainer = document.getElementById('table-container');
 const detailContainer = document.getElementById('detail-container');
@@ -54,8 +55,10 @@ const scheduleHistory = createScheduleHistory(apiFetch);
 const todayDate = () => new Intl.DateTimeFormat('en-CA').format(new Date());
 
 /** Error text of a scheduler write, offline included. */
-const writeError = (err, what = 'nothing was changed') =>
-  err.status === 0 ? `You are offline: ${what}.` : `Not changed: ${err.message}`;
+const writeError = (err) =>
+  err.status === 0
+    ? t('You are offline: nothing was changed.')
+    : t('Not changed: {message}', { message: err.message });
 
 /**
  * Sends one change of the scheduler, then draws the week again (closing the panel when
@@ -91,7 +94,7 @@ async function replaySchedule(mode) {
   try {
     change = await scheduleHistory[mode]();
   } catch (err) {
-    const message = `${writeError(err)} The change could not be ${mode === 'undo' ? 'undone' : 'redone'}.`;
+    const message = `${writeError(err)} ${mode === 'undo' ? t('The change could not be undone.') : t('The change could not be redone.')}`;
     announce(message);
     scheduleCache = null;
     await app.render(currentRoute()); // show what is there now
@@ -99,7 +102,7 @@ async function replaySchedule(mode) {
     return;
   }
   if (!change) return;
-  const text = `${mode === 'undo' ? 'Undone' : 'Redone'}: ${change.text}.`;
+  const text = `${t('{label}: {value}', { label: mode === 'undo' ? t('Undone') : t('Redone'), value: change.text })}.`;
   announce(text);
   scheduleCache = null;
   await app.render(currentRoute());
@@ -128,11 +131,11 @@ const personNameOf = (data, id) => {
 };
 
 export async function showSchedule(route, isCurrent) {
-  app.leaveRecordViews('schedule', 'Week scheduler');
+  app.leaveRecordViews('schedule', t('Week scheduler'));
   const week = route.week;
   const cached = scheduleCache && scheduleCache.week === week ? scheduleCache.data : null;
   if (!tableContainer.querySelector('.scheduler')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the week…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the week…')));
   }
   let data;
   try {
@@ -141,8 +144,9 @@ export async function showSchedule(route, isCurrent) {
     if (!isCurrent()) return;
     app.showConsoleError(err, () => app.render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The week scheduler needs a connection to the server. Technicians find their own week, saved on the device, under My week.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The week scheduler needs a connection to the server. Technicians find their own week, saved on the device, under My week.',
+      );
     }
     return;
   }
@@ -177,13 +181,22 @@ export async function showSchedule(route, isCurrent) {
           before: { saturday_open: data.saturday_open, sunday_open: data.sunday_open },
           after: { saturday_open: data.saturday_open, sunday_open: data.sunday_open, [key]: open },
         },
-        `${key === 'saturday_open' ? 'Saturday' : 'Sunday'} ${open ? 'opened' : 'closed'} for ${formatWeek(data.week)}.`,
+        t(
+          key === 'saturday_open'
+            ? open
+              ? 'Saturday opened for {week}.'
+              : 'Saturday closed for {week}.'
+            : open
+              ? 'Sunday opened for {week}.'
+              : 'Sunday closed for {week}.',
+          { week: formatWeek(data.week) },
+        ),
       ),
   });
   const grid = tableContainer.querySelector('.schedule-scroll');
   if (scroll && grid) Object.assign(grid, { scrollLeft: scroll.left, scrollTop: scroll.top });
 
-  const trayItem = (id) => data.tray.find((t) => t.id === id);
+  const trayItem = (id) => data.tray.find((item) => item.id === id);
   const blockById = (id) => data.people.flatMap((p) => p.blocks).find((b) => b.id === id);
   const max = data.settings.max_block_hours;
   detachScheduleEditing = canEdit
@@ -219,7 +232,12 @@ export async function showSchedule(route, isCurrent) {
                   },
                 ],
               },
-              `${item.number}: ${formatDuration(hours)} for ${who} on ${when}.`,
+              t('{number}: {hours} for {who} on {when}.', {
+                number: item.number,
+                hours: formatDuration(hours),
+                who,
+                when,
+              }),
             );
           }
           const block = blockById(drop.id);
@@ -231,7 +249,7 @@ export async function showSchedule(route, isCurrent) {
               before: fieldsOf(block, moved),
               after: moved,
             },
-            `Block moved to ${who}, ${when}.`,
+            t('Block moved to {who}, {when}.', { who, when }),
           );
         },
         onResize: (id, hours) => {
@@ -243,7 +261,7 @@ export async function showSchedule(route, isCurrent) {
               before: { hours: block.hours },
               after: { hours },
             },
-            `Block now ${formatDuration(hours)}.`,
+            t('Block now {hours}.', { hours: formatDuration(hours) }),
           );
         },
         onRefuse: (message) => {
@@ -269,13 +287,17 @@ export async function showSchedule(route, isCurrent) {
         { class: 'detail-header' },
         h('h2', { class: 'detail-title', tabindex: '-1' }, text),
       ),
-      h('p', {}, h('a', { href: scheduleUrl(shownWeek), 'data-link': true }, 'Back to the week')),
+      h(
+        'p',
+        {},
+        h('a', { href: scheduleUrl(shownWeek), 'data-link': true }, t('Back to the week')),
+      ),
     );
     detailContainer.querySelector('.detail-title')?.focus();
   };
   if (panel.type === 'item') {
     const item = trayItem(panel.id);
-    if (!item) return notFound('This work order is not in this week’s tray');
+    if (!item) return notFound(t('This work order is not in this week’s tray'));
     renderItemPanel(detailContainer, {
       item,
       data,
@@ -284,13 +306,13 @@ export async function showSchedule(route, isCurrent) {
       canEdit,
       onClose: close,
       onSubmit: async ({ blocks, estimate }, form) => {
-        if (!blocks.length) return showErrors(form, {}, 'Add at least one block.');
+        if (!blocks.length) return showErrors(form, {}, t('Add at least one block.'));
         if (estimate !== null) {
           if (!(estimate > 0) || estimate * 2 !== Math.round(estimate * 2)) {
             return showErrors(
               form,
-              { estimate: 'Hours in steps of half an hour' },
-              'Check the highlighted fields.',
+              { estimate: t('Hours in steps of half an hour') },
+              t('Check the highlighted fields.'),
             );
           }
           // BR-S2: the estimate first, on the work order itself, at its current version.
@@ -302,7 +324,10 @@ export async function showSchedule(route, isCurrent) {
                 body: { estimated_hours: estimate, version: wo.version },
               });
             },
-            `${item.number}: estimate set to ${formatDuration(estimate)}.`,
+            t('{number}: estimate set to {estimate}.', {
+              number: item.number,
+              estimate: formatDuration(estimate),
+            }),
             { form },
           );
           if (error) return;
@@ -310,7 +335,12 @@ export async function showSchedule(route, isCurrent) {
         const total = blocks.reduce((s, b) => s + b.hours, 0);
         return scheduleChange(
           { kind: 'create', blocks },
-          `${item.number}: ${formatDuration(total)} scheduled in ${blocks.length} block${blocks.length === 1 ? '' : 's'}.`,
+          tn(
+            blocks.length,
+            '{number}: {hours} scheduled in {n} block.',
+            '{number}: {hours} scheduled in {n} blocks.',
+            { number: item.number, hours: formatDuration(total) },
+          ),
           { form, close: true },
         );
       },
@@ -320,7 +350,7 @@ export async function showSchedule(route, isCurrent) {
   }
   if (panel.type === 'block') {
     const block = blockById(panel.id);
-    if (!block) return notFound('This block is not in this week');
+    if (!block) return notFound(t('This block is not in this week'));
     const person = data.people.find((p) => p.id === block.technician_id);
     renderBlockPanel(detailContainer, {
       block,
@@ -331,7 +361,7 @@ export async function showSchedule(route, isCurrent) {
       onClose: close,
       onUpdate: (changes, form) => {
         if (!Object.keys(changes).length)
-          return showErrors(form, {}, 'Nothing to save: no value was changed.');
+          return showErrors(form, {}, t('Nothing to save: no value was changed.'));
         return scheduleChange(
           {
             kind: 'update',
@@ -339,23 +369,23 @@ export async function showSchedule(route, isCurrent) {
             before: fieldsOf(block, changes),
             after: changes,
           },
-          'Block saved.',
+          t('Block saved.'),
           { form },
         );
       },
       onDelete: async () => {
         const choice = await confirmDialog({
-          title: 'Remove this block?',
-          message: 'Its hours go back to the tray.',
+          title: t('Remove this block?'),
+          message: t('Its hours go back to the tray.'),
           actions: [
-            { value: 'remove', label: 'Remove', primary: true },
-            { value: 'cancel', label: 'Cancel' },
+            { value: 'remove', label: t('block|Remove'), primary: true },
+            { value: 'cancel', label: t('Cancel') },
           ],
         });
         if (choice !== 'remove') return;
         scheduleChange(
           { kind: 'delete', ref: scheduleHistory.refOf(block), block: blockBody(block) },
-          'Block removed: its hours are back in the tray.',
+          t('Block removed: its hours are back in the tray.'),
           { close: true },
         );
       },
@@ -367,7 +397,7 @@ export async function showSchedule(route, isCurrent) {
             from: block.locked_start,
             to: start,
           },
-          start ? `Appointment locked at ${start}.` : 'Appointment unlocked.',
+          start ? t('Appointment locked at {start}.', { start }) : t('Appointment unlocked.'),
           { form },
         ),
     });
@@ -378,8 +408,8 @@ export async function showSchedule(route, isCurrent) {
   if (!person || !person.days.some((d) => d.day === panel.day) || !canEdit) {
     return notFound(
       canEdit
-        ? 'This day is not in this week'
-        : 'Only supervisors and administrators change the week',
+        ? t('This day is not in this week')
+        : t('Only supervisors and administrators change the week'),
     );
   }
   if (panel.type === 'time') {
@@ -391,7 +421,12 @@ export async function showSchedule(route, isCurrent) {
       onSubmit: (block, form) =>
         scheduleChange(
           { kind: 'create', blocks: [block] },
-          `${valueLabel('allocation_kind', block.kind)}: ${formatDuration(block.hours)} for ${personNameOf(data, block.technician_id)} on ${longDay(block.day)}.`,
+          t('{kind}: {hours} for {person} on {longDay}.', {
+            kind: valueLabel('allocation_kind', block.kind),
+            hours: formatDuration(block.hours),
+            person: personNameOf(data, block.technician_id),
+            longDay: longDay(block.day),
+          }),
           { form, close: true },
         ),
     });
@@ -411,8 +446,15 @@ export async function showSchedule(route, isCurrent) {
             after: input.hours === null ? null : input,
           },
           input.hours === null
-            ? `${personNameOf(data, person.id)}: usual hours on ${longDay(panel.day)}.`
-            : `${personNameOf(data, person.id)}: ${formatDuration(input.hours)} on ${longDay(panel.day)}.`,
+            ? t('{person}: usual hours on {longDay}.', {
+                person: personNameOf(data, person.id),
+                longDay: longDay(panel.day),
+              })
+            : t('{person}: {hours} on {longDay}.', {
+                person: personNameOf(data, person.id),
+                hours: formatDuration(input.hours),
+                longDay: longDay(panel.day),
+              }),
           { form, close: true },
         ),
     });
@@ -426,14 +468,14 @@ export async function showMyWeek(route, isCurrent) {
   if (!hasRole('TECHNICIAN', 'SUPERVISOR')) {
     return app.showPlaceholder(
       null,
-      'My week',
-      'My week is for technicians and supervisors: administrators are not counted as capacity.',
+      t('My week'),
+      t('My week is for technicians and supervisors: administrators are not counted as capacity.'),
       true,
     );
   }
-  app.leaveRecordViews('my_week', 'My week');
+  app.leaveRecordViews('my_week', t('My week'));
   if (!tableContainer.querySelector('.my-week')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your week…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading your week…')));
   }
   let data;
   let savedOffline = false;
@@ -446,8 +488,9 @@ export async function showMyWeek(route, isCurrent) {
     if (!data) {
       app.showConsoleError(err, () => app.render(currentRoute()));
       if (err.status === 0) {
-        tableContainer.querySelector('.error-state p').textContent =
-          'This week has not been saved on this device yet: open My week once with a connection.';
+        tableContainer.querySelector('.error-state p').textContent = t(
+          'This week has not been saved on this device yet: open My week once with a connection.',
+        );
       }
       return;
     }
@@ -491,7 +534,7 @@ export async function showMyWeek(route, isCurrent) {
             method: 'PUT',
             body: { technician_id: data.user.id, day: day.day, ids },
           }),
-        direction < 0 ? 'Moved up.' : 'Moved down.',
+        direction < 0 ? t('Moved up.') : t('Moved down.'),
         block.id,
       );
     },
@@ -502,7 +545,7 @@ export async function showMyWeek(route, isCurrent) {
             method: 'PUT',
             body: { locked_start: start, version: block.version },
           }),
-        start ? `Locked at ${start}.` : 'Time unlocked.',
+        start ? t('Locked at {start}.', { start }) : t('Time unlocked.'),
         block.id,
       ),
   });

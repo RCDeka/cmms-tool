@@ -55,7 +55,10 @@ frontend/
                               schedule-history.js, panels, the week saved on the device
     config.js                 APP_NAME, API base, timeout, page size
     entities.js               entity config map (D18), table columns, detail fields
-    enums.js, labels.js       enum codes, UI labels for fields and values
+    enums.js, labels.js       enum codes, UI labels for fields and values (French labels by enum and code)
+    i18n.js                   interface language (D85): the choice kept on the device, t() / tn() / tx(),
+                              server messages, the static texts of index.html
+    i18n-fr.js                French texts of the interface by module, enum labels, server messages
     api.js                    fetch wrapper: base URL, token, timeout, error mapping
     session.js                token and user in localStorage, token expiry
     auth.js                   login/logout, current user, roles
@@ -352,6 +355,13 @@ sequenceDiagram
 - Buttons that need AI carry the `.ai-only` class and are disabled offline (see Network state).
 - **Find a work order** (Phase 26, D67): a top bar button on every page (technicians, supervisors, admins) opens `find-work-order.js`'s dialog. It starts from the asset of the record open in the detail panel (the asset itself, or a work order's asset), else from the one site the list is filtered on, else everywhere; the user can remove that context. `POST /api/assistant/find-work-order` is called with a longer timeout (`ASSISTANT_TIMEOUT_MS`, 25 s) than other calls. **Open** goes to the work order; **New work order** opens the creation form (with the asset) and puts the text in the description through `setCreationText` (`editor.js`), as if typed (the form is dirty and drafted). The text not used yet is kept for the next opening. Without a model, the dialog shows the server's search results with a notice.
 - The detail panel keeps a reserved "AI assistant" area for the report formatting (Phase 25), shown only when `assistant` is true in the reference data.
+
+## Interface language (D85)
+
+- The choice is kept in `localStorage` (`tacto.language`: `en` or `fr`), next to the session; logging out keeps it. Without one, the browser's first language offered is used, else English.
+- `i18n.js` reads it once, before any other module builds its labels, so module-level labels (entity fields, widget names) are translated too. A flag click saves the choice and reloads the page (after the unsaved-changes question); the service worker serves the same shell for both languages.
+- `index.html` keeps its English texts: `translateStatic()` replaces those marked `data-i18n` (text) and `data-i18n-attr` (`aria-label`, `title`) and sets `<html lang>`.
+- The API answers in English. `api.js` translates the `message` and `details.fields` of an error body before any caller sees them (`serverText()`); code that tests a field message compares it with `serverText('…')`.
 
 ## Security
 

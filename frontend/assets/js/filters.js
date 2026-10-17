@@ -9,6 +9,7 @@ import { ENUMS } from './enums.js';
 import { valueLabel } from './labels.js';
 import { debounce } from './save-modes.js';
 import { drillLabel } from './widgets.js';
+import { t, tn } from './i18n.js';
 
 const SEARCH_DELAY_MS = 350;
 /** "Not finished": the non-terminal statuses, sent as one comma-separated value (dashboard links). */
@@ -19,27 +20,27 @@ export const FILTERS = {
   assets: {
     q: { kind: 'search' },
     site: { kind: 'site' },
-    category: { kind: 'enum', enum: 'category', label: 'Category' },
-    status: { kind: 'enum', enum: 'asset_status', label: 'Status' },
-    criticality: { kind: 'enum', enum: 'criticality', label: 'Criticality' },
+    category: { kind: 'enum', enum: 'category', label: t('Category') },
+    status: { kind: 'enum', enum: 'asset_status', label: t('Status') },
+    criticality: { kind: 'enum', enum: 'criticality', label: t('Criticality') },
     // The assets behind a dashboard widget segment (D59, K9), and its period in days.
     drill: { kind: 'drill' },
     period: { kind: 'period' },
   },
   work_orders: {
     q: { kind: 'search' },
-    status: { kind: 'status', label: 'Status' },
-    priority: { kind: 'enum', enum: 'work_order_priority', label: 'Priority' },
-    type: { kind: 'enum', enum: 'work_order_type', label: 'Type' },
-    category: { kind: 'enum', enum: 'category', label: 'Category' },
+    status: { kind: 'status', label: t('Status') },
+    priority: { kind: 'enum', enum: 'work_order_priority', label: t('Priority') },
+    type: { kind: 'enum', enum: 'work_order_type', label: t('Type') },
+    category: { kind: 'enum', enum: 'category', label: t('Category') },
     site: { kind: 'site' },
-    assignee_id: { kind: 'user', label: 'Assignee' },
-    mine: { kind: 'flag', label: 'Assigned to me' },
-    overdue: { kind: 'flag', label: 'Overdue' },
+    assignee_id: { kind: 'user', label: t('Assignee') },
+    mine: { kind: 'flag', label: t('Assigned to me') },
+    overdue: { kind: 'flag', label: t('Overdue') },
     // Staff requests waiting for a supervisor (D47); shown to supervisors and admins.
-    to_review: { kind: 'flag', label: 'Requests to review', supervisors: true },
+    to_review: { kind: 'flag', label: t('Requests to review'), supervisors: true },
     // Staff requests whose requester wrote last (D80).
-    awaiting_reply: { kind: 'flag', label: 'Waiting for a reply' },
+    awaiting_reply: { kind: 'flag', label: t('Waiting for a reply') },
     // The records behind a dashboard widget segment (D59, K9), and its period in days.
     drill: { kind: 'drill' },
     period: { kind: 'period' },
@@ -258,10 +259,10 @@ export function multiSelect({ id, labelId, options, separator = ',', onChange, s
     summary.textContent =
       text?.(value) ??
       (picked.length === 0
-        ? 'Any'
+        ? t('Any')
         : picked.length === 1
           ? picked[0].text
-          : `${picked.length} selected`);
+          : tn(picked.length, 'one|{n} selected', '{n} selected'));
   };
   el.addEventListener('change', refresh);
   el.addEventListener('keydown', (event) => {
@@ -329,7 +330,7 @@ export function renderFilterBar({
       options,
       separator,
       onChange: changed,
-      summary: (value) => (name === 'status' && value === NOT_FINISHED ? 'Not finished' : null),
+      summary: (value) => (name === 'status' && value === NOT_FINISHED ? t('Not finished') : null),
     });
     controls.set(name, el);
     return h(
@@ -351,13 +352,18 @@ export function renderFilterBar({
         autocomplete: 'off',
         placeholder:
           entity === 'assets'
-            ? 'Code, name, brand, serial number…'
-            : 'Number, title, description, report…',
+            ? t('Code, name, brand, serial number…')
+            : t('Number, title, description, report…'),
         onInput: typed,
       });
       controls.set(name, el);
       parts.push(
-        h('div', { class: 'filter-field filter-search' }, h('label', { for: el.id }, 'Search'), el),
+        h(
+          'div',
+          { class: 'filter-field filter-search' },
+          h('label', { for: el.id }, t('Search')),
+          el,
+        ),
       );
     } else if (def.kind === 'enum') {
       parts.push(
@@ -379,7 +385,7 @@ export function renderFilterBar({
       parts.push(
         select(
           name,
-          'Site',
+          t('Site'),
           (refs.sites ?? []).map((s) => [s, s]),
           '|',
         ),
@@ -409,21 +415,21 @@ export function renderFilterBar({
         onChange({ ...defaults }, { typing: false });
       },
     },
-    'Clear filters',
+    t('Clear filters'),
   );
 
   const drillText = h('strong', {});
   const drillChip = h(
     'div',
-    { class: 'filter-drill', role: 'group', 'aria-label': 'From the dashboard', hidden: true },
-    h('span', {}, 'From the dashboard: '),
+    { class: 'filter-drill', role: 'group', 'aria-label': t('From the dashboard'), hidden: true },
+    h('span', {}, t('From the dashboard: ')),
     drillText,
     h(
       'button',
       {
         type: 'button',
         class: 'filter-drill-remove',
-        'aria-label': 'Remove the dashboard filter',
+        'aria-label': t('Remove the dashboard filter'),
         onClick: () => {
           drill = {};
           onChange(read(), { typing: false });
@@ -448,7 +454,7 @@ export function renderFilterBar({
         element.classList.toggle('is-expanded', open);
       },
     },
-    'Filters',
+    t('Filters'),
   );
   const search = parts.filter((part) => part.classList.contains('filter-search'));
   more.append(...parts.filter((part) => !search.includes(part)), clear);
@@ -459,7 +465,7 @@ export function renderFilterBar({
       class: 'filter-bar',
       role: 'search',
       'aria-label':
-        entity === 'assets' ? 'Search and filter assets' : 'Search and filter work orders',
+        entity === 'assets' ? t('Search and filter assets') : t('Search and filter work orders'),
       onSubmit: (event) => {
         event.preventDefault();
         typed.cancel();
@@ -485,7 +491,7 @@ export function renderFilterBar({
     // Always shown (disabled when there is nothing to clear) so the bar never shifts.
     clear.disabled = sameFilters(entity, withoutSort(next), defaults);
     const count = filterCount(next);
-    toggle.textContent = count ? `Filters (${count})` : 'Filters';
+    toggle.textContent = count ? t('Filters ({count})', { count }) : t('Filters');
   };
   setFilters(filters);
   return { element, setFilters };

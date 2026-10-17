@@ -1,0 +1,7 @@
+<!-- SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka) -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" width="30" height="20">
+  <rect width="1" height="2" x="0" fill="#002654"/>
+  <rect width="1" height="2" x="1" fill="#ffffff"/>
+  <rect width="1" height="2" x="2" fill="#ce1126"/>
+</svg>

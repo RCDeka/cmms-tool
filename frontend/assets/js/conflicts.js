@@ -7,8 +7,9 @@ import { fullPath } from './places.js';
 import { codeFirst, h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDateTime, isEmpty, personName, renderValue } from './format.js';
+import { t, tn, tx } from './i18n.js';
 
-const ENTITY_LABELS = { assets: 'Asset', work_orders: 'Work order' };
+const ENTITY_LABELS = { assets: t('Asset'), work_orders: t('Work order') };
 
 /** URL of a conflicting record. */
 const recordUrl = (conflict) => `${ENTITIES[conflict.entity_type].ui}/${conflict.entity_id}`;
@@ -49,22 +50,22 @@ export function mergeFields(conflict, choices) {
  *   placeIndex of the cached tree, for the path of a place (D82)
  */
 export function displayValue(entityKey, apiField, value, lookups) {
-  if (isEmpty(value)) return h('span', { class: 'no-value' }, 'No value');
+  if (isEmpty(value)) return h('span', { class: 'no-value' }, t('No value'));
   const match = fieldForApi(entityKey, apiField);
   if (!match) return String(value);
   const { field, def } = match;
   if (def.type === 'user') {
     const user = lookups.users.find((u) => u.id === value);
-    return user ? personName(user) : `User #${value}`;
+    return user ? personName(user) : t('User #{value}', { value });
   }
   if (def.type === 'asset') {
     const asset = lookups.assets.get(value);
-    return asset ? `${asset.code} — ${asset.name}` : `Asset #${value}`;
+    return asset ? `${asset.code} — ${asset.name}` : t('Asset #{value}', { value });
   }
-  if (def.type === 'plan') return `Plan #${value}`;
+  if (def.type === 'plan') return t('Plan #{value}', { value });
   if (def.type === 'place') {
     const path = lookups.places ? fullPath(lookups.places, value) : '';
-    return path || `Place #${value}`;
+    return path || t('Place #{value}', { value });
   }
   return renderValue(field, def, value);
 }
@@ -82,7 +83,7 @@ export function renderConflictList(container, items) {
           'span',
           { class: 'badge badge-conflict badge-tone-warning' },
           h('span', { 'aria-hidden': 'true' }, '⚠'),
-          'Conflict',
+          t('Conflict'),
         ),
         ' ',
         h(
@@ -111,11 +112,13 @@ export function renderConflictList(container, items) {
   );
   replaceChildren(
     container,
-    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, 'Open conflicts'),
+    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, t('Open conflicts')),
     h(
       'p',
       { class: 'page-intro' },
-      'Two people changed the same record at the same time. Compare both versions and choose what to keep.',
+      t(
+        'Two people changed the same record at the same time. Compare both versions and choose what to keep.',
+      ),
     ),
     items.length
       ? h(
@@ -127,7 +130,7 @@ export function renderConflictList(container, items) {
             h(
               'caption',
               { class: 'visually-hidden' },
-              `${items.length} open conflict${items.length === 1 ? '' : 's'}`,
+              tn(items.length, '{n} open conflict', '{n} open conflicts'),
             ),
             h(
               'thead',
@@ -136,18 +139,18 @@ export function renderConflictList(container, items) {
                 'tr',
                 {},
                 [
-                  'Record',
-                  'Type',
-                  'Version A (server)',
-                  'Version B (rejected edit)',
-                  'Detected',
-                ].map((t) => h('th', { scope: 'col' }, t)),
+                  t('Record'),
+                  t('Type'),
+                  t('Version A (server)'),
+                  t('Version B (rejected edit)'),
+                  t('Detected'),
+                ].map((label) => h('th', { scope: 'col' }, label)),
               ),
             ),
             h('tbody', {}, rows),
           ),
         )
-      : h('p', { class: 'empty-state' }, 'No open conflict. Nothing to arbitrate.'),
+      : h('p', { class: 'empty-state' }, t('No open conflict. Nothing to arbitrate.')),
   );
 }
 
@@ -165,7 +168,7 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
   const pickers = new Map();
 
   const tableRows = rows.map((row) => {
-    let decision = h('span', { class: 'muted' }, 'Same value');
+    let decision = h('span', { class: 'muted' }, t('Same value'));
     if (row.divergent) {
       const name = `pick-${row.field}`;
       const option = (value, text) => {
@@ -174,9 +177,9 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
       };
       decision = h(
         'div',
-        { role: 'radiogroup', 'aria-label': `${row.label}: version to keep` },
-        option('A', 'Keep A'),
-        option('B', 'Keep B'),
+        { role: 'radiogroup', 'aria-label': t('{label}: version to keep', { label: row.label }) },
+        option('A', t('Keep A')),
+        option('B', t('Keep B')),
       );
       pickers.set(row.field, decision);
     }
@@ -194,7 +197,7 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
                 'span',
                 { class: 'badge badge-tone-warning badge-differs' },
                 h('span', { 'aria-hidden': 'true' }, '≠'),
-                'Differs',
+                t('Differs'),
               ),
             ]
           : null,
@@ -223,16 +226,20 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
         'h2',
         { class: 'arbitration-title', tabindex: '-1' },
         h('span', { 'aria-hidden': 'true' }, '⚠ '),
-        `Conflict on ${ENTITY_LABELS[conflict.entity_type].toLowerCase()} `,
-        h('a', { href: recordUrl(conflict), 'data-link': true }, conflict.label),
+        tx(
+          conflict.entity_type === 'assets'
+            ? 'Conflict on asset {record}'
+            : 'Conflict on work order {record}',
+          { record: h('a', { href: recordUrl(conflict), 'data-link': true }, conflict.label) },
+        ),
       ),
-      h('p', {}, h('a', { href: '/conflicts', 'data-link': true }, '← All conflicts')),
+      h('p', {}, h('a', { href: '/conflicts', 'data-link': true }, t('← All conflicts'))),
     ),
     error
       ? h(
           'div',
           { class: 'banner banner-danger', role: 'alert' },
-          h('strong', {}, 'Not resolved. '),
+          h('strong', {}, t('Not resolved. ')),
           error,
         )
       : null,
@@ -240,23 +247,35 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
       ? h(
           'div',
           { class: 'banner banner-info', role: 'note' },
-          `Resolved (${conflict.resolution}) by ${conflict.resolved_by ? personName(conflict.resolved_by) : '—'} on ${formatDateTime(conflict.resolved_at)}.`,
+          t('Resolved ({resolution}) by {person} on {resolved_at}.', {
+            resolution: conflict.resolution === 'MERGE' ? t('merge') : conflict.resolution,
+            person: conflict.resolved_by ? personName(conflict.resolved_by) : '—',
+            resolved_at: formatDateTime(conflict.resolved_at),
+          }),
         )
       : null,
     h(
       'dl',
       { class: 'versions' },
-      h('dt', {}, 'Version A — server'),
+      h('dt', {}, t('Version A — server')),
       h(
         'dd',
         {},
-        `Saved by ${conflict.server_updated_by ? personName(conflict.server_updated_by) : 'unknown'} on ${formatDateTime(conflict.server_updated_at)}`,
+        t('Saved by {person} on {server_updated_at}', {
+          person: conflict.server_updated_by
+            ? personName(conflict.server_updated_by)
+            : t('unknown'),
+          server_updated_at: formatDateTime(conflict.server_updated_at),
+        }),
       ),
-      h('dt', {}, 'Version B — rejected edit'),
+      h('dt', {}, t('Version B — rejected edit')),
       h(
         'dd',
         {},
-        `Made by ${personName(conflict.client_user)} on ${formatDateTime(conflict.client_edited_at)}, based on an older version`,
+        t('Made by {client_user} on {client_edited_at}, based on an older version', {
+          client_user: personName(conflict.client_user),
+          client_edited_at: formatDateTime(conflict.client_edited_at),
+        }),
       ),
     ),
     h(
@@ -268,7 +287,11 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
         h(
           'caption',
           {},
-          `Fields changed in version B (${conflict.divergent_fields.length} differ from version A)`,
+          tn(
+            conflict.divergent_fields.length,
+            'Fields changed in version B ({n} differs from version A)',
+            'Fields changed in version B ({n} differ from version A)',
+          ),
         ),
         h(
           'thead',
@@ -276,8 +299,8 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
           h(
             'tr',
             {},
-            ['Field', 'Version A', 'Version B', 'Merge: keep'].map((t) =>
-              h('th', { scope: 'col' }, t),
+            [t('Field'), t('Version A'), t('Version B'), t('Merge: keep')].map((label) =>
+              h('th', { scope: 'col' }, label),
             ),
           ),
         ),
@@ -292,12 +315,12 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
           h(
             'button',
             { type: 'button', class: 'button button-secondary', onClick: () => onResolve('A') },
-            'Accept version A',
+            t('Accept version A'),
           ),
           h(
             'button',
             { type: 'button', class: 'button button-secondary', onClick: () => onResolve('B') },
-            'Accept version B',
+            t('Accept version B'),
           ),
           h(
             'button',
@@ -307,7 +330,7 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
               disabled: pickers.size === 0,
               onClick: () => onResolve('MERGE', mergeFields(conflict, choices())),
             },
-            'Merge the chosen values',
+            t('Merge the chosen values'),
           ),
         ),
   );
@@ -316,8 +339,14 @@ export function renderArbitration(container, conflict, { lookups, onResolve, err
 /** Words for the confirmation dialog. */
 export function resolutionSummary(choice, conflict) {
   if (choice === 'A')
-    return `Keep version A for ${conflict.label}. The edit made by ${personName(conflict.client_user)} will be dropped.`;
+    return t('Keep version A for {label}. The edit made by {client_user} will be dropped.', {
+      label: conflict.label,
+      client_user: personName(conflict.client_user),
+    });
   if (choice === 'B')
-    return `Apply version B to ${conflict.label}: the edit made by ${personName(conflict.client_user)} replaces the server values.`;
-  return `Save the values you chose for ${conflict.label}.`;
+    return t(
+      'Apply version B to {label}: the edit made by {client_user} replaces the server values.',
+      { label: conflict.label, client_user: personName(conflict.client_user) },
+    );
+  return t('Save the values you chose for {label}.', { label: conflict.label });
 }

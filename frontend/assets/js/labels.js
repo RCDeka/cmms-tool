@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// UI labels for enum codes and fields (docs/data-model.md → Enumerated values).
+// UI labels for enum codes and fields (docs/data-model.md → Enumerated values). The French
+// labels are keyed by enum and code (i18n-fr.js → FR_VALUES), since one English word may need
+// two French ones ('Low': "Faible" for a criticality, "Basse" for a priority).
+import { valueLabels } from './i18n.js';
 
 export const VALUE_LABELS = {
   role: {
@@ -95,9 +98,9 @@ export const VALUE_TONES = {
   },
 };
 
-/** Label of an enum code; falls back to the code itself. */
+/** Label of an enum code in the interface language; falls back to the code itself. */
 export function valueLabel(enumName, code) {
-  return VALUE_LABELS[enumName]?.[code] ?? code;
+  return valueLabels()?.[enumName]?.[code] ?? VALUE_LABELS[enumName]?.[code] ?? code;
 }
 
 /** Tone of an enum code; 'neutral' when the enum has no tones (e.g. category). */

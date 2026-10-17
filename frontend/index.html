@@ -42,6 +42,8 @@
     <link rel="modulepreload" href="/assets/js/form.js" />
     <link rel="modulepreload" href="/assets/js/format.js" />
     <link rel="modulepreload" href="/assets/js/history.js" />
+    <link rel="modulepreload" href="/assets/js/i18n.js" />
+    <link rel="modulepreload" href="/assets/js/i18n-fr.js" />
     <link rel="modulepreload" href="/assets/js/labels.js" />
     <link rel="modulepreload" href="/assets/js/layout.js" />
     <link rel="modulepreload" href="/assets/js/login.js" />
@@ -82,66 +84,70 @@
     <link rel="modulepreload" href="/assets/vendor/idb-8.0.4/index.js" />
   </head>
   <body class="is-logged-out">
-    <a class="skip-link" href="#main-content">Skip to content</a>
+    <a class="skip-link" href="#main-content" data-i18n>Skip to content</a>
 
-    <nav id="sidebar" aria-label="Main navigation" hidden>
+    <nav id="sidebar" aria-label="Main navigation" data-i18n-attr hidden>
       <div class="brand">
         <img src="/assets/img/logo.svg" alt="" width="32" height="32" />
         <span class="brand-name" data-app-name>Tacto</span>
       </div>
       <ul class="nav-list">
         <li data-roles="STAFF" hidden>
-          <a href="/requests" data-link data-nav="requests">My open requests</a>
+          <a href="/requests" data-link data-nav="requests" data-i18n>My open requests</a>
         </li>
         <li data-roles="STAFF" hidden>
-          <a href="/requests/all" data-link data-nav="requests_all">All my requests</a>
+          <a href="/requests/all" data-link data-nav="requests_all" data-i18n>All my requests</a>
         </li>
         <li data-roles="STAFF" hidden>
-          <a href="/requests/new" data-link data-nav="request_new">New request</a>
+          <a href="/requests/new" data-link data-nav="request_new" data-i18n>New request</a>
         </li>
         <li data-roles="TECHNICIAN" hidden>
-          <a href="/dashboard" data-link data-nav="dashboard">Dashboard</a>
+          <a href="/dashboard" data-link data-nav="dashboard" data-i18n>Dashboard</a>
         </li>
         <!-- Personal dashboards of supervisors and admins (D59), filled by dashboards-page.js. -->
         <li data-roles="SUPERVISOR ADMIN" class="nav-group" hidden>
-          <span class="nav-group-title" id="dashboard-nav-title">Dashboards</span>
+          <span class="nav-group-title" id="dashboard-nav-title" data-i18n>Dashboards</span>
           <ul class="nav-sublist" id="dashboard-nav" aria-labelledby="dashboard-nav-title"></ul>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
-          <a href="/assets" data-link data-nav="assets">Assets</a>
+          <a href="/assets" data-link data-nav="assets" data-i18n>Assets</a>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
-          <a href="/work-orders" data-link data-nav="work_orders">Work orders</a>
+          <a href="/work-orders" data-link data-nav="work_orders" data-i18n>Work orders</a>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" class="nav-not-phone" hidden>
-          <a href="/planning" data-link data-nav="planning">Year planner</a>
+          <a href="/planning" data-link data-nav="planning" data-i18n>Year planner</a>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR ADMIN" hidden>
-          <a href="/schedule" data-link data-nav="schedule">Week scheduler</a>
+          <a href="/schedule" data-link data-nav="schedule" data-i18n>Week scheduler</a>
         </li>
         <li data-roles="TECHNICIAN SUPERVISOR" hidden>
-          <a href="/my-week" data-link data-nav="my_week">My week</a>
+          <a href="/my-week" data-link data-nav="my_week" data-i18n>My week</a>
         </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
-          <a href="/conflicts" data-link data-nav="conflicts">Conflicts</a>
+          <a href="/conflicts" data-link data-nav="conflicts" data-i18n>Conflicts</a>
         </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
-          <a href="/audit-log" data-link data-nav="audit">Audit log</a>
+          <a href="/audit-log" data-link data-nav="audit" data-i18n>Audit log</a>
         </li>
         <li data-roles="SUPERVISOR ADMIN" hidden>
-          <a href="/admin/locations" data-link data-nav="locations">Places</a>
+          <a href="/admin/locations" data-link data-nav="locations" data-i18n>Places</a>
         </li>
         <li data-roles="ADMIN" hidden>
-          <a href="/admin/users" data-link data-nav="users">Users</a>
+          <a href="/admin/users" data-link data-nav="users" data-i18n>Users</a>
         </li>
         <li data-roles="ADMIN" hidden>
-          <a href="/admin/feedback" data-link data-nav="feedback">Suggestions</a>
+          <a href="/admin/feedback" data-link data-nav="feedback" data-i18n>Suggestions</a>
         </li>
         <li data-roles="ADMIN" hidden>
-          <a href="/admin/planning" data-link data-nav="planning_settings">Planning settings</a>
+          <a href="/admin/planning" data-link data-nav="planning_settings" data-i18n
+            >Planning settings</a
+          >
         </li>
         <li data-roles="ADMIN" hidden>
-          <a href="/admin/widgets" data-link data-nav="widget_settings">Dashboard widgets</a>
+          <a href="/admin/widgets" data-link data-nav="widget_settings" data-i18n
+            >Dashboard widgets</a
+          >
         </li>
       </ul>
       <!-- Widget checkboxes of the dashboard on screen (D59). -->
@@ -154,8 +160,12 @@
       <div class="user-box">
         <p class="user-name" id="user-name"></p>
         <p class="user-role" id="user-role"></p>
-        <a href="/account" class="user-account" data-link data-nav="account">Change my password</a>
-        <button type="button" class="button button-secondary" id="logout-button">Log out</button>
+        <a href="/account" class="user-account" data-link data-nav="account" data-i18n
+          >Change my password</a
+        >
+        <button type="button" class="button button-secondary" id="logout-button" data-i18n>
+          Log out
+        </button>
       </div>
     </nav>
 
@@ -166,6 +176,7 @@
           id="menu-button"
           class="icon-button"
           aria-label="Open menu"
+          data-i18n-attr
           aria-expanded="false"
           aria-controls="sidebar"
         >
@@ -176,6 +187,8 @@
           type="button"
           id="find-button"
           class="button button-primary find-button ai-only"
+          title="Find a work order"
+          data-i18n-attr
           aria-haspopup="dialog"
           data-roles="TECHNICIAN SUPERVISOR ADMIN"
           hidden
@@ -184,12 +197,14 @@
             <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2" />
             <path d="M15 15l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
-          <span>Find a work order</span>
+          <span data-i18n>Find a work order</span>
         </button>
         <button
           type="button"
           id="feedback-button"
           class="button button-secondary feedback-button"
+          title="Suggest an improvement"
+          data-i18n-attr
           aria-haspopup="dialog"
         >
           <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
@@ -207,12 +222,12 @@
               stroke-linecap="round"
             />
           </svg>
-          <span>Suggest an improvement</span>
+          <span data-i18n>Suggest an improvement</span>
         </button>
       </header>
       <main id="main-content" tabindex="-1">
         <section id="table-container" aria-labelledby="page-title"></section>
-        <section id="detail-container" class="hidden" aria-label="Details"></section>
+        <section id="detail-container" class="hidden" aria-label="Details" data-i18n-attr></section>
       </main>
       <footer id="status-bar">
         <span id="network-status">Online</span>
@@ -227,7 +242,7 @@
             >AGPL-3.0</a
           >
           ·
-          <a href="https://github.com/RCDeka/cmms-tool" rel="noopener" target="_blank"
+          <a href="https://github.com/RCDeka/cmms-tool" rel="noopener" target="_blank" data-i18n
             >Source code</a
           >
         </span>

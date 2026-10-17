@@ -151,6 +151,10 @@ Specified in `docs/spec-locations.md` (confirmed; section 11 holds the full acce
 - **Phase 32: location tree** — done (D83). Level types and places (`locations`), the migration of today's sites, buildings, floors and rooms into the tree, `location_id` on assets, work orders and plans with the site set by the server, the Places page replacing the Rooms page, one place picker for every form (offline, from the cached tree), paths in lists and search, the `location` filter and `group_by=area`. Acceptance: see the spec, section 11.
 - **Phase 33: asset types and codes.** Managed asset types replacing `subcategory`, the default and per-type code patterns, the code proposal and its server-side computation at creation, the admin recode. Acceptance: see the spec, section 11.
 
+## Interface language (D85)
+
+- **Phase 34: French interface** — done (D85). Flags in the top bar and on the login page, the choice kept on the device, every text of the interface, the enum labels and the messages of the API in French, dates and numbers in the French format, the brief's French vocabulary. Acceptance: each page of every role reads in French with no English text other than content; the choice survives a reload, logging out and logging in again; an unsaved form asks before the page reloads in the other language; the French dictionary matches the code (`test/i18n.test.js`); no page is wider than the screen on phones, tablets and computers.
+
 ## Production (D73)
 
 Work that makes the application safe to run for real users. Phase 31 is done at the first deployment to users; Phases 27 to 30 do not need a server.

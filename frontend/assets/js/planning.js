@@ -13,6 +13,7 @@ import { formatDate, formatWeek } from './format.js';
 import { valueLabel } from './labels.js';
 import { setSplitView } from './layout.js';
 import { isBlocked as isBlockedFor } from './planning-rules.js';
+import { locale, t, tn } from './i18n.js';
 
 /** Group keys of the rows, in switch order. */
 // `area`: the first place under the site, a building or a data center hall (D82).
@@ -83,8 +84,8 @@ export function suggestionsBody(filters) {
 export const hasPlanFilters = (filters) =>
   ['site', 'category', 'type', 'performed_by', 'q'].some((k) => filters[k]);
 
-const percentFormat = new Intl.NumberFormat('en-GB', { style: 'percent' });
-const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const percentFormat = new Intl.NumberFormat(locale(), { style: 'percent' });
+const numberFormat = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 /** Load as text: '103%', or a dash without capacity. Pure. */
 export function formatLoad(load) {
@@ -100,7 +101,7 @@ const weekNumber = (week) => Number(week.slice(6));
 /** Label of a timeline group (site, "site · area" or trade). Pure. */
 export function groupTitle(group) {
   if (group.category) return valueLabel('category', group.category);
-  if ('area' in group) return `${group.site} · ${group.area ?? 'The site itself'}`;
+  if ('area' in group) return `${group.site} · ${group.area ?? t('The site itself')}`;
   return group.site;
 }
 
@@ -128,16 +129,18 @@ export function chipView(plan, occurrence, { series = false } = {}) {
     `${plan.code}, ${formatWeek(occurrence.week)}`,
     valueLabel('occurrence_status', occurrence.status),
   ];
-  if (occurrence.work_order) parts.push(`work order ${occurrence.work_order.number}`);
+  if (occurrence.work_order)
+    parts.push(t('work order {number}', { number: occurrence.work_order.number }));
   parts.push(formatHours(plan.estimated_hours));
-  if (plan.type === 'REGULATORY') parts.push('regulatory');
-  if (plan.performed_by === 'CONTRACTOR') parts.push(`contractor ${plan.supplier ?? ''}`.trim());
+  if (plan.type === 'REGULATORY') parts.push(t('regulatory'));
+  if (plan.performed_by === 'CONTRACTOR')
+    parts.push(t('contractor {value}', { value: plan.supplier ?? '' }).trim());
   if (occurrence.week !== occurrence.due_week) {
-    parts.push(`moved from ${formatWeek(occurrence.due_week)}`);
+    parts.push(t('moved from {due_week}', { due_week: formatWeek(occurrence.due_week) }));
   }
-  if (warnings.includes('OUT_OF_SEASON')) parts.push('outside the season');
-  if (warnings.includes('BLOCKED_WEEK')) parts.push('in a blocked week');
-  if (series) parts.push('first planned visit: moving it moves the whole series');
+  if (warnings.includes('OUT_OF_SEASON')) parts.push(t('outside the season'));
+  if (warnings.includes('BLOCKED_WEEK')) parts.push(t('in a blocked week'));
+  if (series) parts.push(t('first planned visit: moving it moves the whole series'));
   return {
     text: `${marks.join('')}${numberFormat.format(plan.estimated_hours)}`,
     classes: classes.join(' '),
@@ -148,7 +151,9 @@ export function chipView(plan, occurrence, { series = false } = {}) {
 /** Text of a plan's warnings (BR-P8). Pure. */
 export function planWarningText(warnings, settings) {
   return warnings.includes('LONG_VISIT')
-    ? `Longer than ${formatHours(settings.max_block_hours)}: will be split`
+    ? t('Longer than {max_block_hours}: will be split', {
+        max_block_hours: formatHours(settings.max_block_hours),
+      })
     : null;
 }
 
@@ -161,55 +166,74 @@ export function tileViews(tiles, weekCount) {
   const { workload, trade_balance: trades, peak_week: peak } = tiles;
   // Trades with capacity, most loaded first; trades with visits but no specialist apart.
   const loaded = trades
-    .filter((t) => t.planned_hours > 0 && t.load !== null)
+    .filter((trade) => trade.planned_hours > 0 && trade.load !== null)
     .sort((a, b) => b.load - a.load)
-    .map((t) => `${valueLabel('category', t.category)} ${formatLoad(t.load)}`);
+    .map((trade) => `${valueLabel('category', trade.category)} ${formatLoad(trade.load)}`);
   const uncovered = trades
-    .filter((t) => t.planned_hours > 0 && t.load === null)
-    .map((t) => valueLabel('category', t.category));
+    .filter((trade) => trade.planned_hours > 0 && trade.load === null)
+    .map((trade) => valueLabel('category', trade.category));
   const tradeDetail = [
     loaded.slice(1).join(' · '),
-    uncovered.length ? `No specialist for: ${uncovered.join(', ')}` : '',
+    uncovered.length
+      ? t('No specialist for: {uncovered}', { uncovered: uncovered.join(', ') })
+      : '',
   ].filter(Boolean);
-  const weeksAbove = (n, what) => `${n} week${n === 1 ? '' : 's'} ${what}`;
+
   return [
     {
       key: 'workload',
-      label: 'Weekly workload',
+      label: t('Weekly workload'),
       value: formatLoad(workload.average_load),
-      detail: `average · peak ${formatLoad(workload.peak_load)} · ${weeksAbove(workload.weeks_over, 'over capacity')}, ${workload.weeks_tight} tight`,
+      detail: tn(
+        workload.weeks_over,
+        'average · peak {peak_load} · {n} week over capacity, {weeks_tight} tight',
+        'average · peak {peak_load} · {n} weeks over capacity, {weeks_tight} tight',
+        { peak_load: formatLoad(workload.peak_load), weeks_tight: workload.weeks_tight },
+      ),
       flagged: workload.weeks_over > 0,
     },
     {
       key: 'trades',
-      label: 'Trade balance',
-      value: loaded[0] ?? (uncovered.length ? 'No specialist' : 'Nothing planned'),
-      detail: tradeDetail.join('. ') || `over ${weekCount} weeks`,
-      flagged: trades.some((t) => t.planned_hours > 0 && (t.load === null || t.load > 1)),
+      label: t('Trade balance'),
+      value: loaded[0] ?? (uncovered.length ? t('No specialist') : t('Nothing planned')),
+      detail: tradeDetail.join('. ') || t('over {weekCount} weeks', { weekCount }),
+      flagged: trades.some(
+        (trade) => trade.planned_hours > 0 && (trade.load === null || trade.load > 1),
+      ),
     },
     {
       key: 'peak',
-      label: 'Peak week',
+      label: t('Peak week'),
       value: peak ? formatWeek(peak.week) : '—',
       detail: peak
-        ? `${formatLoad(peak.load)} of capacity${peak.excess_hours > 0 ? `, ${formatHours(peak.excess_hours)} too many` : ''}`
-        : 'No capacity counted',
+        ? peak.excess_hours > 0
+          ? t('{load} of capacity, {excess} too many', {
+              load: formatLoad(peak.load),
+              excess: formatHours(peak.excess_hours),
+            })
+          : t('{load} of capacity', { load: formatLoad(peak.load) })
+        : t('No capacity counted'),
       flagged: Boolean(peak && peak.load > 1),
     },
     {
       key: 'sites',
-      label: 'Site spread',
+      label: t('Site spread'),
       value: numberFormat.format(tiles.site_spread.average ?? 0),
-      detail: `sites with internal visits a week on average, ${tiles.site_spread.peak} at most`,
+      detail: t('sites with internal visits a week on average, {peak} at most', {
+        peak: tiles.site_spread.peak,
+      }),
       flagged: false,
     },
     {
       key: 'contractors',
-      label: 'Contractor visits',
+      label: t('Contractor visits'),
       value: String(tiles.contractor_visits.total),
       detail: tiles.contractor_visits.peak
-        ? `at most ${tiles.contractor_visits.peak} in a week (${formatWeek(tiles.contractor_visits.peak_week)}), not in the load`
-        : 'none in these weeks',
+        ? t('at most {peak} in a week ({peak_week}), not in the load', {
+            peak: tiles.contractor_visits.peak,
+            peak_week: formatWeek(tiles.contractor_visits.peak_week),
+          })
+        : t('none in these weeks'),
       flagged: false,
     },
   ];
@@ -245,7 +269,7 @@ function weekClass(data, i) {
 export function blockedText(week, blockedWeeks = []) {
   return blockedWeeks
     .filter((b) => b.week === week)
-    .map((b) => `${b.reason} (${b.site ?? 'every site'})`)
+    .map((b) => `${b.reason} (${b.site ?? t('every site')})`)
     .join('; ');
 }
 
@@ -256,37 +280,37 @@ export function isMovable(occurrence, currentWeek, canEdit) {
 
 /** Field labels of the planning records in the audit log (history.js). */
 export const PLANNING_FIELD_LABELS = {
-  code: 'Code',
-  title: 'Title',
-  description: 'Instructions',
-  type: 'Type',
-  category: 'Trade',
-  asset_id: 'Asset',
-  site: 'Site',
+  code: t('Code'),
+  title: t('Title'),
+  description: t('Instructions'),
+  type: t('Type'),
+  category: t('Trade'),
+  asset_id: t('Asset'),
+  site: t('Site'),
   // Before D82; kept for the history of older plans.
-  building: 'Building',
-  place: 'Place',
-  location: 'Exact location',
-  estimated_hours: 'Hours per visit',
-  frequency_weeks: 'Every (weeks)',
-  anchor_week: 'First visit',
-  end_week: 'Last week',
-  schedule_mode: 'Calendar',
-  tolerance_weeks: 'Tolerance (weeks)',
-  season_from_week: 'Season from week',
-  season_to_week: 'Season to week',
-  performed_by: 'Done by',
-  supplier: 'Contractor',
-  is_active: 'Active',
-  status: 'Status',
-  week: 'Planned week',
-  due_week: 'Due week',
-  work_order_id: 'Work order',
-  skip_reason: 'Reason for skipping',
-  daily_hours: 'Daily capacity',
-  reserve_percent: 'Corrective reserve',
-  release_weeks_ahead: 'Release horizon (weeks)',
-  max_block_hours: 'Longest block',
+  building: t('Building'),
+  place: t('Place'),
+  location: t('Exact location'),
+  estimated_hours: t('Hours per visit'),
+  frequency_weeks: t('Every (weeks)'),
+  anchor_week: t('First visit'),
+  end_week: t('Last week'),
+  schedule_mode: t('Calendar'),
+  tolerance_weeks: t('Tolerance (weeks)'),
+  season_from_week: t('Season from week'),
+  season_to_week: t('Season to week'),
+  performed_by: t('Done by'),
+  supplier: t('Contractor'),
+  is_active: t('Active'),
+  status: t('Status'),
+  week: t('Planned week'),
+  due_week: t('Due week'),
+  work_order_id: t('Work order'),
+  skip_reason: t('Reason for skipping'),
+  daily_hours: t('Daily capacity'),
+  reserve_percent: t('Corrective reserve'),
+  release_weeks_ahead: t('Release horizon (weeks)'),
+  max_block_hours: t('Longest block'),
 };
 
 const PLANNING_ENUMS = {
@@ -300,9 +324,9 @@ const PLANNING_ENUMS = {
 /** Value of a planning field in the audit log, as text. Pure. */
 export function planningFieldValue(field, value) {
   if (value === null || value === undefined || value === '') {
-    return h('span', { class: 'no-value' }, 'No value');
+    return h('span', { class: 'no-value' }, t('No value'));
   }
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'boolean') return value ? t('Yes') : t('No');
   if (PLANNING_ENUMS[field]) return valueLabel(PLANNING_ENUMS[field], value);
   if (field.endsWith('_hours')) return formatHours(value);
   if (field === 'reserve_percent') return `${value}%`;
@@ -319,7 +343,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
     const control = h(
       'select',
       { id: `plan-filter-${key}`, onChange: (e) => set(key, e.target.value) },
-      h('option', { value: '' }, 'All'),
+      h('option', { value: '' }, t('All')),
       options.map(([value, text]) => h('option', { value }, text)),
     );
     control.value = filters[key] ?? '';
@@ -346,9 +370,11 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
         onFilter(next);
       },
     },
-    h('option', { value: '' }, 'Next 52 weeks'),
-    [currentYear, currentYear + 1].map((y) => h('option', { value: `year:${y}` }, `Year ${y}`)),
-    h('option', { value: 'from' }, '52 weeks from…'),
+    h('option', { value: '' }, t('Next 52 weeks')),
+    [currentYear, currentYear + 1].map((y) =>
+      h('option', { value: `year:${y}` }, t('Year {y}', { y })),
+    ),
+    h('option', { value: 'from' }, t('52 weeks from…')),
   );
   range.value = rangeValue;
   const weekInput = h('input', {
@@ -362,7 +388,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
   const weekField = h(
     'div',
     { class: 'filter-field', hidden: !filters.from },
-    h('label', { for: weekInput.id }, 'First week'),
+    h('label', { for: weekInput.id }, t('First week')),
     weekInput,
   );
 
@@ -371,7 +397,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
     id: 'plan-filter-q',
     type: 'search',
     value: filters.q ?? '',
-    placeholder: 'Code, title, place…',
+    placeholder: t('Code, title, place…'),
     onInput: (e) => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => set('q', e.target.value.trim()), 350);
@@ -380,13 +406,13 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
 
   return h(
     'div',
-    { class: 'filter-bar planner-filters', role: 'search', 'aria-label': 'Planner filters' },
-    h('div', { class: 'filter-field' }, h('label', { for: range.id }, 'Weeks shown'), range),
+    { class: 'filter-bar planner-filters', role: 'search', 'aria-label': t('Planner filters') },
+    h('div', { class: 'filter-field' }, h('label', { for: range.id }, t('Weeks shown')), range),
     weekField,
     h(
       'div',
       { class: 'filter-field' },
-      h('span', { class: 'filter-label', id: 'plan-group-label' }, 'Group by'),
+      h('span', { class: 'filter-label', id: 'plan-group-label' }, t('Group by')),
       h(
         'div',
         { class: 'segmented', role: 'group', 'aria-labelledby': 'plan-group-label' },
@@ -406,25 +432,25 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
     ),
     select(
       'site',
-      'Site',
+      t('Site'),
       sites.map((s) => [s, s]),
     ),
     select(
       'category',
-      'Trade',
+      t('Trade'),
       CATEGORIES.map((c) => [c, valueLabel('category', c)]),
     ),
     select(
       'type',
-      'Type',
-      PLAN_TYPES.map((t) => [t, valueLabel('work_order_type', t)]),
+      t('Type'),
+      PLAN_TYPES.map((type) => [type, valueLabel('work_order_type', type)]),
     ),
     select(
       'performed_by',
-      'Done by',
+      t('Done by'),
       PERFORMERS.map((p) => [p, valueLabel('performed_by', p)]),
     ),
-    h('div', { class: 'filter-field' }, h('label', { for: search.id }, 'Search'), search),
+    h('div', { class: 'filter-field' }, h('label', { for: search.id }, t('Search')), search),
     hasPlanFilters(filters)
       ? h(
           'button',
@@ -434,7 +460,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
             onClick: () =>
               onFilter({ from: filters.from, year: filters.year, group: filters.group }),
           },
-          'Clear filters',
+          t('Clear filters'),
         )
       : null,
     canEdit
@@ -445,7 +471,7 @@ function filterBar(filters, { sites, currentYear, canEdit, onFilter }) {
             'data-link': true,
             class: 'button button-primary online-only planner-new',
           },
-          '+ New plan',
+          t('+ New plan'),
         )
       : null,
   );
@@ -458,7 +484,7 @@ function tilesSection(data, preview = false) {
     h(
       'h2',
       { id: 'planner-tiles-heading', class: 'visually-hidden', tabindex: '-1' },
-      'Key figures of the weeks shown',
+      t('Key figures of the weeks shown'),
     ),
     h(
       'ul',
@@ -480,7 +506,7 @@ function tilesSection(data, preview = false) {
                   'span',
                   { class: 'badge badge-tone-warning kpi-flag' },
                   h('span', { 'aria-hidden': 'true' }, '⚠'),
-                  'Needs balancing',
+                  t('Needs balancing'),
                 )
               : null,
           ),
@@ -495,9 +521,12 @@ function reserveLine(data, isAdmin) {
   return h(
     'p',
     { class: 'planner-reserve muted' },
-    `Capacity: ${formatHours(data.capacity.weekly)} a week (${formatHours(daily)} a day per technician and supervisor), keeping a ${reserve}% reserve for breakdowns and staff requests, set by the administrators.`,
+    t(
+      'Capacity: {weekly} a week ({daily} a day per technician and supervisor), keeping a {reserve}% reserve for breakdowns and staff requests, set by the administrators.',
+      { weekly: formatHours(data.capacity.weekly), daily: formatHours(daily), reserve },
+    ),
     isAdmin
-      ? [' ', h('a', { href: '/admin/planning', 'data-link': true }, 'Change the settings')]
+      ? [' ', h('a', { href: '/admin/planning', 'data-link': true }, t('Change the settings'))]
       : null,
   );
 }
@@ -533,18 +562,35 @@ function loadRow(data, tooltip) {
     h(
       'th',
       { scope: 'row', class: 'plan-cell' },
-      h('span', { class: 'load-title' }, 'Load'),
-      h('span', { class: 'plan-meta' }, `planned vs ${formatHours(capacity)} a week`),
+      // " (preview)" follows while a visit is being dropped (planning.css).
+      h('span', { class: 'load-title', dataset: { preview: t(' (preview)') } }, t('Load')),
+      h(
+        'span',
+        { class: 'plan-meta' },
+        t('planned vs {capacity} a week', { capacity: formatHours(capacity) }),
+      ),
     ),
     data.figures.map((f) => {
       const level = f.level ?? 'NONE';
       const lines = [
-        `${formatWeek(f.week)}: ${formatLoad(f.load)}`,
-        `${formatHours(f.planned_hours)} planned of ${formatHours(f.capacity)}`,
-        ...loadSegments(f, scale).map(
-          (s) => `${valueLabel('category', s.category)}: ${formatHours(s.hours)}`,
+        t('{label}: {value}', { label: formatWeek(f.week), value: formatLoad(f.load) }),
+        t('{planned_hours} planned of {capacity}', {
+          planned_hours: formatHours(f.planned_hours),
+          capacity: formatHours(f.capacity),
+        }),
+        ...loadSegments(f, scale).map((s) =>
+          t('{label}: {value}', {
+            label: valueLabel('category', s.category),
+            value: formatHours(s.hours),
+          }),
         ),
-        f.contractor_visits ? `${f.contractor_visits} contractor visit(s), not counted` : null,
+        f.contractor_visits
+          ? tn(
+              f.contractor_visits,
+              '{n} contractor visit, not counted',
+              '{n} contractor visits, not counted',
+            )
+          : null,
       ].filter(Boolean);
       const bar = h(
         'div',
@@ -583,7 +629,7 @@ function headerRow(data) {
   return h(
     'tr',
     {},
-    h('th', { scope: 'col', class: 'plan-cell' }, 'Plan'),
+    h('th', { scope: 'col', class: 'plan-cell' }, t('Plan')),
     data.weeks.map(({ week, monday }) => {
       const year = week.slice(0, 4);
       const showYear = year !== lastYear;
@@ -595,19 +641,25 @@ function headerRow(data) {
         {
           scope: 'col',
           class: `week-col${isCurrent ? ' is-current' : ''}${showYear ? ' year-start' : ''}${blocked ? ' is-blocked' : ''}`,
-          title: `${formatWeek(week)}, Monday ${formatDate(monday)}${blocked ? `. Blocked: ${blocked}` : ''}`,
+          title: blocked
+            ? t('{week}, Monday {monday}. Blocked: {blocked}', {
+                week: formatWeek(week),
+                monday: formatDate(monday),
+                blocked,
+              })
+            : t('{week}, Monday {monday}', { week: formatWeek(week), monday: formatDate(monday) }),
           'aria-current': isCurrent ? 'date' : null,
         },
         showYear ? h('span', { class: 'week-year' }, year) : null,
-        h('span', { class: 'visually-hidden' }, 'Week '),
+        h('span', { class: 'visually-hidden' }, t('Week ')),
         String(weekNumber(week)),
-        isCurrent ? h('span', { class: 'visually-hidden' }, ' (this week)') : null,
+        isCurrent ? h('span', { class: 'visually-hidden' }, t(' (this week)')) : null,
         blocked
           ? h(
               'span',
               { class: 'week-blocked' },
               h('span', { 'aria-hidden': 'true' }, '⛔'),
-              h('span', { class: 'visually-hidden' }, ` blocked: ${blocked}`),
+              h('span', { class: 'visually-hidden' }, t(' blocked: {blocked}', { blocked })),
             )
           : null,
       );
@@ -664,9 +716,14 @@ function planRow(plan, data, { selectedId, onOpen, canEdit }) {
       h(
         'span',
         { class: 'plan-meta' },
-        `${formatHours(plan.estimated_hours)} · every ${plan.frequency_weeks} wk`,
-        plan.type === 'REGULATORY' ? ' · § regulatory' : null,
-        plan.performed_by === 'CONTRACTOR' ? ` · ${plan.supplier ?? 'contractor'}` : null,
+        tn(
+          plan.frequency_weeks,
+          'one|{estimated_hours} · every {n} wk',
+          '{estimated_hours} · every {n} wk',
+          { estimated_hours: formatHours(plan.estimated_hours) },
+        ),
+        plan.type === 'REGULATORY' ? t(' · § regulatory') : null,
+        plan.performed_by === 'CONTRACTOR' ? ` · ${plan.supplier ?? t('contractor')}` : null,
       ),
       warning
         ? h('span', { class: 'plan-warning' }, h('span', { 'aria-hidden': 'true' }, '⚠ '), warning)
@@ -697,11 +754,7 @@ function groupRows(group, data, options) {
         'th',
         { scope: 'rowgroup', class: 'plan-cell' },
         groupTitle(group),
-        h(
-          'span',
-          { class: 'plan-meta' },
-          ` · ${group.plans.length} plan${group.plans.length === 1 ? '' : 's'}`,
-        ),
+        h('span', { class: 'plan-meta' }, ` · ${tn(group.plans.length, '{n} plan', '{n} plans')}`),
       ),
       group.hours.map((hours, i) =>
         h(
@@ -723,28 +776,33 @@ function legend(canEdit) {
     h(
       'p',
       { class: 'legend-group' },
-      h('span', { class: 'legend-title' }, 'Visits (hours): '),
-      h('span', {}, chip('chip chip-planned', '2'), ' planned'),
-      h('span', {}, chip('chip chip-released', '✓2'), ' work order created'),
-      h('span', {}, chip('chip chip-skipped', '2'), ' skipped'),
-      h('span', {}, chip('chip chip-planned', '§2'), ' regulatory'),
-      h('span', {}, chip('chip chip-planned chip-contractor', '2'), ' contractor'),
-      h('span', {}, chip('chip chip-planned chip-warning', '⚠2'), ' outside its season or blocked'),
-      h('span', {}, chip('chip chip-planned chip-moved', '↔2'), ' moved'),
+      h('span', { class: 'legend-title' }, t('Visits (hours): ')),
+      h('span', {}, chip('chip chip-planned', '2'), t(' planned')),
+      h('span', {}, chip('chip chip-released', '✓2'), t(' work order created')),
+      h('span', {}, chip('chip chip-skipped', '2'), t(' skipped')),
+      h('span', {}, chip('chip chip-planned', '§2'), t(' regulatory')),
+      h('span', {}, chip('chip chip-planned chip-contractor', '2'), t(' contractor')),
+      h(
+        'span',
+        {},
+        chip('chip chip-planned chip-warning', '⚠2'),
+        t(' outside its season or blocked'),
+      ),
+      h('span', {}, chip('chip chip-planned chip-moved', '↔2'), t(' moved')),
       canEdit
         ? h(
             'span',
             {},
             chip('chip chip-planned chip-series', '2'),
-            ' first visit: moves the series',
+            t(' first visit: moves the series'),
           )
         : null,
-      h('span', {}, chip('legend-blocked', '⛔'), ' blocked week'),
+      h('span', {}, chip('legend-blocked', '⛔'), t(' blocked week')),
     ),
     h(
       'p',
       { class: 'legend-group' },
-      h('span', { class: 'legend-title' }, 'Load by trade: '),
+      h('span', { class: 'legend-title' }, t('Load by trade: ')),
       CATEGORIES.map((c, i) =>
         h(
           'span',
@@ -753,7 +811,7 @@ function legend(canEdit) {
           valueLabel('category', c),
         ),
       ),
-      h('span', {}, h('span', { class: 'legend-capacity', 'aria-hidden': 'true' }), 'capacity'),
+      h('span', {}, h('span', { class: 'legend-capacity', 'aria-hidden': 'true' }), t('capacity')),
     ),
   );
 }
@@ -762,23 +820,28 @@ function figuresTable(data) {
   return h(
     'details',
     { class: 'chart-table planner-figures' },
-    h('summary', {}, 'Show the weekly figures as a table'),
+    h('summary', {}, t('Show the weekly figures as a table')),
     h(
       'div',
       { class: 'table-scroll' },
       h(
         'table',
         { class: 'data-table' },
-        h('caption', { class: 'visually-hidden' }, 'Planned hours and capacity per week'),
+        h('caption', { class: 'visually-hidden' }, t('Planned hours and capacity per week')),
         h(
           'thead',
           {},
           h(
             'tr',
             {},
-            ['Week', 'Planned', 'Capacity', 'Load', 'By trade', 'Contractor visits'].map((t) =>
-              h('th', { scope: 'col' }, t),
-            ),
+            [
+              t('Week'),
+              t('Planned'),
+              t('Capacity'),
+              t('Load'),
+              t('By trade'),
+              t('Contractor visits'),
+            ].map((label) => h('th', { scope: 'col' }, label)),
           ),
         ),
         h(
@@ -796,7 +859,7 @@ function figuresTable(data) {
                 { class: 'numeric' },
                 f.level === 'OVER' ? '⚠ ' : '',
                 formatLoad(f.load),
-                f.level === 'TIGHT' ? ' (tight)' : f.level === 'OVER' ? ' (over)' : '',
+                f.level === 'TIGHT' ? t(' (tight)') : f.level === 'OVER' ? t(' (over)') : '',
               ),
               h(
                 'td',
@@ -830,7 +893,7 @@ export function renderPlanner(
   let load = loadRow(data, tooltip);
   const { element: message, say } = pageMessage();
   const plans = data.groups.reduce((n, g) => n + g.plans.length, 0);
-  const range = `${formatWeek(data.from)} to ${formatWeek(data.to)}`;
+  const range = t('{from} to {to}', { from: formatWeek(data.from), to: formatWeek(data.to) });
   replaceChildren(
     container,
     h(
@@ -856,7 +919,14 @@ export function renderPlanner(
           h(
             'caption',
             { id: 'planner-caption', class: 'visually-hidden' },
-            `Maintenance plans, ${range}: ${plans} plan${plans === 1 ? '' : 's'}`,
+            tn(
+              plans,
+              'Maintenance plans, {range}: {n} plan',
+              'Maintenance plans, {range}: {n} plans',
+              {
+                range,
+              },
+            ),
           ),
           h('thead', {}, headerRow(data), load),
           data.groups.map((g) => groupRows(g, data, { selectedId, onOpen, canEdit })),
@@ -867,7 +937,9 @@ export function renderPlanner(
         : h(
             'p',
             { class: 'empty-state' },
-            hasPlanFilters(filters) ? 'No plan matches these filters.' : 'No maintenance plan yet.',
+            hasPlanFilters(filters)
+              ? t('No plan matches these filters.')
+              : t('No maintenance plan yet.'),
           ),
       figuresTable(data),
     ),
@@ -936,7 +1008,9 @@ export function historyButton(label, entry, onClick, key) {
       type: 'button',
       class: 'button button-secondary online-only',
       disabled: !entry,
-      title: entry ? `${label}: ${entry} (${key})` : `Nothing to ${label.toLowerCase()}`,
+      title: entry
+        ? t('{label}: {value}', { label, value: `${entry} (${key})` })
+        : t('Nothing to {label}', { label: label.toLowerCase() }),
       'aria-keyshortcuts': key.replace('Ctrl', 'Control'),
       onClick,
     },
@@ -952,8 +1026,8 @@ function toolbar({ filters, canEdit, history, message }) {
     { class: 'planner-toolbar' },
     canEdit && history
       ? [
-          historyButton('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
-          historyButton('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
+          historyButton(t('Undo'), history.undoLabel, history.onUndo, t('Ctrl+Z')),
+          historyButton(t('Redo'), history.redoLabel, history.onRedo, t('Ctrl+Y')),
         ]
       : null,
     h(
@@ -963,7 +1037,7 @@ function toolbar({ filters, canEdit, history, message }) {
         'data-link': true,
         class: 'button button-secondary',
       },
-      'Blocked weeks',
+      t('Blocked weeks'),
     ),
     canEdit
       ? h(
@@ -973,14 +1047,16 @@ function toolbar({ filters, canEdit, history, message }) {
             'data-link': true,
             class: 'button button-secondary online-only',
           },
-          'Suggest a smoother plan',
+          t('Suggest a smoother plan'),
         )
       : null,
     canEdit
       ? h(
           'p',
           { id: 'planner-move-help', class: 'planner-help muted' },
-          'Drag a planned visit to another week, or select it and press Shift + arrow keys, then Enter (Escape cancels). The first planned visit of a row moves the whole series; Alt + Shift + arrows move the series from any visit.',
+          t(
+            'Drag a planned visit to another week, or select it and press Shift + arrow keys, then Enter (Escape cancels). The first planned visit of a row moves the whole series; Alt + Shift + arrows move the series from any visit.',
+          ),
         )
       : null,
     message,

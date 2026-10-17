@@ -11,6 +11,7 @@ import { valueLabel } from './labels.js';
 import { historyButton } from './planning.js';
 import { addWeeks } from './planning-rules.js';
 import { appointmentText, dayWarningTexts, formatDuration, leftText } from './schedule-rules.js';
+import { locale, t } from './i18n.js';
 
 const WEEK = /^\d{4}-W\d{2}$/;
 const ID = /^[1-9]\d{0,15}$/;
@@ -77,13 +78,13 @@ export const myWeekUrl = (week = null) => (week ? `/my-week?week=${week}` : '/my
 /** Week of a `<input type="week">` value, or null. Pure. */
 export const weekInput = (value) => (WEEK.test(value) ? value : null);
 
-const dayFormat = new Intl.DateTimeFormat('en-GB', {
+const dayFormat = new Intl.DateTimeFormat(locale(), {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
   timeZone: 'UTC',
 });
-const longDayFormat = new Intl.DateTimeFormat('en-GB', {
+const longDayFormat = new Intl.DateTimeFormat(locale(), {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
@@ -94,8 +95,8 @@ export const dayLabel = (day) => dayFormat.format(new Date(`${day}T00:00:00Z`));
 /** 'Monday 5 October'. Pure. */
 export const longDayLabel = (day) => longDayFormat.format(new Date(`${day}T00:00:00Z`));
 
-const percentFormat = new Intl.NumberFormat('en-GB', { style: 'percent' });
-const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const percentFormat = new Intl.NumberFormat(locale(), { style: 'percent' });
+const numberFormat = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 /** What a person's day header says: "6 h / 7 h", and the reason of an override. Pure. */
 export function dayHeadText(day) {
@@ -119,9 +120,12 @@ export function blockView(block, person) {
     formatDuration(block.hours),
     where,
     block.note,
-    helper ? 'helper' : null,
+    helper ? t('helper') : null,
     block.locked_start
-      ? `appointment ${appointmentText(block.locked_start, block.hours)}, locked by ${personName(block.locked_by)}`
+      ? t('appointment {appointmentText}, locked by {locked_by}', {
+          appointmentText: appointmentText(block.locked_start, block.hours),
+          locked_by: personName(block.locked_by),
+        })
       : null,
   ].filter(Boolean);
   return {
@@ -140,46 +144,50 @@ export function scheduleTileViews(tiles) {
   return [
     {
       key: 'booked',
-      label: 'Booked hours',
+      label: t('Booked hours'),
       value: `${numberFormat.format(tiles.booked_hours)} h / ${numberFormat.format(tiles.available_hours)} h`,
-      detail: 'booked vs available, whole team',
+      detail: t('booked vs available, whole team'),
       flagged: tiles.booked_hours > tiles.available_hours,
     },
     {
       key: 'left',
-      label: 'Left to schedule',
+      label: t('Left to schedule'),
       value: `${numberFormat.format(left.planned + left.carried_over)} h`,
-      detail: `planned this week or carried over; ${numberFormat.format(left.not_planned)} h of work without a week`,
+      detail: t('planned this week or carried over; {not_planned} h of work without a week', {
+        not_planned: numberFormat.format(left.not_planned),
+      }),
       flagged: false,
     },
     {
       key: 'travel',
-      label: 'Travel time',
+      label: t('Travel time'),
       value: tiles.travel_share === null ? '—' : percentFormat.format(tiles.travel_share),
-      detail: 'of the booked hours',
+      detail: t('of the booked hours'),
       flagged: false,
     },
     {
       key: 'sites',
-      label: 'Sites per day',
+      label: t('Sites per day'),
       value: numberFormat.format(tiles.sites_per_day.average ?? 0),
-      detail: `average per person and working day, ${tiles.sites_per_day.worst} at most`,
+      detail: t('average per person and working day, {worst} at most', {
+        worst: tiles.sites_per_day.worst,
+      }),
       flagged: tiles.sites_per_day.worst >= 2,
     },
     {
       key: 'carried',
-      label: 'Carried over',
+      label: t('Carried over'),
       value: String(tiles.carried_over),
-      detail: 'unfinished work orders from earlier weeks',
+      detail: t('unfinished work orders from earlier weeks'),
       flagged: tiles.carried_over > 0,
     },
   ];
 }
 
 const TRAY_TITLES = {
-  PLANNED: 'Planned this week',
-  CARRIED_OVER: 'Carried over',
-  NOT_PLANNED: 'Not planned',
+  PLANNED: t('Planned this week'),
+  CARRIED_OVER: t('Carried over'),
+  NOT_PLANNED: t('Not planned'),
 };
 /** Tray groups the user closed (the "Not planned" one starts closed: it can be long). */
 const closedGroups = new Set(['NOT_PLANNED']);
@@ -223,9 +231,9 @@ function trayCard(item, { canEdit, selected, week }) {
         'span',
         { class: 'tray-card-meta' },
         [
-          item.category ? valueLabel('category', item.category) : 'No trade',
-          item.due_on ? `due ${formatDate(item.due_on)}` : null,
-          item.assignee ? personName(item.assignee) : 'Unassigned',
+          item.category ? valueLabel('category', item.category) : t('No trade'),
+          item.due_on ? t('due {due_on}', { due_on: formatDate(item.due_on) }) : null,
+          item.assignee ? personName(item.assignee) : t('Unassigned'),
         ]
           .filter(Boolean)
           .join(' · '),
@@ -241,7 +249,7 @@ function trayCard(item, { canEdit, selected, week }) {
             'span',
             { class: 'tray-card-carried' },
             h('span', { 'aria-hidden': 'true' }, '↻ '),
-            `Carried over from ${formatWeek(item.carried_from)}`,
+            t('Carried over from {carried_from}', { carried_from: formatWeek(item.carried_from) }),
           )
         : null,
     ),
@@ -250,7 +258,7 @@ function trayCard(item, { canEdit, selected, week }) {
 
 function trayGroups(data, { canEdit, panel }) {
   return ['PLANNED', 'CARRIED_OVER', 'NOT_PLANNED'].map((group) => {
-    const items = data.tray.filter((t) => t.group === group);
+    const items = data.tray.filter((item) => item.group === group);
     const details = h(
       'details',
       { class: 'tray-group', open: !closedGroups.has(group), dataset: { group } },
@@ -267,7 +275,7 @@ function trayGroups(data, { canEdit, panel }) {
               }),
             ),
           )
-        : h('p', { class: 'muted' }, 'Nothing here.'),
+        : h('p', { class: 'muted' }, t('Nothing here.')),
     );
     details.addEventListener('toggle', () => {
       if (details.open) closedGroups.delete(group);
@@ -299,7 +307,7 @@ function blockItem(block, person, { canEdit, selected, week }) {
       h(
         'span',
         { class: 'block-meta' },
-        [view.hours, view.where, view.helper ? 'helper' : null].filter(Boolean).join(' · '),
+        [view.hours, view.where, view.helper ? t('helper') : null].filter(Boolean).join(' · '),
       ),
       block.note ? h('span', { class: 'block-note' }, block.note) : null,
     ),
@@ -328,8 +336,12 @@ function dayCell(person, dayInfo, column, { canEdit, panel, week, shownDay }) {
               href: scheduleUrl(week, { type: 'capacity', person: person.id, day: dayInfo.day }),
               'data-link': true,
               class: 'cell-capacity',
-              'aria-label': `${head}: hours of ${name} on ${longDayLabel(dayInfo.day)}`,
-              title: 'Set leave, part time or weekend hours',
+              'aria-label': t('{head}: hours of {name} on {longDayLabel}', {
+                head,
+                name,
+                longDayLabel: longDayLabel(dayInfo.day),
+              }),
+              title: t('Set leave, part time or weekend hours'),
             },
             head,
           )
@@ -359,7 +371,7 @@ function dayCell(person, dayInfo, column, { canEdit, panel, week, shownDay }) {
                         }),
                         'data-link': true,
                       },
-                      'Add travel time',
+                      t('Add travel time'),
                     ),
                   ]
                 : null,
@@ -387,16 +399,19 @@ function dayCell(person, dayInfo, column, { canEdit, panel, week, shownDay }) {
             href: scheduleUrl(week, { type: 'time', person: person.id, day: dayInfo.day }),
             'data-link': true,
             class: 'add-time',
-            'aria-label': `Add time for ${name} on ${longDayLabel(dayInfo.day)}`,
+            'aria-label': t('Add time for {name} on {longDayLabel}', {
+              name,
+              longDayLabel: longDayLabel(dayInfo.day),
+            }),
           },
-          '+ Time',
+          t('+ Time'),
         )
       : null,
   );
 }
 
 function personHeader(person) {
-  const trade = person.specialty ? valueLabel('category', person.specialty) : 'General';
+  const trade = person.specialty ? valueLabel('category', person.specialty) : t('General');
   return h(
     'th',
     { scope: 'row', class: 'person-cell' },
@@ -404,7 +419,7 @@ function personHeader(person) {
     h(
       'span',
       { class: 'muted' },
-      `${valueLabel('role', person.role)} · ${trade}${person.inactive ? ' · inactive' : ''}`,
+      `${valueLabel('role', person.role)} · ${trade}${person.inactive ? t(' · inactive') : ''}`,
     ),
     h(
       'span',
@@ -425,7 +440,7 @@ function grid(data, options) {
       h(
         'caption',
         { id: 'schedule-caption', class: 'visually-hidden' },
-        `${formatWeek(data.week)}: hours of each person per day`,
+        t('{week}: hours of each person per day', { week: formatWeek(data.week) }),
       ),
       h(
         'thead',
@@ -433,7 +448,7 @@ function grid(data, options) {
         h(
           'tr',
           {},
-          h('th', { scope: 'col', class: 'person-cell' }, 'Person'),
+          h('th', { scope: 'col', class: 'person-cell' }, t('Person')),
           data.days.map((d) =>
             h(
               'th',
@@ -443,8 +458,8 @@ function grid(data, options) {
                 dataset: { day: d.day },
               },
               dayLabel(d.day),
-              d.day === today ? h('span', { class: 'visually-hidden' }, ' (today)') : null,
-              d.open ? null : h('span', { class: 'day-closed' }, 'not open'),
+              d.day === today ? h('span', { class: 'visually-hidden' }, t(' (today)')) : null,
+              d.open ? null : h('span', { class: 'day-closed' }, t('not open')),
             ),
           ),
         ),
@@ -469,9 +484,16 @@ function grid(data, options) {
 export function scheduleSummaryText(tiles) {
   const left = tiles.hours_left;
   return [
-    `${numberFormat.format(tiles.booked_hours)} h booked of ${numberFormat.format(tiles.available_hours)} h`,
-    `${numberFormat.format(left.planned + left.carried_over)} h left to schedule`,
-    tiles.carried_over ? `${tiles.carried_over} carried over` : null,
+    t('{booked_hours} h booked of {available_hours} h', {
+      booked_hours: numberFormat.format(tiles.booked_hours),
+      available_hours: numberFormat.format(tiles.available_hours),
+    }),
+    t('{value} h left to schedule', {
+      value: numberFormat.format(left.planned + left.carried_over),
+    }),
+    tiles.carried_over
+      ? t('{carried_over} carried over', { carried_over: tiles.carried_over })
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -484,7 +506,7 @@ function tilesSection(data) {
     h(
       'h2',
       { id: 'schedule-tiles-heading', class: 'visually-hidden', tabindex: '-1' },
-      `Key figures of ${formatWeek(data.week)}`,
+      t('Key figures of {week}', { week: formatWeek(data.week) }),
     ),
     h('p', { class: 'schedule-summary' }, scheduleSummaryText(data.tiles)),
     h(
@@ -505,7 +527,7 @@ function tilesSection(data) {
                   'span',
                   { class: 'badge badge-tone-warning kpi-flag' },
                   h('span', { 'aria-hidden': 'true' }, '⚠'),
-                  'Needs attention',
+                  t('Needs attention'),
                 )
               : null,
           ),
@@ -533,7 +555,7 @@ function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
     type: 'week',
     id: 'schedule-week',
     value: data.week,
-    'aria-label': 'Week shown',
+    'aria-label': t('Week shown'),
     onChange: (event) => {
       const week = weekInput(event.target.value);
       if (week) onWeek(week);
@@ -551,7 +573,10 @@ function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
       }),
       ` ${label}`,
     );
-  const openDays = [data.saturday_open ? 'Saturday' : null, data.sunday_open ? 'Sunday' : null]
+  const openDays = [
+    data.saturday_open ? t('Saturday') : null,
+    data.sunday_open ? t('Sunday') : null,
+  ]
     .filter(Boolean)
     .join(' and ');
   return h(
@@ -560,29 +585,31 @@ function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
     h(
       'div',
       { class: 'schedule-weeks' },
-      link(addWeeks(data.week, -1), '← Previous', 'Previous week'),
+      link(addWeeks(data.week, -1), t('← Previous'), t('Previous week')),
       h('strong', { class: 'schedule-week-name' }, formatWeek(data.week)),
-      link(addWeeks(data.week, 1), 'Next →', 'Next week'),
-      shown ? link(data.current_week, 'This week', 'Back to this week') : null,
+      link(addWeeks(data.week, 1), t('Next →'), t('Next week')),
+      shown ? link(data.current_week, t('This week'), t('Back to this week')) : null,
       picker,
     ),
     canEdit
       ? h(
           'div',
           { class: 'schedule-weekend' },
-          weekend('saturday_open', 'Open Saturday'),
-          weekend('sunday_open', 'Open Sunday'),
+          weekend('saturday_open', t('Open Saturday')),
+          weekend('sunday_open', t('Open Sunday')),
           history
             ? [
-                historyButton('Undo', history.undoLabel, history.onUndo, 'Ctrl+Z'),
-                historyButton('Redo', history.redoLabel, history.onRedo, 'Ctrl+Y'),
+                historyButton(t('Undo'), history.undoLabel, history.onUndo, t('Ctrl+Z')),
+                historyButton(t('Redo'), history.redoLabel, history.onRedo, t('Ctrl+Y')),
               ]
             : null,
         )
       : h(
           'p',
           { class: 'muted' },
-          openDays ? `${openDays} open this week.` : 'Monday to Friday this week.',
+          openDays
+            ? t('{openDays} open this week.', { openDays })
+            : t('Monday to Friday this week.'),
         ),
     canEdit
       ? h(
@@ -592,12 +619,16 @@ function toolbar(data, { canEdit, history, onWeek, onWeekend, message }) {
           h(
             'span',
             { class: 'help-fine' },
-            'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour; Ctrl + Z undoes, Ctrl + Y redoes.',
+            t(
+              'Drag a work order from the tray onto a person’s day, or a block to another day or person. With the keyboard, open a card or a block (Enter) to schedule or move it; + and − change a block’s length by half an hour; Ctrl + Z undoes, Ctrl + Y redoes.',
+            ),
           ),
           h(
             'span',
             { class: 'help-coarse' },
-            'Tap a work order in “To schedule” to schedule it, or a block to move, resize or remove it.',
+            t(
+              'Tap a work order in “To schedule” to schedule it, or a block to move, resize or remove it.',
+            ),
           ),
         )
       : null,
@@ -611,7 +642,9 @@ let trayOpen = false;
 let phoneDay = null;
 
 const trayToggleText = (count, open) =>
-  open ? 'Hide the work orders to schedule' : `Show the work orders to schedule (${count})`;
+  open
+    ? t('Hide the work orders to schedule')
+    : t('Show the work orders to schedule ({count})', { count });
 
 /** Day of the one-day view (phones, M14): the one chosen, else today, else the first. Pure. */
 export function dayToShow(days, today, chosen = phoneDay) {
@@ -624,7 +657,7 @@ export function dayToShow(days, today, chosen = phoneDay) {
 function daySwitcher(days, shownDay, scheduleGrid) {
   const group = h(
     'div',
-    { class: 'segmented day-switcher', role: 'group', 'aria-label': 'Day shown' },
+    { class: 'segmented day-switcher', role: 'group', 'aria-label': t('Day shown') },
     days.map((d) =>
       h(
         'button',
@@ -674,7 +707,7 @@ export function renderScheduler(
       class: `schedule-tray${trayOpen ? ' is-open' : ''}`,
       'aria-labelledby': 'tray-heading',
     },
-    h('h2', { id: 'tray-heading' }, 'To schedule'),
+    h('h2', { id: 'tray-heading' }, t('To schedule')),
     h(
       'button',
       {
@@ -695,7 +728,7 @@ export function renderScheduler(
   );
   const scheduleGrid = people
     ? grid(data, { canEdit, panel, today, shownDay })
-    : h('p', { class: 'empty-state' }, 'No active technician or supervisor.');
+    : h('p', { class: 'empty-state' }, t('No active technician or supervisor.'));
   replaceChildren(
     container,
     h(

@@ -129,7 +129,10 @@
   box-shadow: 0 8px 24px rgb(var(--shadow-color) / 8%);
 }
 
-.login-logo {
+.login-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: var(--space-3);
 }
 

@@ -35,12 +35,13 @@ import {
   widgetOptions,
   widgetTable,
 } from './widgets.js';
+import { locale, serverText, t, tn } from './i18n.js';
 
 const tableContainer = document.getElementById('table-container');
 const LIST_CACHE = 'dashboards';
 const DISABLED_CACHE = 'dashboard_widgets_disabled';
 const dataCache = (id) => `dashboard_data_${id}`;
-const numberFormat = new Intl.NumberFormat('en-GB');
+const numberFormat = new Intl.NumberFormat(locale());
 
 /** What the page needs from the app shell (app.js), given once at startup. */
 let app = null;
@@ -155,7 +156,7 @@ function renderNav() {
       h(
         'button',
         { type: 'button', class: 'nav-action online-only', onClick: () => newDashboard() },
-        '+ New dashboard',
+        t('+ New dashboard'),
       ),
     ),
   );
@@ -174,11 +175,11 @@ function renderPicker() {
   const shown = new Set(view.dashboard.widgets.map((w) => w.key));
   replaceChildren(
     picker,
-    h('h2', { id: 'widget-picker-title', class: 'widget-picker-title' }, 'Widgets'),
+    h('h2', { id: 'widget-picker-title', class: 'widget-picker-title' }, t('Widgets')),
     h(
       'p',
       { class: 'widget-picker-hint' },
-      `Tick the widgets to show on “${view.dashboard.name}”.`,
+      t('Tick the widgets to show on “{name}”.', { name: view.dashboard.name }),
     ),
     WIDGET_GROUPS.map((group) => {
       const offered = WIDGETS.filter((w) => w.group === group && shownDef(w.key));
@@ -201,7 +202,11 @@ function renderPicker() {
             h('span', {}, w.label),
             // Administrators only: the widget is switched off for supervisors.
             disabledWidgets.has(w.key)
-              ? h('span', { class: 'widget-off', title: 'Switched off for supervisors' }, 'Off')
+              ? h(
+                  'span',
+                  { class: 'widget-off', title: t('Switched off for supervisors') },
+                  t('Off'),
+                )
               : null,
           ),
         ),
@@ -216,8 +221,8 @@ function renderPicker() {
 
 /** `/admin/widgets`: each widget switched on or off for supervisors (online only). */
 export async function showWidgetSettings(isCurrent) {
-  app.leaveRecordViews('widget_settings', 'Dashboard widgets');
-  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the widgets…'));
+  app.leaveRecordViews('widget_settings', t('Dashboard widgets'));
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the widgets…')));
   let items;
   try {
     ({ items } = await apiFetch('/dashboards/widgets'));
@@ -225,8 +230,9 @@ export async function showWidgetSettings(isCurrent) {
     if (!isCurrent()) return;
     app.showConsoleError(err, () => app.render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The dashboard widgets need a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The dashboard widgets need a connection to the server.',
+      );
     }
     return;
   }
@@ -249,9 +255,15 @@ export async function showWidgetSettings(isCurrent) {
       if (enabled) disabledWidgets.delete(key);
       else disabledWidgets.add(key);
       await DB.setConfig(DISABLED_CACHE, [...disabledWidgets]);
-      announce(`${label} switched ${enabled ? 'on' : 'off'} for supervisors.`);
+      announce(
+        enabled
+          ? t('{label} switched on for supervisors.', { label })
+          : t('{label} switched off for supervisors.', { label }),
+      );
     } catch (err) {
-      announce(err.status === 0 ? `You are offline: ${label} was not changed.` : err.message);
+      announce(
+        err.status === 0 ? t('You are offline: {label} was not changed.', { label }) : err.message,
+      );
     }
     if (isCurrent()) draw(`setting-${key}`);
   }
@@ -295,11 +307,13 @@ export async function showDashboards(route, isCurrent) {
     if (!isOnline()) {
       return app.showPlaceholder(
         null,
-        'Dashboard',
-        'Your dashboards have not been loaded on this device yet, so they are not available offline.',
+        t('Dashboard'),
+        t(
+          'Your dashboards have not been loaded on this device yet, so they are not available offline.',
+        ),
       );
     }
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your dashboards…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading your dashboards…')));
     try {
       await fetchList();
     } catch (err) {
@@ -312,8 +326,8 @@ export async function showDashboards(route, isCurrent) {
   if (!dashboard) {
     return app.showPlaceholder(
       null,
-      'Dashboard not found',
-      'This dashboard does not exist, or it is not one of yours.',
+      t('Dashboard not found'),
+      t('This dashboard does not exist, or it is not one of yours.'),
     );
   }
 
@@ -398,7 +412,10 @@ function paint(focus = focusKey()) {
   renderNav();
   renderPicker();
 
-  const grid = h('ul', { class: 'widget-grid', 'aria-label': `Widgets of ${dashboard.name}` });
+  const grid = h('ul', {
+    class: 'widget-grid',
+    'aria-label': t('Widgets of {name}', { name: dashboard.name }),
+  });
   const charts = [];
   const entries = dashboard.widgets.filter((w) => shownDef(w.key));
   entries.forEach((entry) => {
@@ -418,18 +435,20 @@ function paint(focus = focusKey()) {
         ? h(
             'div',
             { class: 'banner banner-info', role: 'note' },
-            `Offline: figures saved on this device on ${formatDateTime(view.fetchedAt)}.`,
+            t('Offline: figures saved on this device on {fetchedAt}.', {
+              fetchedAt: formatDateTime(view.fetchedAt),
+            }),
           )
         : null,
       h('p', { id: 'dashboard-message', class: 'dashboard-message', role: 'status' }),
       h(
         'p',
         { id: 'widget-drag-help', class: 'visually-hidden' },
-        'Press Space to pick the widget up, the arrow keys to move it, and Space to drop it.',
+        t('Press Space to pick the widget up, the arrow keys to move it, and Space to drop it.'),
       ),
       entries.length
         ? grid
-        : h('p', { class: 'empty-state' }, 'No widget yet: tick widgets in the sidebar.'),
+        : h('p', { class: 'empty-state' }, t('No widget yet: tick widgets in the sidebar.')),
     ),
   );
   view.detach = attachWidgetDrag(grid, {
@@ -487,7 +506,7 @@ function toolbar(dashboard) {
   const { filters } = dashboard;
   const period = h(
     'div',
-    { class: 'segmented', role: 'group', 'aria-label': 'Period' },
+    { class: 'segmented', role: 'group', 'aria-label': t('Period') },
     PERIODS.map((days) =>
       h(
         'button',
@@ -500,7 +519,7 @@ function toolbar(dashboard) {
             if (filters.period !== days) changeFilters({ ...filters, period: days });
           },
         },
-        `${days} days`,
+        t('{days} days', { days }),
       ),
     ),
   );
@@ -512,7 +531,7 @@ function toolbar(dashboard) {
     options: siteNames.map((s) => [s, s]),
     separator: '|',
     onChange: () => changeFilters({ ...dashboard.filters, sites: splitValue(sites.value, '|') }),
-    summary: (value) => (value ? null : 'All sites'),
+    summary: (value) => (value ? null : t('All sites')),
   });
   sites.value = filters.sites.join('|');
   const trades = multiSelect({
@@ -521,7 +540,7 @@ function toolbar(dashboard) {
     options: CATEGORIES.map((c) => [c, valueLabel('category', c)]),
     onChange: () =>
       changeFilters({ ...dashboard.filters, categories: splitValue(trades.value, ',') }),
-    summary: (value) => (value ? null : 'All trades'),
+    summary: (value) => (value ? null : t('All trades')),
   });
   trades.value = filters.categories.join(',');
   for (const el of [sites, trades]) {
@@ -537,20 +556,25 @@ function toolbar(dashboard) {
       {
         class: 'dashboard-filters',
         role: 'group',
-        'aria-label': 'Filters of this dashboard',
+        'aria-label': t('Filters of this dashboard'),
         tabindex: '-1',
       },
-      h('div', { class: 'filter-field' }, h('span', { class: 'filter-label' }, 'Period'), period),
       h(
         'div',
         { class: 'filter-field' },
-        h('span', { id: 'dashboard-sites-label', class: 'filter-label' }, 'Sites'),
+        h('span', { class: 'filter-label' }, t('Period')),
+        period,
+      ),
+      h(
+        'div',
+        { class: 'filter-field' },
+        h('span', { id: 'dashboard-sites-label', class: 'filter-label' }, t('Sites')),
         sites,
       ),
       h(
         'div',
         { class: 'filter-field' },
-        h('span', { id: 'dashboard-categories-label', class: 'filter-label' }, 'Trades'),
+        h('span', { id: 'dashboard-categories-label', class: 'filter-label' }, t('Trades')),
         trades,
       ),
     ),
@@ -585,23 +609,23 @@ function dashboardMenu(dashboard) {
     h(
       'summary',
       { class: 'button button-secondary', dataset: { focus: 'page-menu' } },
-      'Dashboard',
+      t('Dashboard'),
     ),
     h(
       'div',
       { class: 'menu-list' },
-      menuButton('New dashboard…', () => newDashboard(), { online: true }),
-      menuButton('Rename…', () => renameDashboard(), { online: true }),
-      menuButton('Duplicate…', () => duplicateDashboard(), { online: true }),
-      menuButton('Move up in the sidebar', () => moveDashboard(-1), {
+      menuButton(t('New dashboard…'), () => newDashboard(), { online: true }),
+      menuButton(t('Rename…'), () => renameDashboard(), { online: true }),
+      menuButton(t('Duplicate…'), () => duplicateDashboard(), { online: true }),
+      menuButton(t('Move up in the sidebar'), () => moveDashboard(-1), {
         online: true,
         disabled: index <= 0,
       }),
-      menuButton('Move down in the sidebar', () => moveDashboard(1), {
+      menuButton(t('Move down in the sidebar'), () => moveDashboard(1), {
         online: true,
         disabled: index === list.length - 1,
       }),
-      menuButton('Delete…', () => deleteDashboard(), {
+      menuButton(t('Delete…'), () => deleteDashboard(), {
         online: true,
         disabled: list.length === 1,
       }),
@@ -632,7 +656,7 @@ function widgetCard({ key, options }) {
         element: h(
           'p',
           { class: 'empty-state' },
-          isOnline() ? 'Loading…' : 'Not saved on this device yet.',
+          isOnline() ? t('Loading…') : t('Not saved on this device yet.'),
         ),
       };
   const card = h(
@@ -650,7 +674,7 @@ function widgetCard({ key, options }) {
         {
           type: 'button',
           class: 'widget-handle online-only',
-          'aria-label': `Move ${def.label}`,
+          'aria-label': t('Move {label}', { label: def.label }),
           'aria-describedby': 'widget-drag-help',
           'aria-pressed': 'false',
           dataset: { focus: `handle-${key}` },
@@ -680,24 +704,28 @@ function widgetMenu(key, def, hasData) {
     { class: 'widget-menu' },
     h(
       'summary',
-      { 'aria-label': `Actions: ${def.label}`, dataset: { focus: `menu-${key}` } },
+      {
+        'aria-label': t('Actions: {label}', { label: def.label }),
+        dataset: { focus: `menu-${key}` },
+      },
       h('span', { 'aria-hidden': 'true' }, '⋯'),
     ),
     h(
       'div',
       { class: 'menu-list' },
-      menuButton('Figures (CSV)', () => exportFigures(key), { disabled: !hasData }),
+      menuButton(t('Figures (CSV)'), () => exportFigures(key), { disabled: !hasData }),
       def.rows
         ? menuButton(
-            { assets: 'Assets (CSV)', visits: 'Visits (CSV)' }[def.rows] ?? 'Work orders (CSV)',
+            { assets: t('Assets (CSV)'), visits: t('Visits (CSV)') }[def.rows] ??
+              t('Work orders (CSV)'),
             () => exportRecords(key),
             { online: true },
           )
         : null,
-      menuButton('Image (JPG)', () => exportImage(key), { disabled: !hasData }),
-      menuButton('Move earlier', () => moveWidget(key, -1), { online: true, move: 'earlier' }),
-      menuButton('Move later', () => moveWidget(key, 1), { online: true, move: 'later' }),
-      menuButton('Remove from dashboard', () => toggleWidget(key, false), { online: true }),
+      menuButton(t('Image (JPG)'), () => exportImage(key), { disabled: !hasData }),
+      menuButton(t('Move earlier'), () => moveWidget(key, -1), { online: true, move: 'earlier' }),
+      menuButton(t('Move later'), () => moveWidget(key, 1), { online: true, move: 'later' }),
+      menuButton(t('Remove from dashboard'), () => toggleWidget(key, false), { online: true }),
     ),
   );
 }
@@ -731,9 +759,9 @@ function save(changes, { refetch = false } = {}) {
 async function recover(err) {
   const message =
     err.status === 409
-      ? 'This dashboard was changed elsewhere: it is shown again as saved.'
+      ? t('This dashboard was changed elsewhere: it is shown again as saved.')
       : err.status === 0
-        ? 'The change could not be saved: the server cannot be reached.'
+        ? t('The change could not be saved: the server cannot be reached.')
         : err.message;
   try {
     const items = await fetchList();
@@ -762,12 +790,12 @@ function toggleWidget(key, checked) {
     setWidgets([...widgets, { key, options: {} }]);
     paint();
     tableContainer.querySelector(`[data-key="${key}"]`)?.scrollIntoView({ block: 'nearest' });
-    announce(`${label} added at the end of the dashboard.`);
+    announce(t('{label} added at the end of the dashboard.', { label }));
     save({ widgets: view.dashboard.widgets }, { refetch: true });
   } else {
     setWidgets(widgets.filter((w) => w.key !== key));
     paint(focusKey() ?? 'page-menu');
-    announce(`${label} removed from the dashboard.`);
+    announce(t('{label} removed from the dashboard.', { label }));
     save({ widgets: view.dashboard.widgets });
   }
 }
@@ -801,7 +829,13 @@ function moveWidget(key, step) {
   else sibling.after(card);
   const keys = [...grid.querySelectorAll(':scope > .widget-card')].map((c) => c.dataset.key);
   card.querySelector('.widget-handle').focus();
-  announce(`${widgetDef(key).label}, position ${keys.indexOf(key) + 1} of ${keys.length}.`);
+  announce(
+    t('{label}, position {value} of {length}.', {
+      label: widgetDef(key).label,
+      value: keys.indexOf(key) + 1,
+      length: keys.length,
+    }),
+  );
   reorderWidgets(keys);
 }
 
@@ -855,15 +889,19 @@ function nameDialog({ title, submit, value = '', starts }, onSubmit) {
     'form',
     { class: 'dialog-form', novalidate: true },
     h('h2', { class: 'dialog-title' }, title),
-    h('div', { class: 'form-field' }, h('label', { for: input.id }, 'Name'), input, error),
+    h('div', { class: 'form-field' }, h('label', { for: input.id }, t('Name')), input, error),
     choices
-      ? h('fieldset', { class: 'dialog-choices' }, h('legend', {}, 'Start from'), choices)
+      ? h('fieldset', { class: 'dialog-choices' }, h('legend', {}, t('Start from')), choices)
       : null,
     h(
       'div',
       { class: 'dialog-actions' },
       h('button', { type: 'submit', class: 'button button-primary online-only' }, submit),
-      h('button', { type: 'button', class: 'button button-secondary', value: 'cancel' }, 'Cancel'),
+      h(
+        'button',
+        { type: 'button', class: 'button button-secondary', value: 'cancel' },
+        t('Cancel'),
+      ),
     ),
   );
   const dialog = h(
@@ -886,7 +924,7 @@ function nameDialog({ title, submit, value = '', starts }, onSubmit) {
     event.preventDefault();
     const name = input.value.trim();
     if (!name) {
-      error.textContent = 'Give the dashboard a name.';
+      error.textContent = t('Give the dashboard a name.');
       input.setAttribute('aria-invalid', 'true');
       input.setAttribute('aria-describedby', error.id);
       return input.focus();
@@ -898,8 +936,9 @@ function nameDialog({ title, submit, value = '', starts }, onSubmit) {
       close();
     } catch (err) {
       error.textContent =
-        err.body?.details?.fields?.name === 'Already used'
-          ? 'You already have a dashboard with this name.'
+        // The field message arrives translated (api.js): compare it in the same language.
+        err.body?.details?.fields?.name === serverText('Already used')
+          ? t('You already have a dashboard with this name.')
           : err.message;
       input.setAttribute('aria-invalid', 'true');
       input.setAttribute('aria-describedby', error.id);
@@ -914,27 +953,34 @@ function nameDialog({ title, submit, value = '', starts }, onSubmit) {
 
 function newDashboard() {
   const starts = [
-    { value: 'EMPTY', label: 'An empty dashboard' },
-    { value: 'OVERVIEW', label: 'The overview (every key figure and chart)' },
-    { value: 'BACKLOG', label: 'The backlog (flow, age, weeks of work, planned vs reactive)' },
-    { value: 'COMPLIANCE', label: 'Compliance (preventive, regulatory, schedule, contractors)' },
-    { value: 'ASSETS_PEOPLE', label: 'Assets and people (breakdowns, response times, estimates)' },
+    { value: 'EMPTY', label: t('An empty dashboard') },
+    { value: 'OVERVIEW', label: t('The overview (every key figure and chart)') },
+    { value: 'BACKLOG', label: t('The backlog (flow, age, weeks of work, planned vs reactive)') },
+    { value: 'COMPLIANCE', label: t('Compliance (preventive, regulatory, schedule, contractors)') },
+    {
+      value: 'ASSETS_PEOPLE',
+      label: t('Assets and people (breakdowns, response times, estimates)'),
+    },
   ];
-  if (view) starts.push({ value: 'COPY', label: `A copy of “${view.dashboard.name}”` });
-  nameDialog({ title: 'New dashboard', submit: 'Create', starts }, async ({ name, start }) => {
-    const body =
-      start === 'COPY' ? { name, copy_of: view.dashboard.id } : { name, template: start };
-    const created = await apiFetch('/dashboards', { method: 'POST', body });
-    await storeList([...list, created]);
-    announce(`Dashboard ${created.name} created.`);
-    navigate(`/dashboard/${created.id}`);
-  });
+  if (view)
+    starts.push({ value: 'COPY', label: t('A copy of “{name}”', { name: view.dashboard.name }) });
+  nameDialog(
+    { title: t('New dashboard'), submit: t('Create'), starts },
+    async ({ name, start }) => {
+      const body =
+        start === 'COPY' ? { name, copy_of: view.dashboard.id } : { name, template: start };
+      const created = await apiFetch('/dashboards', { method: 'POST', body });
+      await storeList([...list, created]);
+      announce(t('Dashboard {name} created.', { name: created.name }));
+      navigate(`/dashboard/${created.id}`);
+    },
+  );
 }
 
 function renameDashboard() {
   const { dashboard } = view;
   nameDialog(
-    { title: 'Rename the dashboard', submit: 'Rename', value: dashboard.name },
+    { title: t('Rename the dashboard'), submit: t('Rename'), value: dashboard.name },
     async ({ name }) => {
       if (name === dashboard.name) return;
       await saving;
@@ -946,7 +992,7 @@ function renameDashboard() {
       await storeList(list.map((d) => (d.id === updated.id ? updated : d)));
       view.dashboard = { ...view.dashboard, name: updated.name, version: updated.version };
       paint('page-menu');
-      announce(`Dashboard renamed ${updated.name}.`);
+      announce(t('Dashboard renamed {name}.', { name: updated.name }));
     },
   );
 }
@@ -954,7 +1000,11 @@ function renameDashboard() {
 function duplicateDashboard() {
   const { dashboard } = view;
   nameDialog(
-    { title: 'Duplicate the dashboard', submit: 'Duplicate', value: `${dashboard.name} (copy)` },
+    {
+      title: t('Duplicate the dashboard'),
+      submit: t('Duplicate'),
+      value: t('{name} (copy)', { name: dashboard.name }),
+    },
     async ({ name }) => {
       await saving;
       const created = await apiFetch('/dashboards', {
@@ -962,7 +1012,7 @@ function duplicateDashboard() {
         body: { name, copy_of: dashboard.id },
       });
       await storeList([...list, created]);
-      announce(`Dashboard ${created.name} created.`);
+      announce(t('Dashboard {name} created.', { name: created.name }));
       navigate(`/dashboard/${created.id}`);
     },
   );
@@ -977,7 +1027,11 @@ async function moveDashboard(step) {
     await apiFetch('/dashboards/order', { method: 'PUT', body: { ids: reordered } });
     await storeList(reordered.map((x) => list.find((d) => d.id === x)));
     paint('page-menu');
-    announce(`${view.dashboard.name} moved ${step < 0 ? 'up' : 'down'} in the sidebar.`);
+    announce(
+      step < 0
+        ? t('{name} moved up in the sidebar.', { name: view.dashboard.name })
+        : t('{name} moved down in the sidebar.', { name: view.dashboard.name }),
+    );
   } catch (err) {
     await recover(err);
   }
@@ -986,11 +1040,14 @@ async function moveDashboard(step) {
 async function deleteDashboard() {
   const { dashboard } = view;
   const choice = await confirmDialog({
-    title: 'Delete this dashboard?',
-    message: `“${dashboard.name}” and its layout will be deleted. The work orders and figures are not affected.`,
+    title: t('Delete this dashboard?'),
+    message: t(
+      '“{name}” and its layout will be deleted. The work orders and figures are not affected.',
+      { name: dashboard.name },
+    ),
     actions: [
-      { value: 'cancel', label: 'Cancel', primary: true },
-      { value: 'delete', label: 'Delete dashboard' },
+      { value: 'cancel', label: t('Cancel'), primary: true },
+      { value: 'delete', label: t('Delete dashboard') },
     ],
   });
   if (choice !== 'delete') return;
@@ -1002,7 +1059,7 @@ async function deleteDashboard() {
     await storeList(list.filter((d) => d.id !== dashboard.id));
     releaseView();
     view = null;
-    announce(`Dashboard ${dashboard.name} deleted.`);
+    announce(t('Dashboard {name} deleted.', { name: dashboard.name }));
     navigate('/dashboard');
   } catch (err) {
     await recover(err);
@@ -1043,7 +1100,7 @@ async function exportRecords(key) {
       : key === 'bad_actors' && optionsOf(key).critical_only === 'yes'
         ? '&segment=critical'
         : '';
-  showMessage('Preparing the file…');
+  showMessage(t('Preparing the file…'));
   try {
     const result = await apiFetch(
       `/dashboard/widgets/${key}/rows?${filterQuery(view.dashboard.filters)}${segment}`,
@@ -1051,11 +1108,18 @@ async function exportRecords(key) {
     const table = recordsTable(result.kind, result.items, key);
     downloadCsv(
       toCsv(table.columns, table.rows),
-      fileName(key, 'csv', { assets: 'assets', visits: 'visits' }[def.rows] ?? 'work orders'),
+      fileName(
+        key,
+        'csv',
+        { assets: t('assets'), visits: t('visits') }[def.rows] ?? t('work orders'),
+      ),
     );
     const text = result.truncated
-      ? `The file holds the first ${numberFormat.format(result.items.length)} of ${numberFormat.format(result.total)} records.`
-      : `${numberFormat.format(result.total)} record${result.total === 1 ? '' : 's'} exported.`;
+      ? t('The file holds the first {length} of {total} records.', {
+          length: numberFormat.format(result.items.length),
+          total: numberFormat.format(result.total),
+        })
+      : tn(result.total, '{n} record exported.', '{n} records exported.');
     showMessage(text, result.truncated ? 'warning' : 'info');
     announce(text);
   } catch (err) {
@@ -1065,9 +1129,9 @@ async function exportRecords(key) {
 
 /** Headline share of the rate widgets, written big in their image ("75% on time"). */
 const HEADLINES = {
-  pm_compliance: 'on time',
-  schedule_compliance: 'kept',
-  contractor_scorecard: 'on time',
+  pm_compliance: t('on time'),
+  schedule_compliance: t('kept'),
+  contractor_scorecard: t('on time'),
 };
 
 /** Options of a widget on the dashboard on screen, defaults filled in. */
@@ -1089,7 +1153,10 @@ async function exportImage(key) {
     const blob = await widgetImage({
       title: def.label,
       subtitle: widgetScope(def, view.dashboard.filters),
-      footer: `Tacto · ${view.dashboard.name} · figures of ${formatDateTime(view.fetchedAt)}`,
+      footer: t('Tacto · {name} · figures of {fetchedAt}', {
+        name: view.dashboard.name,
+        fetchedAt: formatDateTime(view.fetchedAt),
+      }),
       font: css.getPropertyValue('--font-sans').trim(),
       charts,
       legend: view.legends.get(key)?.map(([label, slot]) => [
@@ -1110,7 +1177,7 @@ async function exportImage(key) {
         : HEADLINES[key] && data.rate !== null && data.rate !== undefined
           ? `${percentFormat.format(data.rate)} ${HEADLINES[key]}`
           : undefined,
-      note: card?.classList.contains('is-flagged') ? '⚠ Needs attention' : undefined,
+      note: card?.classList.contains('is-flagged') ? t('⚠ Needs attention') : undefined,
       // Without the chart library, a chart's image falls back to its table.
       table:
         imageShowsTable(key) || (!chart && !tile)

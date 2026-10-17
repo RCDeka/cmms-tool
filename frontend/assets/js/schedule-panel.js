@@ -20,6 +20,7 @@ import {
   lockTimes,
   splitProposal,
 } from './schedule-rules.js';
+import { t, tn } from './i18n.js';
 
 const select = (name, options, value) =>
   h(
@@ -32,7 +33,7 @@ const select = (name, options, value) =>
 const personOptions = (data) =>
   data.people.filter((p) => !p.inactive).map((p) => [p.id, `${p.first_name} ${p.last_name}`]);
 const dayOptions = (data) =>
-  data.days.map((d) => [d.day, `${longDayLabel(d.day)}${d.open ? '' : ' (not open)'}`]);
+  data.days.map((d) => [d.day, `${longDayLabel(d.day)}${d.open ? '' : t(' (not open)')}`]);
 const lengthOptions = (max) => blockLengths(max).map((v) => [v, formatDuration(v)]);
 
 const field = (dt, dd) =>
@@ -95,22 +96,22 @@ export function renderItemPanel(
     const row = h(
       'li',
       { class: 'block-row' },
-      formRow(`sb-person-${n}`, 'Person', select('person', personOptions(data), block.person)),
-      formRow(`sb-day-${n}`, 'Day', select('day', dayOptions(data), block.day)),
-      formRow(`sb-hours-${n}`, 'Length', select('hours', lengthOptions(max), block.hours)),
+      formRow(`sb-person-${n}`, t('Person'), select('person', personOptions(data), block.person)),
+      formRow(`sb-day-${n}`, t('Day'), select('day', dayOptions(data), block.day)),
+      formRow(`sb-hours-${n}`, t('Length'), select('hours', lengthOptions(max), block.hours)),
       h(
         'button',
         {
           type: 'button',
           class: 'button button-secondary',
-          'aria-label': `Remove block ${n}`,
+          'aria-label': t('Remove block {n}', { n }),
           onClick: () => {
             row.remove();
             update();
             rows.querySelector('select')?.focus();
           },
         },
-        'Remove',
+        t('block|Remove'),
       ),
     );
     rows.append(row);
@@ -134,9 +135,9 @@ export function renderItemPanel(
     const blocks = read();
     const sum = blocks.reduce((s, b) => s + b.hours, 0);
     const left = needed() - sum;
-    total.textContent = `${formatDuration(sum)} in ${blocks.length} block${blocks.length === 1 ? '' : 's'}${
-      left > 0 ? ` · ${formatDuration(left)} still left after these` : ''
-    }`;
+    total.textContent = `${tn(blocks.length, '{hours} in {n} block', '{hours} in {n} blocks', {
+      hours: formatDuration(sum),
+    })}${left > 0 ? t(' · {left} still left after these', { left: formatDuration(left) }) : ''}`;
   }
 
   const form = canEdit
@@ -157,25 +158,29 @@ export function renderItemPanel(
             );
           },
         },
-        h('h3', {}, 'Blocks'),
+        h('h3', {}, t('Blocks')),
         summary(),
         estimate
-          ? formRow('sb-estimate', 'Estimated time (hours)', estimate, {
+          ? formRow('sb-estimate', t('Estimated time (hours)'), estimate, {
               required: true,
-              hint: 'This work order has no estimate yet: give one to know what is left (half-hour steps).',
+              hint: t(
+                'This work order has no estimate yet: give one to know what is left (half-hour steps).',
+              ),
             })
           : null,
         estimate
           ? h(
               'button',
               { type: 'button', class: 'button button-secondary', onClick: propose },
-              'Propose blocks for this estimate',
+              t('Propose blocks for this estimate'),
             )
           : null,
         h(
           'p',
           { class: 'field-hint' },
-          `Blocks last ${formatDuration(max)} at most; a longer job is split over the following days.`,
+          t('Blocks last {max} at most; a longer job is split over the following days.', {
+            max: formatDuration(max),
+          }),
         ),
         rows,
         h(
@@ -190,39 +195,44 @@ export function renderItemPanel(
               rows.querySelector('.block-row:last-child select')?.focus();
             },
           },
-          '+ Add a block',
+          t('+ Add a block'),
         ),
         total,
-        h('div', { class: 'form-actions' }, submitButton('Schedule')),
+        h('div', { class: 'form-actions' }, submitButton(t('Schedule'))),
       )
     : null;
 
   const where = [item.site, item.place].filter(Boolean).join(' · ');
   replaceChildren(
     container,
-    panelHeader(`Schedule ${item.number}`, onClose),
+    panelHeader(t('Schedule {number}', { number: item.number }), onClose),
     h('p', {}, h('a', { href: `/work-orders/${item.id}`, 'data-link': true }, item.title)),
     h(
       'dl',
       { class: 'detail-fields' },
-      field('Where', [where, item.location].filter(Boolean).join(' · ')),
-      field('Trade', item.category ? valueLabel('category', item.category) : null),
-      field('Priority', valueLabel('work_order_priority', item.priority)),
-      field('Due', item.due_on ? formatDate(item.due_on) : null),
+      field(t('Where'), [where, item.location].filter(Boolean).join(' · ')),
+      field(t('Trade'), item.category ? valueLabel('category', item.category) : null),
+      field(t('Priority'), valueLabel('work_order_priority', item.priority)),
+      field(t('Due'), item.due_on ? formatDate(item.due_on) : null),
       field(
-        'Assignee',
-        item.assignee ? personName(item.assignee) : 'Unassigned: the first person given a block',
+        t('Assignee'),
+        item.assignee ? personName(item.assignee) : t('Unassigned: the first person given a block'),
       ),
       field(
-        'Estimate',
-        item.needed_hours === null ? 'None yet' : formatDuration(item.needed_hours),
+        t('Estimate'),
+        item.needed_hours === null ? t('None yet') : formatDuration(item.needed_hours),
       ),
       field(
-        'Already scheduled',
-        item.scheduled_hours ? formatDuration(item.scheduled_hours) : 'Nothing yet',
+        t('Already scheduled'),
+        item.scheduled_hours ? formatDuration(item.scheduled_hours) : t('Nothing yet'),
       ),
-      field('Left', leftText(item)),
-      field('Carried over', item.carried_from ? `from ${formatWeek(item.carried_from)}` : null),
+      field(t('Left'), leftText(item)),
+      field(
+        t('Carried over'),
+        item.carried_from
+          ? t('from {carried_from}', { carried_from: formatWeek(item.carried_from) })
+          : null,
+      ),
     ),
     form,
   );
@@ -275,31 +285,31 @@ export function renderBlockPanel(
             onUpdate(changes, moveForm);
           },
         },
-        h('h3', {}, locked ? 'Note' : 'Move or resize'),
+        h('h3', {}, locked ? t('Note') : t('Move or resize')),
         summary(),
         locked
           ? null
           : [
               formRow(
                 'bp-person',
-                'Person',
+                t('Person'),
                 select('person', personOptions(data), block.technician_id),
               ),
-              formRow('bp-day', 'Day', select('day', dayOptions(data), block.day)),
-              formRow('bp-hours', 'Length', select('hours', lengthOptions(max), block.hours), {
-                hint: 'A shorter block sends the difference back to the tray.',
+              formRow('bp-day', t('Day'), select('day', dayOptions(data), block.day)),
+              formRow('bp-hours', t('Length'), select('hours', lengthOptions(max), block.hours), {
+                hint: t('A shorter block sends the difference back to the tray.'),
               }),
             ],
-        formRow('bp-note', 'Note', note, { hint: 'e.g. "Keys at reception".' }),
-        h('div', { class: 'form-actions' }, submitButton('Save changes')),
+        formRow('bp-note', t('Note'), note, { hint: t('e.g. "Keys at reception".') }),
+        h('div', { class: 'form-actions' }, submitButton(t('Save changes'))),
       )
     : null;
 
   const time = h(
     'select',
     { name: 'locked_start' },
-    lockTimes(block.hours).map((t) =>
-      h('option', { value: t, selected: t === (block.locked_start ?? '09:00') }, t),
+    lockTimes(block.hours).map((time) =>
+      h('option', { value: time, selected: time === (block.locked_start ?? '09:00') }, time),
     ),
   );
   const lockForm =
@@ -314,16 +324,24 @@ export function renderBlockPanel(
               onLock(locked ? null : time.value, lockForm);
             },
           },
-          h('h3', {}, 'Appointment'),
+          h('h3', {}, t('Appointment')),
           summary(),
           locked
             ? h(
                 'p',
                 {},
-                `🔒 ${appointmentText(block.locked_start, block.hours)}, locked by ${personName(block.locked_by)}. Unlock it to move, resize or remove the block.`,
+                t(
+                  '🔒 {appointmentText}, locked by {locked_by}. Unlock it to move, resize or remove the block.',
+                  {
+                    appointmentText: appointmentText(block.locked_start, block.hours),
+                    locked_by: personName(block.locked_by),
+                  },
+                ),
               )
-            : formRow('bp-time', 'Start time', time, {
-                hint: 'Lock this block at a time, e.g. an appointment with the site. It then keeps its day, person and length.',
+            : formRow('bp-time', t('Start time'), time, {
+                hint: t(
+                  'Lock this block at a time, e.g. an appointment with the site. It then keeps its day, person and length.',
+                ),
               }),
           h(
             'div',
@@ -331,7 +349,7 @@ export function renderBlockPanel(
             h(
               'button',
               { type: 'submit', class: 'button button-secondary online-only' },
-              locked ? 'Unlock' : 'Lock at this time',
+              locked ? t('Unlock') : t('Lock at this time'),
             ),
           ),
         )
@@ -343,17 +361,20 @@ export function renderBlockPanel(
     h(
       'dl',
       { class: 'detail-fields' },
-      field('Person', `${person.first_name} ${person.last_name}${view.helper ? ' (helper)' : ''}`),
-      field('Day', longDayLabel(block.day)),
-      field('Length', view.hours),
-      field('Where', view.where),
       field(
-        'Appointment',
+        t('Person'),
+        `${person.first_name} ${person.last_name}${view.helper ? t(' (helper)') : ''}`,
+      ),
+      field(t('Day'), longDayLabel(block.day)),
+      field(t('Length'), view.hours),
+      field(t('Where'), view.where),
+      field(
+        t('Appointment'),
         locked ? `🔒 ${appointmentText(block.locked_start, block.hours)}` : null,
       ),
-      field('Note', block.note),
+      field(t('Note'), block.note),
       field(
-        'Work order',
+        t('Work order'),
         block.work_order
           ? h(
               'a',
@@ -372,7 +393,7 @@ export function renderBlockPanel(
           h(
             'button',
             { type: 'button', class: 'button button-danger online-only', onClick: onDelete },
-            'Remove this block',
+            t('Remove this block'),
           ),
         )
       : null,
@@ -410,22 +431,22 @@ export function renderTimePanel(container, { data, person, day, onClose, onSubmi
     summary(),
     formRow(
       'tp-kind',
-      'Kind of time',
+      t('Kind of time'),
       select(
         'kind',
         ['TRAVEL', 'PREPARATION', 'OTHER'].map((k) => [k, valueLabel('allocation_kind', k)]),
         'TRAVEL',
       ),
     ),
-    formRow('tp-person', 'Person', select('person', personOptions(data), person)),
-    formRow('tp-day', 'Day', select('day', dayOptions(data), day)),
-    formRow('tp-hours', 'Length', select('hours', lengthOptions(max), 1)),
-    formRow('tp-note', 'Note', h('input', { name: 'note', type: 'text', maxlength: '500' }), {
-      hint: 'e.g. "Lyon → Saclay", "Collect the parts".',
+    formRow('tp-person', t('Person'), select('person', personOptions(data), person)),
+    formRow('tp-day', t('Day'), select('day', dayOptions(data), day)),
+    formRow('tp-hours', t('Length'), select('hours', lengthOptions(max), 1)),
+    formRow('tp-note', t('Note'), h('input', { name: 'note', type: 'text', maxlength: '500' }), {
+      hint: t('e.g. "Lyon → Saclay", "Collect the parts".'),
     }),
-    h('div', { class: 'form-actions' }, submitButton('Add time')),
+    h('div', { class: 'form-actions' }, submitButton(t('Add time'))),
   );
-  replaceChildren(container, panelHeader('Add time', onClose), form);
+  replaceChildren(container, panelHeader(t('Add time'), onClose), form);
 }
 
 /**
@@ -465,13 +486,15 @@ export function renderCapacityPanel(container, { data, person, day, onClose, onS
       },
     },
     summary(),
-    formRow('cp-hours', 'Hours this day', hours, {
-      hint: `Without a change: ${formatDuration(standard)}${weekend ? ' (weekend)' : ''}.`,
+    formRow('cp-hours', t('Hours this day'), hours, {
+      hint: weekend
+        ? t('Without a change: {hours} (weekend).', { hours: formatDuration(standard) })
+        : t('Without a change: {hours}.', { hours: formatDuration(standard) }),
     }),
-    formRow('cp-reason', 'Reason', reason),
+    formRow('cp-reason', t('Reason'), reason),
     formRow(
       'cp-note',
-      'Note',
+      t('Note'),
       h('input', {
         name: 'note',
         type: 'text',
@@ -482,7 +505,7 @@ export function renderCapacityPanel(container, { data, person, day, onClose, onS
     h(
       'div',
       { class: 'form-actions' },
-      submitButton('Save hours'),
+      submitButton(t('Save hours')),
       current?.override
         ? h(
             'button',
@@ -491,7 +514,7 @@ export function renderCapacityPanel(container, { data, person, day, onClose, onS
               class: 'button button-secondary online-only',
               onClick: () => onSubmit({ hours: null }, form),
             },
-            'Back to the usual hours',
+            t('Back to the usual hours'),
           )
         : null,
     ),
@@ -503,8 +526,11 @@ export function renderCapacityPanel(container, { data, person, day, onClose, onS
       'p',
       {},
       current?.override
-        ? `${valueLabel('capacity_reason', current.override.reason)}: ${formatDuration(current.capacity)} this day.`
-        : `Usual hours: ${formatDuration(standard)}.`,
+        ? t('{reason}: {capacity} this day.', {
+            reason: valueLabel('capacity_reason', current.override.reason),
+            capacity: formatDuration(current.capacity),
+          })
+        : t('Usual hours: {standard}.', { standard: formatDuration(standard) }),
     ),
     form,
   );

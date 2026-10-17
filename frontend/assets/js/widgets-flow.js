@@ -10,33 +10,34 @@ import { h } from './dom.js';
 import { formatWeek } from './format.js';
 import { valueLabel } from './labels.js';
 import { drawLine, drawPairedColumns, drawShareColumns, drawWeekBars } from './widget-charts.js';
+import { locale, plural, t, tn, tx } from './i18n.js';
 
-const dayMonth = new Intl.DateTimeFormat('en-GB', {
+const dayMonth = new Intl.DateTimeFormat(locale(), {
   day: 'numeric',
   month: 'short',
   timeZone: 'UTC',
 });
-const monthYear = new Intl.DateTimeFormat('en-GB', {
+const monthYear = new Intl.DateTimeFormat(locale(), {
   month: 'short',
   year: 'numeric',
   timeZone: 'UTC',
 });
-const monthLong = new Intl.DateTimeFormat('en-GB', {
+const monthLong = new Intl.DateTimeFormat(locale(), {
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
 });
 const asDate = (date) => new Date(`${date}T00:00:00Z`);
-const oneDecimal = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const oneDecimal = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
-const monthShort = new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' });
+const monthShort = new Intl.DateTimeFormat(locale(), { month: 'short', timeZone: 'UTC' });
 
 /**
  * Short axis label of a bucket: "W37"; months "Oct 2025", "Nov"… with the year only on the
  * first month and on January, so twelve labels fit a half-width card. Pure.
  */
 export function bucketAxis(bucket, unit, index = 0) {
-  if (unit === 'week') return `W${Number(bucket.key.slice(6))}`;
+  if (unit === 'week') return t('W{key}', { key: Number(bucket.key.slice(6)) });
   const date = asDate(bucket.from);
   return index === 0 || date.getUTCMonth() === 0 ? monthYear.format(date) : monthShort.format(date);
 }
@@ -55,7 +56,7 @@ export function bucketTitle(bucket, unit) {
       : from.getUTCMonth() === to.getUTCMonth()
         ? `${from.getUTCDate()}–${dayMonth.format(to)}`
         : `${dayMonth.format(from)}–${dayMonth.format(to)}`;
-  return `Week ${Number(bucket.key.slice(6))}: ${days}`;
+  return t('Week {key}: {days}', { key: Number(bucket.key.slice(6)), days });
 }
 
 /** "Week 40, 2026" or "September 2026" from a bucket key alone (drill labels). Pure. */
@@ -63,20 +64,27 @@ export function bucketKeyText(key) {
   return key.includes('-W') ? formatWeek(key) : monthLong.format(asDate(`${key}-01`));
 }
 
+/** The same inside a sentence: "week 40, 2026", "September 2026". Pure. */
+export function bucketKeyInText(key) {
+  const text = bucketKeyText(key);
+  const week = t('Week');
+  return text.startsWith(week) ? t('week') + text.slice(week.length) : text;
+}
+
 export const AGE_LABELS = {
-  '0-7': '0–7 days',
-  '8-30': '8–30 days',
-  '31-90': '31–90 days',
-  '91+': '91+ days',
+  '0-7': t('0–7 days'),
+  '8-30': t('8–30 days'),
+  '31-90': t('31–90 days'),
+  '91+': t('91+ days'),
 };
 /** Old urgent and high work: the cells with the attention style. */
 const OLD = ['31-90', '91+'];
 
 export const WORK_GROUP_LABELS = {
-  PLANNED: 'Planned',
-  REACTIVE: 'Reactive',
-  REQUESTS: 'Staff requests',
-  IMPROVEMENT: 'Improvement',
+  PLANNED: t('Planned'),
+  REACTIVE: t('Reactive'),
+  REQUESTS: t('Staff requests'),
+  IMPROVEMENT: t('Improvement'),
 };
 /** Fixed color slot of each kind of work (the color follows the kind, never its rank). */
 const WORK_GROUP_SLOTS = { PLANNED: 1, REACTIVE: 2, REQUESTS: 3, IMPROVEMENT: 4 };
@@ -165,26 +173,26 @@ const tableDetails = (table, caption) =>
   h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show as a table'),
+    h('summary', {}, t('Show as a table')),
     tableElement(table, caption),
   );
 
 // --- Opened vs closed -----------------------------------------------------------------------
 
 const FLOW_KINDS = [
-  ['opened', 'Opened'],
-  ['closed', 'Closed'],
-  ['cancelled', 'Cancelled'],
+  ['opened', t('Opened')],
+  ['closed', t('count|Closed')],
+  ['cancelled', t('count|Cancelled')],
 ];
 
 function flowTable(data, { drill }) {
   return {
     columns: [
-      { label: data.unit === 'week' ? 'Week' : 'Month' },
-      { label: 'Opened', numeric: true },
-      { label: 'Closed', numeric: true },
-      { label: 'Cancelled', numeric: true },
-      { label: 'Unfinished at the end', numeric: true },
+      { label: data.unit === 'week' ? t('Week') : t('Month') },
+      { label: t('Opened'), numeric: true },
+      { label: t('count|Closed'), numeric: true },
+      { label: t('count|Cancelled'), numeric: true },
+      { label: t('Unfinished at the end'), numeric: true },
     ],
     rows: data.buckets.map((b) => [
       bucketTitle(b, data.unit),
@@ -212,49 +220,83 @@ function flowBody(data, context) {
   const cancelled = sum('cancelled');
   const last = data.buckets.at(-1);
   const bars = canvasFor(
-    `Column chart, opened and closed per ${data.unit}. ${data.buckets
-      .map((b, i) => `${titles[i]}: ${b.opened} opened, ${b.closed} closed`)
-      .join('; ')}.`,
+    t(
+      data.unit === 'week'
+        ? 'Column chart, opened and closed per week. {map}.'
+        : 'Column chart, opened and closed per month. {map}.',
+      {
+        map: data.buckets
+          .map((b, i) =>
+            t('{title}: {opened} opened, {closed} closed', {
+              title: titles[i],
+              opened: b.opened,
+              closed: b.closed,
+            }),
+          )
+          .join('; '),
+      },
+    ),
   );
   const line = canvasFor(
-    `Line chart, unfinished work orders at the end of each ${data.unit}. ${data.buckets
-      .map((b, i) => `${titles[i]}: ${b.unfinished}`)
-      .join('; ')}.`,
+    t(
+      data.unit === 'week'
+        ? 'Line chart, unfinished work orders at the end of each week. {map}.'
+        : 'Line chart, unfinished work orders at the end of each month. {map}.',
+      {
+        map: data.buckets
+          .map((b, i) => t('{label}: {value}', { label: titles[i], value: b.unfinished }))
+          .join('; '),
+      },
+    ),
   );
-  const unit = data.unit === 'week' ? 'week' : 'month';
+  const unfinishedTitle =
+    data.unit === 'week'
+      ? t('Unfinished at the end of each week')
+      : t('Unfinished at the end of each month');
   return {
     element: [
       h(
         'p',
         { class: 'widget-summary' },
-        `${numberFormat.format(opened)} opened, ${numberFormat.format(closed)} closed, ${numberFormat.format(cancelled)} cancelled. `,
+        t('{opened} opened, {closed} closed, {cancelled} cancelled. ', {
+          opened: numberFormat.format(opened),
+          closed: numberFormat.format(closed),
+          cancelled: numberFormat.format(cancelled),
+        }),
         h(
           'strong',
           {},
           opened > closed + cancelled
-            ? `The backlog grew by ${numberFormat.format(opened - closed - cancelled)}.`
+            ? t('The backlog grew by {value}.', {
+                value: numberFormat.format(opened - closed - cancelled),
+              })
             : opened < closed + cancelled
-              ? `The backlog shrank by ${numberFormat.format(closed + cancelled - opened)}.`
-              : 'The backlog is stable.',
+              ? t('The backlog shrank by {value}.', {
+                  value: numberFormat.format(closed + cancelled - opened),
+                })
+              : t('The backlog is stable.'),
         ),
       ),
       legend([
-        ['Opened', 1],
-        ['Closed', 2],
+        [t('Opened'), 1],
+        [t('count|Closed'), 2],
       ]),
       chartFrame(bars, 220),
       h(
         'h3',
         { class: 'chart-subtitle' },
-        `Unfinished at the end of each ${unit}`,
-        last ? ` (now ${numberFormat.format(last.unfinished)})` : '',
+        unfinishedTitle,
+        last ? t(' (now {unfinished})', { unfinished: numberFormat.format(last.unfinished) }) : '',
       ),
       chartFrame(line, 140),
-      tableDetails(flowTable(data, context), `Opened and closed per ${unit}`),
+      tableDetails(
+        flowTable(data, context),
+        data.unit === 'week' ? t('Opened and closed per week') : t('Opened and closed per month'),
+      ),
     ],
     legend: [
-      ['Opened', 1],
-      ['Closed', 2],
+      [t('Opened'), 1],
+      [t('count|Closed'), 2],
     ],
     charts: [
       {
@@ -264,8 +306,8 @@ function flowBody(data, context) {
             labels,
             titles,
             series: [
-              { label: 'Opened', values: data.buckets.map((b) => b.opened), slot: 1 },
-              { label: 'Closed', values: data.buckets.map((b) => b.closed), slot: 2 },
+              { label: t('Opened'), values: data.buckets.map((b) => b.opened), slot: 1 },
+              { label: t('count|Closed'), values: data.buckets.map((b) => b.closed), slot: 2 },
             ],
             onPick: context.open
               ? (series, i) =>
@@ -275,12 +317,12 @@ function flowBody(data, context) {
       },
       {
         canvas: line,
-        caption: `Unfinished at the end of each ${unit}`,
+        caption: unfinishedTitle,
         draw: () =>
           drawLine(line, {
             labels,
             titles,
-            label: 'Unfinished',
+            label: t('Unfinished'),
             values: data.buckets.map((b) => b.unfinished),
           }),
       },
@@ -294,9 +336,9 @@ function ageTable(data, { drill }) {
   const columnTotals = data.buckets.map((_, i) => data.rows.reduce((s, r) => s + r.counts[i], 0));
   return {
     columns: [
-      { label: 'Priority' },
+      { label: t('Priority') },
       ...data.buckets.map((b) => ({ label: AGE_LABELS[b], numeric: true })),
-      { label: 'Total', numeric: true },
+      { label: t('Total'), numeric: true },
     ],
     rows: [
       ...data.rows.map((r) => [
@@ -304,7 +346,7 @@ function ageTable(data, { drill }) {
         ...r.counts,
         r.counts.reduce((s, n) => s + n, 0),
       ]),
-      ['Total', ...columnTotals, data.total],
+      [t('Total'), ...columnTotals, data.total],
     ],
     links: drill
       ? [
@@ -340,15 +382,19 @@ function ageBody(data, context) {
               'span',
               { class: 'badge badge-tone-warning' },
               h('span', { 'aria-hidden': 'true' }, '⚠'),
-              'Needs attention',
+              t('Needs attention'),
             ),
-            ` ${numberFormat.format(data.urgent_old)} urgent or high-priority work order${data.urgent_old === 1 ? ' is' : 's are'} more than 30 days old.`,
+            tn(
+              data.urgent_old,
+              ' {n} urgent or high-priority work order is more than 30 days old.',
+              ' {n} urgent or high-priority work orders are more than 30 days old.',
+            ),
           )
         : null,
       h(
         'div',
         { class: 'heatmap-scroll' },
-        tableElement(table, 'Unfinished work orders by priority and age', {
+        tableElement(table, t('Unfinished work orders by priority and age'), {
           cellClass: (r, i, cell) => {
             if (r >= priorityCount || i === 0 || i > data.buckets.length) return 'heat-total';
             const old =
@@ -361,7 +407,10 @@ function ageBody(data, context) {
       h(
         'p',
         { class: 'widget-note' },
-        `${numberFormat.format(data.total)} unfinished work orders, by days since they were created. Darker cells hold more.`,
+        t(
+          '{total} unfinished work orders, by days since they were created. Darker cells hold more.',
+          { total: numberFormat.format(data.total) },
+        ),
       ),
     ],
   };
@@ -371,8 +420,8 @@ function ageBody(data, context) {
 
 const weeksText = (item) =>
   item.weeks === null
-    ? `${oneDecimal.format(item.hours)} h, no capacity`
-    : `${oneDecimal.format(item.weeks)} wk`;
+    ? t('{hours} h, no capacity', { hours: oneDecimal.format(item.hours) })
+    : t('{weeks} wk', { weeks: oneDecimal.format(item.weeks) });
 
 function weeksTable(data, { drill }) {
   const rows = data.items.map((i) => [
@@ -391,7 +440,7 @@ function weeksTable(data, { drill }) {
   ]);
   if (data.unspecified) {
     rows.push([
-      'Unspecified',
+      t('Unspecified'),
       data.unspecified.work_orders,
       oneDecimal.format(data.unspecified.hours),
       '—',
@@ -401,11 +450,11 @@ function weeksTable(data, { drill }) {
   }
   return {
     columns: [
-      { label: 'Trade' },
-      { label: 'Work orders', numeric: true },
-      { label: 'Hours left', numeric: true },
-      { label: 'Weekly capacity (h)', numeric: true },
-      { label: 'Weeks of work', numeric: true },
+      { label: t('Trade') },
+      { label: t('Work orders'), numeric: true },
+      { label: t('Hours left'), numeric: true },
+      { label: t('Weekly capacity (h)'), numeric: true },
+      { label: t('Weeks of work'), numeric: true },
     ],
     rows,
     links: drill ? links : undefined,
@@ -418,42 +467,71 @@ function weeksBody(data, context) {
       ? h(
           'p',
           { class: 'widget-note' },
-          context.drill
-            ? h(
-                'a',
-                { href: context.drill('UNSPECIFIED'), 'data-link': true },
-                `${oneDecimal.format(data.unspecified.hours)} h`,
-              )
-            : `${oneDecimal.format(data.unspecified.hours)} h`,
-          ` left on ${numberFormat.format(data.unspecified.work_orders)} work order${data.unspecified.work_orders === 1 ? '' : 's'} without a trade.`,
+          tx(
+            plural(
+              data.unspecified.work_orders,
+              '{hours} left on {n} work order without a trade.',
+              '{hours} left on {n} work orders without a trade.',
+            ),
+            {
+              n: numberFormat.format(data.unspecified.work_orders),
+              hours: context.drill
+                ? h(
+                    'a',
+                    { href: context.drill('UNSPECIFIED'), 'data-link': true },
+                    `${oneDecimal.format(data.unspecified.hours)} h`,
+                  )
+                : `${oneDecimal.format(data.unspecified.hours)} h`,
+            },
+          ),
         )
       : null,
     data.without_estimate
       ? h(
           'p',
           { class: 'widget-note' },
-          context.drill
-            ? h(
-                'a',
-                { href: context.drill('NO_ESTIMATE'), 'data-link': true },
-                `${numberFormat.format(data.without_estimate)} unfinished work order${data.without_estimate === 1 ? '' : 's'}`,
-              )
-            : `${numberFormat.format(data.without_estimate)} unfinished work orders`,
-          ` without an estimate ${data.without_estimate === 1 ? 'is' : 'are'} not counted.`,
+          tx(
+            plural(
+              data.without_estimate,
+              '{orders} without an estimate is not counted.',
+              '{orders} without an estimate are not counted.',
+            ),
+            {
+              orders: context.drill
+                ? h(
+                    'a',
+                    { href: context.drill('NO_ESTIMATE'), 'data-link': true },
+                    tn(
+                      data.without_estimate,
+                      '{n} unfinished work order',
+                      '{n} unfinished work orders',
+                    ),
+                  )
+                : tn(
+                    data.without_estimate,
+                    '{n} unfinished work order',
+                    '{n} unfinished work orders',
+                  ),
+            },
+          ),
         )
       : null,
   ];
   if (!data.items.length) {
     return {
       element: [
-        h('p', { class: 'empty-state' }, 'No unfinished work and no capacity for these trades.'),
+        h('p', { class: 'empty-state' }, t('No unfinished work and no capacity for these trades.')),
         ...notes,
       ],
     };
   }
   const labels = data.items.map((i) => valueLabel('category', i.category));
   const canvas = canvasFor(
-    `Bar chart, weeks of work per trade. ${data.items.map((i, n) => `${labels[n]}: ${weeksText(i)}`).join(', ')}.`,
+    t('Bar chart, weeks of work per trade. {map}.', {
+      map: data.items
+        .map((i, n) => t('{label}: {value}', { label: labels[n], value: weeksText(i) }))
+        .join(', '),
+    }),
   );
   return {
     element: [
@@ -461,10 +539,13 @@ function weeksBody(data, context) {
       h(
         'p',
         { class: 'widget-note' },
-        `Hours left on unfinished work, divided by the trade's weekly capacity. Shaded: ${BACKLOG_BAND[0]} to ${BACKLOG_BAND[1]} weeks, a common rule of thumb.`,
+        t(
+          "Hours left on unfinished work, divided by the trade's weekly capacity. Shaded: {BACKLOG_BAND} to {BACKLOG_BAND2} weeks, a common rule of thumb.",
+          { BACKLOG_BAND: BACKLOG_BAND[0], BACKLOG_BAND2: BACKLOG_BAND[1] },
+        ),
       ),
       ...notes,
-      tableDetails(weeksTable(data, context), 'Backlog in weeks of work, by trade'),
+      tableDetails(weeksTable(data, context), t('Backlog in weeks of work, by trade')),
     ],
     charts: [
       {
@@ -476,8 +557,15 @@ function weeksBody(data, context) {
             tips: data.items.map((i) => weeksText(i)),
             band: BACKLOG_BAND,
             tooltips: data.items.map((i) => [
-              `${oneDecimal.format(i.hours)} h left on ${numberFormat.format(i.work_orders)} work order${i.work_orders === 1 ? '' : 's'}`,
-              `Capacity: ${oneDecimal.format(i.capacity)} h a week`,
+              tn(
+                i.work_orders,
+                '{hours} h left on {n} work order',
+                '{hours} h left on {n} work orders',
+                {
+                  hours: oneDecimal.format(i.hours),
+                },
+              ),
+              t('Capacity: {capacity} h a week', { capacity: oneDecimal.format(i.capacity) }),
             ]),
             onPick: context.open ? (_s, n) => context.open(data.items[n].category) : undefined,
           }),
@@ -495,9 +583,9 @@ function workTable(data, { drill, options }) {
   const value = (cell) => (basis === 'hours' ? Math.round(cell.hours * 10) / 10 : cell.count);
   return {
     columns: [
-      { label: data.unit === 'week' ? 'Week' : 'Month' },
+      { label: data.unit === 'week' ? t('Week') : t('Month') },
       ...data.groups.map((g) => ({ label: WORK_GROUP_LABELS[g], numeric: true })),
-      { label: basis === 'hours' ? 'Total hours' : 'Total', numeric: true },
+      { label: basis === 'hours' ? t('Total hours') : t('Total'), numeric: true },
     ],
     rows: data.buckets.map((b) => {
       const values = data.groups.map((g) => value(b.values[g]));
@@ -537,14 +625,26 @@ function workBody(data, context) {
   const titles = data.buckets.map((b) => bucketTitle(b, data.unit));
   const share = plannedShare(data, basis);
   const canvas = canvasFor(
-    `Stacked column chart, share of planned, reactive, staff request and improvement work closed per ${data.unit}${share === null ? '' : `; planned work: ${percentFormat.format(share)} over the period`}.`,
+    `${
+      data.unit === 'week'
+        ? t(
+            'Stacked column chart, share of planned, reactive, staff request and improvement work closed per week',
+          )
+        : t(
+            'Stacked column chart, share of planned, reactive, staff request and improvement work closed per month',
+          )
+    }${
+      share === null
+        ? ''
+        : t('; planned work: {share} over the period', { share: percentFormat.format(share) })
+    }.`,
   );
   const switcher = h(
     'div',
-    { class: 'segmented', role: 'group', 'aria-label': 'Count' },
+    { class: 'segmented', role: 'group', 'aria-label': t('Count') },
     [
-      ['count', 'Work orders'],
-      ['hours', 'Hours'],
+      ['count', t('Work orders')],
+      ['hours', t('Hours')],
     ].map(([value, label]) =>
       h(
         'button',
@@ -568,14 +668,13 @@ function workBody(data, context) {
         'p',
         { class: 'widget-summary' },
         share === null
-          ? 'No work order was closed in this period.'
-          : [
-              'Planned work: ',
-              h('strong', {}, percentFormat.format(share)),
+          ? t('No work order was closed in this period.')
+          : tx(
               basis === 'hours'
-                ? ' of the hours worked on the work orders closed in the period.'
-                : ' of the work orders closed in the period.',
-            ],
+                ? 'Planned work: {share} of the hours worked on the work orders closed in the period.'
+                : 'Planned work: {share} of the work orders closed in the period.',
+              { share: h('strong', {}, percentFormat.format(share)) },
+            ),
       ),
       legend(data.groups.map((g) => [WORK_GROUP_LABELS[g], WORK_GROUP_SLOTS[g]])),
       chartFrame(canvas, 220),
@@ -583,10 +682,19 @@ function workBody(data, context) {
         ? h(
             'p',
             { class: 'widget-note' },
-            `${numberFormat.format(data.without_actual_hours)} closed work order${data.without_actual_hours === 1 ? ' has' : 's have'} no actual hours (counted as 0 h).`,
+            tn(
+              data.without_actual_hours,
+              '{n} closed work order has no actual hours (counted as 0 h).',
+              '{n} closed work orders have no actual hours (counted as 0 h).',
+            ),
           )
         : null,
-      tableDetails(workTable(data, context), `Work closed per ${data.unit}, by kind`),
+      tableDetails(
+        workTable(data, context),
+        data.unit === 'week'
+          ? t('Work closed per week, by kind')
+          : t('Work closed per month, by kind'),
+      ),
     ],
     legend: data.groups.map((g) => [WORK_GROUP_LABELS[g], WORK_GROUP_SLOTS[g]]),
     charts: [
@@ -622,23 +730,27 @@ function segmentText(key, segment) {
     : [segment, null];
   switch (key) {
     case 'opened_vs_closed':
-      return `${first} in ${bucketKeyText(second).replace(/^Week/, 'week')}`;
+      return t(
+        first === 'opened'
+          ? 'opened in {bucket}'
+          : first === 'closed'
+            ? 'closed in {bucket}'
+            : 'cancelled in {bucket}',
+        { bucket: bucketKeyInText(second) },
+      );
     case 'backlog_age': {
       const priority = first ? valueLabel('work_order_priority', first) : null;
-      const age = second ? `${AGE_LABELS[second]} old` : null;
+      const age = second ? t('{age} old', { age: AGE_LABELS[second] }) : null;
       return [priority, age].filter(Boolean).join(', ');
     }
     case 'backlog_weeks':
       return segment === 'NO_ESTIMATE'
-        ? 'without an estimate'
+        ? t('without an estimate')
         : segment === 'UNSPECIFIED'
-          ? 'without a trade'
+          ? t('without a trade')
           : valueLabel('category', segment);
     case 'planned_vs_reactive':
-      return [
-        WORK_GROUP_LABELS[first],
-        second ? bucketKeyText(second).replace(/^Week/, 'week') : null,
-      ]
+      return [WORK_GROUP_LABELS[first], second ? bucketKeyInText(second) : null]
         .filter(Boolean)
         .join(', ');
     default:

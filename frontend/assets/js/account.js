@@ -4,16 +4,17 @@
 // "Change my password", for every user (BR-U8): other sessions end, this one gets a new token.
 import { PASSWORD_MIN_LENGTH, showErrors } from './admin-users.js';
 import { h, replaceChildren } from './dom.js';
+import { t } from './i18n.js';
 
 /** Checks of the change-password form. Pure. */
 export function checkPasswordChange({ current, next, confirm }) {
   const errors = {};
-  if (!current) errors.current_password = 'Required';
+  if (!current) errors.current_password = t('Required');
   if (next.length < PASSWORD_MIN_LENGTH)
-    errors.new_password = `At least ${PASSWORD_MIN_LENGTH} characters`;
+    errors.new_password = t('At least {PASSWORD_MIN_LENGTH} characters', { PASSWORD_MIN_LENGTH });
   else if (next === current)
-    errors.new_password = 'Choose a password different from the current one';
-  if (confirm !== next) errors.confirm_password = 'The two passwords differ';
+    errors.new_password = t('Choose a password different from the current one');
+  if (confirm !== next) errors.confirm_password = t('The two passwords differ');
   return errors;
 }
 
@@ -46,14 +47,14 @@ export function renderAccount(container, { username = '', onChange }) {
       ),
     };
   };
-  const current = field('current_password', 'Current password', 'current-password');
+  const current = field('current_password', t('Current password'), 'current-password');
   const next = field(
     'new_password',
-    'New password',
+    t('New password'),
     'new-password',
-    `At least ${PASSWORD_MIN_LENGTH} characters.`,
+    t('At least {PASSWORD_MIN_LENGTH} characters.', { PASSWORD_MIN_LENGTH }),
   );
-  const confirm = field('confirm_password', 'Repeat the new password', 'new-password');
+  const confirm = field('confirm_password', t('Repeat the new password'), 'new-password');
   const form = h(
     'form',
     {
@@ -68,7 +69,7 @@ export function renderAccount(container, { username = '', onChange }) {
         };
         const errors = checkPasswordChange(values);
         if (Object.keys(errors).length)
-          return showErrors(form, errors, 'Check the highlighted fields.');
+          return showErrors(form, errors, t('Check the highlighted fields.'));
         onChange(values.current, values.next, form);
       },
     },
@@ -85,7 +86,7 @@ export function renderAccount(container, { username = '', onChange }) {
     h(
       'p',
       { class: 'form-help' },
-      'Your other sessions (other browsers or devices) will end; this one stays open.',
+      t('Your other sessions (other browsers or devices) will end; this one stays open.'),
     ),
     current.row,
     next.row,
@@ -96,7 +97,7 @@ export function renderAccount(container, { username = '', onChange }) {
       h(
         'button',
         { type: 'submit', class: 'button button-primary online-only' },
-        'Change password',
+        t('Change password'),
       ),
     ),
   );
@@ -105,7 +106,7 @@ export function renderAccount(container, { username = '', onChange }) {
     h(
       'div',
       { class: 'account-page' },
-      h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Change my password'),
+      h('h2', { class: 'placeholder-title', tabindex: '-1' }, t('Change my password')),
       form,
     ),
   );

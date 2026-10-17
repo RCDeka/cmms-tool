@@ -7,18 +7,19 @@ import { apiFetch } from './api.js';
 import { displayValue } from './conflicts.js';
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES, fieldForApi } from './entities.js';
-import { formatDate, formatDateTime, personName } from './format.js';
+import { formatDate, formatDateTime, formatHoursValue, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { PLANNING_FIELD_LABELS, planningFieldValue } from './planning.js';
+import { t, tn } from './i18n.js';
 
 const ACTION_LABELS = {
-  CREATE: 'Created',
-  UPDATE: 'Changed',
-  DELETE: 'Deleted',
-  CONFLICT: 'Edit not applied (conflict)',
-  RESOLVE: 'Conflict resolved',
+  CREATE: t('Created'),
+  UPDATE: t('Changed'),
+  DELETE: t('Deleted'),
+  CONFLICT: t('Edit not applied (conflict)'),
+  RESOLVE: t('Conflict resolved'),
 };
-const CHOICE_LABELS = { A: 'kept version A', B: 'applied version B', MERGE: 'merged' };
+const CHOICE_LABELS = { A: t('kept version A'), B: t('applied version B'), MERGE: t('merged') };
 /** Fields shown in the summary of a creation (the full list would drown the timeline). */
 const CREATION_SUMMARY = [
   'code',
@@ -34,22 +35,22 @@ const CREATION_SUMMARY = [
 ];
 /** User accounts are not a table entity: their labels live here (admins only, D39). */
 const USER_FIELD_LABELS = {
-  username: 'Username',
-  first_name: 'First name',
-  last_name: 'Last name',
-  role: 'Role',
-  site: 'Site',
-  specialty: 'Specialty',
-  power_user: 'Auto-save',
-  is_active: 'Account active',
+  username: t('Username'),
+  first_name: t('First name'),
+  last_name: t('Last name'),
+  role: t('Role'),
+  site: t('Site'),
+  specialty: t('Specialty'),
+  power_user: t('Auto-save'),
+  is_active: t('Account active'),
 };
 
 /** Value of a user-account field, as text. Pure. */
 export function userFieldValue(field, value) {
   if (value === null || value === undefined || value === '') {
-    return h('span', { class: 'no-value' }, 'No value');
+    return h('span', { class: 'no-value' }, t('No value'));
   }
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'boolean') return value ? t('Yes') : t('No');
   if (field === 'role') return valueLabel('role', value);
   if (field === 'specialty') return valueLabel('category', value);
   return String(value);
@@ -57,26 +58,30 @@ export function userFieldValue(field, value) {
 
 /** Blocks of the week scheduler (Phase 19). */
 const ALLOCATION_FIELD_LABELS = {
-  kind: 'Kind',
-  work_order_id: 'Work order',
-  technician_id: 'Person',
-  day: 'Day',
-  hours: 'Length',
-  locked_start: 'Appointment',
-  note: 'Note',
+  kind: t('Kind'),
+  work_order_id: t('Work order'),
+  technician_id: t('Person'),
+  day: t('Day'),
+  hours: t('Length'),
+  locked_start: t('Appointment'),
+  note: t('Note'),
 };
 
 /** Value of a block field, as text; people by name when the server named them. Pure. */
 export function allocationFieldValue(field, value, lookups = { users: [] }) {
   if (value === null || value === undefined || value === '') {
-    return h('span', { class: 'no-value' }, field === 'locked_start' ? 'Not locked' : 'No value');
+    return h(
+      'span',
+      { class: 'no-value' },
+      field === 'locked_start' ? t('Not locked') : t('No value'),
+    );
   }
   if (field === 'kind') return valueLabel('allocation_kind', value);
   if (field === 'technician_id') {
     const person = lookups.users.find((u) => u.id === value);
-    return person ? personName(person) : `User #${value}`;
+    return person ? personName(person) : t('User #{value}', { value });
   }
-  if (field === 'hours') return `${value} h`;
+  if (field === 'hours') return formatHoursValue(value);
   if (field === 'work_order_id') return `#${value}`;
   if (field === 'day') return formatDate(value);
   return String(value);
@@ -104,13 +109,13 @@ const OTHER_RECORDS = {
 
 /** Record types of the audit log filter, in display order. */
 export const AUDIT_TYPES = [
-  { value: 'assets', label: 'Assets' },
-  { value: 'work_orders', label: 'Work orders' },
-  { value: 'maintenance_plans', label: 'Maintenance plans' },
-  { value: 'plan_occurrences', label: 'Plan visits' },
-  { value: 'planning_settings', label: 'Planning settings' },
-  { value: 'allocations', label: 'Scheduled blocks' },
-  { value: 'users', label: 'User accounts', adminOnly: true },
+  { value: 'assets', label: t('Assets') },
+  { value: 'work_orders', label: t('Work orders') },
+  { value: 'maintenance_plans', label: t('Maintenance plans') },
+  { value: 'plan_occurrences', label: t('Plan visits') },
+  { value: 'planning_settings', label: t('Planning settings') },
+  { value: 'allocations', label: t('Scheduled blocks') },
+  { value: 'users', label: t('User accounts'), adminOnly: true },
 ];
 
 /** Adds the people named by the server to the lookups (names instead of "User #id"). */
@@ -124,20 +129,20 @@ export function withPeople(lookups, people = {}) {
 
 /** Title of an entry, e.g. "Conflict resolved: merged". Pure. */
 export function entryTitle(entry) {
-  if (entry.note?.password_reset) return 'Password reset by an administrator';
-  if (entry.note?.password_changed) return 'Password changed by the user';
+  if (entry.note?.password_reset) return t('Password reset by an administrator');
+  if (entry.note?.password_changed) return t('Password changed by the user');
   const base = ACTION_LABELS[entry.action] ?? entry.action;
   return entry.action === 'RESOLVE' && entry.note?.choice
-    ? `${base}: ${CHOICE_LABELS[entry.note.choice]}`
+    ? t('{label}: {value}', { label: base, value: CHOICE_LABELS[entry.note.choice] })
     : base;
 }
 
 /** Labels of fields the records no longer have, or that no form shows (D82). */
 const OTHER_FIELD_LABELS = {
-  place: 'Place',
-  building: 'Building',
-  floor: 'Floor',
-  room_id: 'Room',
+  place: t('Place'),
+  building: t('Building'),
+  floor: t('Floor'),
+  room_id: t('Room'),
 };
 
 /**
@@ -170,7 +175,7 @@ function changeList(entityKey, entry, lookups) {
       return h(
         'li',
         {},
-        h('span', { class: 'change-field' }, `${label}: `),
+        h('span', { class: 'change-field' }, t('{label}: ', { label })),
         entry.action === 'CREATE'
           ? null
           : [show(from), h('span', { class: 'change-arrow' }, ' → ')],
@@ -202,7 +207,7 @@ export function renderTimeline(container, entityKey, entries, lookups) {
             ),
           ),
         )
-      : h('p', { class: 'muted' }, 'No change recorded yet.'),
+      : h('p', { class: 'muted' }, t('No change recorded yet.')),
   );
 }
 
@@ -221,7 +226,7 @@ export function historySection(entityKey, id, getLookups) {
       class: 'history',
       onToggle: async () => {
         if (!section.open || loaded) return;
-        replaceChildren(body, h('p', { class: 'muted' }, 'Loading the history…'));
+        replaceChildren(body, h('p', { class: 'muted' }, t('Loading the history…')));
         try {
           const { items, people } = await apiFetch(`${ENTITIES[entityKey].api}/${id}/history`);
           renderTimeline(body, entityKey, items, withPeople(await getLookups(items), people));
@@ -232,13 +237,13 @@ export function historySection(entityKey, id, getLookups) {
             h(
               'p',
               { class: 'muted' },
-              err.status === 0 ? 'The history needs a connection to the server.' : err.message,
+              err.status === 0 ? t('The history needs a connection to the server.') : err.message,
             ),
           );
         }
       },
     },
-    h('summary', {}, 'History'),
+    h('summary', {}, t('History')),
     body,
   );
   return section;
@@ -278,9 +283,9 @@ export function renderAuditLog(
   const filter = h(
     'select',
     { id: 'audit-type', onChange: (event) => onFilter(event.target.value || null) },
-    h('option', { value: '' }, 'All records'),
-    AUDIT_TYPES.filter((t) => withUsers || !t.adminOnly).map((t) =>
-      h('option', { value: t.value }, t.label),
+    h('option', { value: '' }, t('All records')),
+    AUDIT_TYPES.filter((type) => withUsers || !type.adminOnly).map((type) =>
+      h('option', { value: type.value }, type.label),
     ),
   );
   filter.value = entityType ?? '';
@@ -298,14 +303,14 @@ export function renderAuditLog(
   );
   replaceChildren(
     container,
-    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, 'Audit log'),
+    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, t('Audit log')),
     h(
       'div',
       { class: 'filter-row' },
-      h('label', { for: 'audit-type' }, 'Show'),
+      h('label', { for: 'audit-type' }, t('Show')),
       filter,
       paginationTop,
-      h('p', { class: 'table-count' }, `${data.total} change${data.total === 1 ? '' : 's'}`),
+      h('p', { class: 'table-count' }, tn(data.total, '{n} change', '{n} changes')),
     ),
     data.items.length
       ? h(
@@ -317,7 +322,7 @@ export function renderAuditLog(
             h(
               'caption',
               { class: 'visually-hidden' },
-              `Audit log, page ${data.page} of ${data.pages}`,
+              t('Audit log, page {page} of {pages}', { page: data.page, pages: data.pages }),
             ),
             h(
               'thead',
@@ -325,15 +330,15 @@ export function renderAuditLog(
               h(
                 'tr',
                 {},
-                ['When', 'Who', 'Record', 'What', 'Changes'].map((t) =>
-                  h('th', { scope: 'col' }, t),
+                [t('When'), t('Who'), t('Record'), t('What'), t('Changes')].map((label) =>
+                  h('th', { scope: 'col' }, label),
                 ),
               ),
             ),
             h('tbody', {}, rows),
           ),
         )
-      : h('p', { class: 'empty-state' }, 'No change recorded yet.'),
+      : h('p', { class: 'empty-state' }, t('No change recorded yet.')),
     pagination,
   );
 }

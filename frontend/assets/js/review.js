@@ -9,6 +9,7 @@ import { formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { applyToPage } from './network.js';
 import { checkReview } from './rules.js';
+import { t } from './i18n.js';
 
 /** Body of PUT /api/work-orders/:id/review. Empty optional fields are left out. Pure. */
 export function reviewPayload(decision, values, version) {
@@ -70,7 +71,7 @@ export function reviewPanel({ record, users, onReview }) {
       ),
     );
 
-  const assignee = select('assignee_id', resourceOptions(users), '', '— Choose —');
+  const assignee = select('assignee_id', resourceOptions(users), '', t('— Choose —'));
   const type = select(
     'type',
     WORK_ORDER_TYPES.map((c) => [c, valueLabel('work_order_type', c)]),
@@ -85,12 +86,12 @@ export function reviewPanel({ record, users, onReview }) {
     'category',
     CATEGORIES.map((c) => [c, valueLabel('category', c)]),
     record.category,
-    '— None —',
+    t('— None —'),
   );
   const due = control('due_on', h('input', { type: 'date', value: record.due_on ?? '' }));
   const reason = control(
     'reason',
-    h('textarea', { rows: '3', maxlength: '2000', placeholder: 'Shown to the requester' }),
+    h('textarea', { rows: '3', maxlength: '2000', placeholder: t('Shown to the requester') }),
   );
   const summary = h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' });
   const controls = { assignee_id: assignee, type, priority, category, due_on: due, reason };
@@ -126,7 +127,7 @@ export function reviewPanel({ record, users, onReview }) {
         class: 'button button-primary online-only',
         onClick: () => submit('APPROVE'),
       },
-      'Approve and assign',
+      t('Approve and assign'),
     ),
     h(
       'button',
@@ -135,32 +136,35 @@ export function reviewPanel({ record, users, onReview }) {
         class: 'button button-danger online-only',
         onClick: () => submit('REJECT'),
       },
-      'Reject request',
+      t('Reject request'),
     ),
   ];
 
-  const author = record.created_by ? personName(record.created_by) : 'A staff member';
+  const author = record.created_by ? personName(record.created_by) : t('A staff member');
   const box = h(
     'section',
     { class: 'review-box', 'aria-labelledby': 'review-title' },
-    h('h3', { id: 'review-title' }, 'Staff request to review'),
+    h('h3', { id: 'review-title' }, t('Staff request to review')),
     h(
       'p',
       { class: 'muted' },
-      `${author} sent this request on ${formatDateTime(record.created_at)}. Approve it and choose who will do the work, or reject it: the requester sees your decision.`,
+      t(
+        '{author} sent this request on {created_at}. Approve it and choose who will do the work, or reject it: the requester sees your decision.',
+        { author, created_at: formatDateTime(record.created_at) },
+      ),
     ),
     summary,
     h(
       'div',
       { class: 'detail-form review-form' },
-      row('assignee_id', 'Assign to', assignee, true),
-      row('type', 'Type', type),
-      row('priority', 'Priority', priority),
-      row('category', 'Category', category),
-      row('due_on', 'Due date', due),
+      row('assignee_id', t('Assign to'), assignee, true),
+      row('type', t('Type'), type),
+      row('priority', t('Priority'), priority),
+      row('category', t('Category'), category),
+      row('due_on', t('Due date'), due),
       h('div', { class: 'review-actions' }, buttons[0]),
       h('hr', { class: 'review-separator' }),
-      row('reason', 'Reason for rejection', reason),
+      row('reason', t('Reason for rejection'), reason),
       h('div', { class: 'review-actions' }, buttons[1]),
     ),
   );

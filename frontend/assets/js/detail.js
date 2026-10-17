@@ -6,8 +6,9 @@
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
 import { isEmpty, renderValue } from './format.js';
+import { t } from './i18n.js';
 
-function header(title, onClose, backLabel = 'Back to list') {
+function header(title, onClose, backLabel = t('Back to list')) {
   return h(
     'div',
     { class: 'detail-header' },
@@ -24,7 +25,7 @@ function header(title, onClose, backLabel = 'Back to list') {
         type: 'button',
         class: 'icon-button',
         id: 'btn-close-detail',
-        'aria-label': 'Close details',
+        'aria-label': t('Close details'),
         onClick: onClose,
       },
       h('span', { 'aria-hidden': 'true' }, '✕'),
@@ -37,10 +38,10 @@ function conflictBanner(consoleLink) {
     'div',
     { class: 'banner banner-warning', role: 'note' },
     h('span', { 'aria-hidden': 'true' }, '⚠ '),
-    h('strong', {}, 'Conflict'),
-    ' — two versions of this record are waiting for a supervisor to arbitrate.',
+    h('strong', {}, t('Conflict')),
+    t(' — two versions of this record are waiting for a supervisor to arbitrate.'),
     consoleLink
-      ? [' ', h('a', { href: '/conflicts', 'data-link': true }, 'Open the conflict console')]
+      ? [' ', h('a', { href: '/conflicts', 'data-link': true }, t('Open the conflict console'))]
       : null,
   );
 }
@@ -125,7 +126,7 @@ export function renderDetailMessage(container, { title, message, onClose, onRetr
             h(
               'button',
               { type: 'button', class: 'button button-secondary', onClick: onRetry },
-              'Retry',
+              t('Retry'),
             ),
           ]
         : null,
@@ -148,7 +149,7 @@ export function showUpdateAvailable(container, onReload) {
       'button',
       { type: 'button', class: 'button button-secondary update-available', onClick: onReload },
       h('span', { 'aria-hidden': 'true' }, '↻'),
-      'Update available — show the latest version',
+      t('Update available — show the latest version'),
     ),
   );
 }

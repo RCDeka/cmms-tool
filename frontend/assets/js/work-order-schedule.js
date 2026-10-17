@@ -10,6 +10,7 @@ import { personName } from './format.js';
 import { savedBlocksOf } from './my-week.js';
 import { dayLabel } from './schedule.js';
 import { appointmentText, formatDuration } from './schedule-rules.js';
+import { t } from './i18n.js';
 
 /**
  * One line per block from `today` on: 'Thu 8 Oct · 2 h · appointment 10:00–12:00 · you'. Pure.
@@ -26,8 +27,12 @@ export function scheduledTexts(blocks, userId, today) {
       [
         dayLabel(b.day),
         formatDuration(b.hours),
-        b.locked_start ? `appointment ${appointmentText(b.locked_start, b.hours)}` : null,
-        b.technician_id === userId ? 'you' : b.technician ? personName(b.technician) : null,
+        b.locked_start
+          ? t('appointment {appointmentText}', {
+              appointmentText: appointmentText(b.locked_start, b.hours),
+            })
+          : null,
+        b.technician_id === userId ? t('you') : b.technician ? personName(b.technician) : null,
       ]
         .filter(Boolean)
         .join(' · '),
@@ -45,7 +50,7 @@ export function scheduledSection(workOrderId, user, today) {
   const section = h(
     'section',
     { class: 'detail-scheduled', 'aria-labelledby': 'scheduled-heading', hidden: true },
-    h('h3', { id: 'scheduled-heading' }, 'Scheduled'),
+    h('h3', { id: 'scheduled-heading' }, t('heading|Scheduled')),
     list,
   );
   (async () => {

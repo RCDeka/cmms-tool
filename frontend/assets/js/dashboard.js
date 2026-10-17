@@ -10,6 +10,7 @@ import { h, replaceChildren } from './dom.js';
 import { ENUMS } from './enums.js';
 import { badge, formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
+import { locale, t, tn } from './i18n.js';
 
 const CHART_SCRIPT = '/assets/vendor/chart.js-4.5.1/chart.umd.min.js';
 /** Bar band height; bars themselves are capped at 24 px. */
@@ -19,43 +20,47 @@ const AXIS_BAND = 36;
 
 /** KPI tiles in display order. `attention`: a count above zero needs someone's attention. */
 export const KPI_TILES = [
-  { key: 'open_work_orders', label: 'Open work orders', href: '/work-orders?status=OPEN' },
-  { key: 'in_progress_work_orders', label: 'In progress', href: '/work-orders?status=IN_PROGRESS' },
-  { key: 'closed_this_month', label: 'Closed this month', href: '/work-orders?status=CLOSED' },
+  { key: 'open_work_orders', label: t('Open work orders'), href: '/work-orders?status=OPEN' },
+  {
+    key: 'in_progress_work_orders',
+    label: t('In progress'),
+    href: '/work-orders?status=IN_PROGRESS',
+  },
+  { key: 'closed_this_month', label: t('Closed this month'), href: '/work-orders?status=CLOSED' },
   {
     key: 'overdue_work_orders',
-    label: 'Overdue work orders',
+    label: t('Overdue work orders'),
     href: '/work-orders?overdue=true',
     attention: true,
   },
   {
     key: 'assets_broken_down',
-    label: 'Assets broken down',
+    label: t('Assets broken down'),
     href: '/assets?status=BROKEN_DOWN',
     attention: true,
   },
   {
     key: 'requests_to_review',
-    label: 'Staff requests to review',
+    label: t('Staff requests to review'),
     href: '/work-orders?to_review=true',
     attention: true,
   },
   // Requests whose requester wrote last (D80): all of them, or a technician's own.
   {
     key: 'requests_awaiting_reply',
-    label: 'Requests waiting for a reply',
+    label: t('Requests waiting for a reply'),
     href: '/work-orders?awaiting_reply=true',
     attention: true,
   },
   {
     key: 'my_requests_awaiting_reply',
-    label: 'Requests waiting for my reply',
+    label: t('Requests waiting for my reply'),
     href: '/work-orders?mine=true&awaiting_reply=true',
     attention: true,
   },
   {
     key: 'pending_conflicts',
-    label: 'Conflicts to arbitrate',
+    label: t('Conflicts to arbitrate'),
     href: '/conflicts',
     attention: true,
   },
@@ -82,12 +87,12 @@ export function chartRows(stats) {
 }
 
 /** Text equivalent of the chart for screen readers. Pure. */
-export function chartSummary(rows, kind = 'Bar chart') {
-  return `${kind}. ${rows.map((r) => `${r.label}: ${r.count}`).join(', ')}.`;
+export function chartSummary(rows, kind = t('Bar chart')) {
+  return `${kind}. ${rows.map((r) => t('{label}: {value}', { label: r.label, value: r.count })).join(', ')}.`;
 }
 
-export const numberFormat = new Intl.NumberFormat('en-GB');
-export const percentFormat = new Intl.NumberFormat('en-GB', { style: 'percent' });
+export const numberFormat = new Intl.NumberFormat(locale());
+export const percentFormat = new Intl.NumberFormat(locale(), { style: 'percent' });
 
 /**
  * Pie slices: every status in workflow order, each with its fixed color slot (the color
@@ -110,8 +115,8 @@ export function statusRows(stats) {
 
 /** "My work" periods: today (default) or the next 7 days (`my_work_week`). */
 export const MY_WORK_RANGES = [
-  { key: 'today', label: 'Today' },
-  { key: 'week', label: 'Next 7 days' },
+  { key: 'today', label: t('Today') },
+  { key: 'week', label: t('Next 7 days') },
 ];
 let myWorkRange = 'today';
 
@@ -125,7 +130,7 @@ export function loadChartJs() {
     script.onload = () => resolve(window.Chart);
     script.onerror = () => {
       chartLoading = null;
-      reject(new Error('The chart library could not be loaded.'));
+      reject(new Error(t('The chart library could not be loaded.')));
     };
     document.head.append(script);
   });
@@ -136,7 +141,7 @@ function kpiSection(kpis) {
   return h(
     'section',
     { class: 'dashboard-section', 'aria-labelledby': 'kpi-heading' },
-    h('h2', { id: 'kpi-heading', class: 'visually-hidden', tabindex: '-1' }, 'Key figures'),
+    h('h2', { id: 'kpi-heading', class: 'visually-hidden', tabindex: '-1' }, t('Key figures')),
     h(
       'ul',
       { class: 'kpi-grid' },
@@ -158,7 +163,7 @@ function kpiSection(kpis) {
                   'span',
                   { class: 'badge badge-tone-warning kpi-flag' },
                   h('span', { 'aria-hidden': 'true' }, '⚠'),
-                  'Needs attention',
+                  t('Needs attention'),
                 )
               : null,
           ),
@@ -183,7 +188,7 @@ export function categoryChartBody(rows, caption, linkOf) {
   const table = h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show as a table'),
+    h('summary', {}, t('Show as a table')),
     h(
       'table',
       { class: 'data-table' },
@@ -194,8 +199,8 @@ export function categoryChartBody(rows, caption, linkOf) {
         h(
           'tr',
           {},
-          h('th', { scope: 'col' }, 'Category'),
-          h('th', { scope: 'col', class: 'numeric' }, 'Work orders'),
+          h('th', { scope: 'col' }, t('Category')),
+          h('th', { scope: 'col', class: 'numeric' }, t('Work orders')),
         ),
       ),
       h(
@@ -224,7 +229,10 @@ export function categoryChartBody(rows, caption, linkOf) {
 function chartSection(stats) {
   const rows = chartRows(stats);
   const total = rows.reduce((sum, r) => sum + r.count, 0);
-  const body = categoryChartBody(rows, `Work orders by category, last ${stats.period} days`);
+  const body = categoryChartBody(
+    rows,
+    t('Work orders by category, last {period} days', { period: stats.period }),
+  );
   return {
     canvas: body.canvas,
     rows,
@@ -235,12 +243,12 @@ function chartSection(stats) {
       h(
         'figcaption',
         {},
-        h('h2', { id: 'chart-heading' }, `Work orders by category — last ${stats.period} days`),
         h(
-          'p',
-          { class: 'muted' },
-          `${numberFormat.format(total)} work order${total === 1 ? '' : 's'} created`,
+          'h2',
+          { id: 'chart-heading' },
+          t('Work orders by category — last {period} days', { period: stats.period }),
         ),
+        h('p', { class: 'muted' }, tn(total, '{n} work order created', '{n} work orders created')),
       ),
       body.element,
     ),
@@ -257,7 +265,7 @@ export function statusChartBody(rows, linkOf) {
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   const canvas = h('canvas', {
     role: 'img',
-    'aria-label': chartSummary(rows, 'Pie chart'),
+    'aria-label': chartSummary(rows, t('Pie chart')),
   });
   return {
     canvas,
@@ -268,7 +276,7 @@ export function statusChartBody(rows, linkOf) {
           h('div', { class: 'pie-frame' }, canvas),
           h(
             'ul',
-            { class: 'pie-legend', 'aria-label': 'Work orders by status' },
+            { class: 'pie-legend', 'aria-label': t('Work orders by status') },
             rows.map((r) =>
               h(
                 'li',
@@ -290,7 +298,7 @@ export function statusChartBody(rows, linkOf) {
             ),
           ),
         )
-      : h('p', { class: 'empty-state' }, 'No work order was created in this period.'),
+      : h('p', { class: 'empty-state' }, t('No work order was created in this period.')),
   };
 }
 
@@ -311,12 +319,16 @@ function statusChartSection(stats) {
         h(
           'h2',
           { id: 'status-chart-heading' },
-          `Work orders by status — last ${stats.period} days`,
+          t('Work orders by status — last {period} days', { period: stats.period }),
         ),
         h(
           'p',
           { class: 'muted' },
-          `${numberFormat.format(total)} work order${total === 1 ? '' : 's'} created, by current status`,
+          tn(
+            total,
+            '{n} work order created, by current status',
+            '{n} work orders created, by current status',
+          ),
         ),
       ),
       body.element,
@@ -348,19 +360,24 @@ export function activityList(items) {
             h(
               'p',
               { class: 'muted' },
-              `Updated ${formatDateTime(wo.updated_at)}${wo.updated_by ? ` by ${personName(wo.updated_by)}` : ''}`,
+              wo.updated_by
+                ? t('Updated {updated_at} by {person}', {
+                    updated_at: formatDateTime(wo.updated_at),
+                    person: personName(wo.updated_by),
+                  })
+                : t('Updated {updated_at}', { updated_at: formatDateTime(wo.updated_at) }),
             ),
           ),
         ),
       )
-    : h('p', { class: 'empty-state' }, 'No activity yet.');
+    : h('p', { class: 'empty-state' }, t('No activity yet.'));
 }
 
 function recentSection(items) {
   return h(
     'section',
     { class: 'dashboard-card', 'aria-labelledby': 'recent-heading' },
-    h('h2', { id: 'recent-heading' }, 'Recent activity'),
+    h('h2', { id: 'recent-heading' }, t('Recent activity')),
     activityList(items),
   );
 }
@@ -398,7 +415,7 @@ function myWorkSection(data, myWeekLink) {
 export function myWorkSwitch(range, onRange) {
   return h(
     'div',
-    { class: 'segmented', role: 'group', 'aria-label': 'Period' },
+    { class: 'segmented', role: 'group', 'aria-label': t('Period') },
     MY_WORK_RANGES.map((r) =>
       h(
         'button',
@@ -423,8 +440,8 @@ export function myWorkNote(weekEnd, range) {
     'p',
     { class: 'muted' },
     range === 'week' && weekEnd
-      ? `Due by ${formatDate(weekEnd)}, late or without a due date.`
-      : 'Due today, late or without a due date.',
+      ? t('Due by {weekEnd}, late or without a due date.', { weekEnd: formatDate(weekEnd) })
+      : t('Due today, late or without a due date.'),
   );
 }
 
@@ -434,7 +451,7 @@ function myWorkContent(data, onRange, myWeekLink) {
     h(
       'div',
       { class: 'card-header' },
-      h('h2', { id: 'mywork-heading', tabindex: '-1' }, 'My work'),
+      h('h2', { id: 'mywork-heading', tabindex: '-1' }, t('My work')),
       myWorkSwitch(myWorkRange, onRange),
     ),
     myWeekLink
@@ -444,7 +461,7 @@ function myWorkContent(data, onRange, myWeekLink) {
           h(
             'a',
             { href: '/my-week', 'data-link': true, class: 'button button-secondary' },
-            'Today in My week →',
+            t('Today in My week →'),
           ),
         )
       : null,
@@ -474,7 +491,7 @@ export function workList(items, today, week) {
             h(
               'p',
               { class: 'muted' },
-              wo.due_on ? `Due ${formatDate(wo.due_on)}` : 'No due date',
+              wo.due_on ? t('Due {due_on}', { due_on: formatDate(wo.due_on) }) : t('No due date'),
               late
                 ? [
                     ' ',
@@ -482,7 +499,7 @@ export function workList(items, today, week) {
                       'span',
                       { class: 'badge badge-tone-warning' },
                       h('span', { 'aria-hidden': 'true' }, '⚠'),
-                      'Overdue',
+                      t('Overdue'),
                     ),
                   ]
                 : null,
@@ -494,8 +511,8 @@ export function workList(items, today, week) {
         'p',
         { class: 'empty-state' },
         week
-          ? 'No work order assigned to you is due in the next 7 days.'
-          : 'No work order assigned to you is due today.',
+          ? t('No work order assigned to you is due in the next 7 days.')
+          : t('No work order assigned to you is due today.'),
       );
 }
 
@@ -525,7 +542,9 @@ export function renderDashboard(
         ? h(
             'div',
             { class: 'banner banner-info', role: 'note' },
-            `Offline: figures saved on this device on ${formatDateTime(fetchedAt)}.`,
+            t('Offline: figures saved on this device on {fetchedAt}.', {
+              fetchedAt: formatDateTime(fetchedAt),
+            }),
           )
         : null,
       charts
@@ -597,7 +616,7 @@ export async function drawCategoryChart(canvas, rows, onPick) {
       labels: rows.map((r) => r.label),
       datasets: [
         {
-          label: 'Work orders',
+          label: t('Work orders'),
           data: values,
           backgroundColor: token('--color-chart-bar'),
           hoverBackgroundColor: token('--color-chart-bar-hover'),
@@ -623,7 +642,12 @@ export async function drawCategoryChart(canvas, rows, onPick) {
           displayColors: false,
           titleFont: { family: font },
           bodyFont: { family: font, weight: '600' },
-          callbacks: { label: (item) => `${numberFormat.format(item.parsed.x)} work orders` },
+          callbacks: {
+            label: (item) =>
+              tn(item.parsed.x, '{n} work order', '{n} work orders', {
+                n: numberFormat.format(item.parsed.x),
+              }),
+          },
         },
       },
       scales: {
@@ -663,7 +687,7 @@ export async function drawStatusChart(canvas, rows, onPick) {
       labels: rows.map((r) => r.label),
       datasets: [
         {
-          label: 'Work orders',
+          label: t('Work orders'),
           data: rows.map((r) => r.count),
           backgroundColor: rows.map((r) => token(`--color-chart-series-${r.slot}`)),
           borderColor: token('--color-surface'),
@@ -685,7 +709,10 @@ export async function drawStatusChart(canvas, rows, onPick) {
           bodyFont: { family: font, weight: '600' },
           callbacks: {
             label: (item) =>
-              `${numberFormat.format(item.parsed)} work orders (${percentFormat.format(rows[item.dataIndex].share)})`,
+              tn(item.parsed, '{n} work order ({share})', '{n} work orders ({share})', {
+                n: numberFormat.format(item.parsed),
+                share: percentFormat.format(rows[item.dataIndex].share),
+              }),
           },
         },
       },

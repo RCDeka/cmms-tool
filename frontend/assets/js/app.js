@@ -147,6 +147,7 @@ import {
   renderTable,
   selectRow,
 } from './table.js';
+import { t, tn } from './i18n.js';
 
 const tableContainer = document.getElementById('table-container');
 const detailContainer = document.getElementById('detail-container');
@@ -195,7 +196,7 @@ async function render(route) {
     }
     resetViews();
     showLoggedOut();
-    setTitle('Log in');
+    setTitle(t('Log in'));
     return renderLogin(document.getElementById('login-container'), {
       onLoggedIn: async (user) => {
         await forgetOtherUsersData(user);
@@ -220,7 +221,7 @@ async function render(route) {
     case 'dashboard':
       // Supervisors and admins have personal dashboards (D59); technicians the fixed one.
       if (hasDashboards()) {
-        leaveRecordViews('dashboard', 'Dashboard');
+        leaveRecordViews('dashboard', t('Dashboard'));
         return showDashboards(route, isCurrent);
       }
       return showDashboard(isCurrent);
@@ -229,16 +230,16 @@ async function render(route) {
         ? showAuditLog(route, isCurrent)
         : showPlaceholder(
             null,
-            'Access denied',
-            'Only supervisors and administrators can open this page.',
+            t('Access denied'),
+            t('Only supervisors and administrators can open this page.'),
           );
     case 'conflicts':
     case 'conflict':
       if (!hasRole('SUPERVISOR', 'ADMIN')) {
         return showPlaceholder(
           null,
-          'Access denied',
-          'Only supervisors and administrators can open this page.',
+          t('Access denied'),
+          t('Only supervisors and administrators can open this page.'),
         );
       }
       return route.name === 'conflicts'
@@ -249,7 +250,7 @@ async function render(route) {
     case 'userCreate':
       return hasRole('ADMIN')
         ? showUsers(route, isCurrent)
-        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+        : showPlaceholder(null, t('Access denied'), t('Only administrators can open this page.'));
     case 'places':
     case 'place':
     case 'placeCreate':
@@ -258,8 +259,8 @@ async function render(route) {
         ? showPlaces(route, isCurrent)
         : showPlaceholder(
             null,
-            'Access denied',
-            'Only supervisors and administrators can open this page.',
+            t('Access denied'),
+            t('Only supervisors and administrators can open this page.'),
           );
     case 'account':
       return showAccount();
@@ -272,8 +273,8 @@ async function render(route) {
       if (isPhone()) {
         return showPlaceholder(
           'planning',
-          'Year planner',
-          'The year planner needs a larger screen: open it on a tablet or a computer.',
+          t('Year planner'),
+          t('The year planner needs a larger screen: open it on a tablet or a computer.'),
           true,
         );
       }
@@ -283,10 +284,10 @@ async function render(route) {
         ? showPlanning(route, isCurrent)
         : showPlaceholder(
             'planning',
-            'Access denied',
+            t('Access denied'),
             route.name === 'suggestions'
-              ? 'Only supervisors and administrators can rebalance the plans.'
-              : 'Only supervisors and administrators can create plans.',
+              ? t('Only supervisors and administrators can rebalance the plans.')
+              : t('Only supervisors and administrators can create plans.'),
           );
     case 'schedule':
       return showSchedule(route, isCurrent);
@@ -295,15 +296,15 @@ async function render(route) {
     case 'planningSettings':
       return hasRole('ADMIN')
         ? showPlanningSettings(isCurrent)
-        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+        : showPlaceholder(null, t('Access denied'), t('Only administrators can open this page.'));
     case 'widgetSettings':
       return hasRole('ADMIN')
         ? showWidgetSettings(isCurrent)
-        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+        : showPlaceholder(null, t('Access denied'), t('Only administrators can open this page.'));
     case 'feedback':
       return hasRole('ADMIN')
         ? showFeedbackLog(route, isCurrent)
-        : showPlaceholder(null, 'Access denied', 'Only administrators can open this page.');
+        : showPlaceholder(null, t('Access denied'), t('Only administrators can open this page.'));
     case 'request':
       // A link to a staff request: the maintenance team opens it as the work order it is.
       return navigate(`/work-orders/${route.id}`, { replace: true, force: true });
@@ -311,12 +312,12 @@ async function render(route) {
     case 'requestCreate':
       return showPlaceholder(
         null,
-        'Staff requests',
-        'This page is for staff members. Their requests are listed under Work orders.',
+        t('Staff requests'),
+        t('This page is for staff members. Their requests are listed under Work orders.'),
         true,
       );
     default:
-      return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
+      return showPlaceholder(null, t('Page not found'), t('This page does not exist.'), true);
   }
 }
 
@@ -354,7 +355,7 @@ function showPlaceholder(section, title, message, withHomeLink = false) {
           h(
             'a',
             { href: homeUrl(), 'data-link': true },
-            isStaff() ? 'Go to my open requests' : 'Go to the dashboard',
+            isStaff() ? t('Go to my open requests') : t('Go to the dashboard'),
           ),
         ),
       );
@@ -378,7 +379,7 @@ function renderStaffRoute(route, isCurrent) {
     case 'account':
       return showAccount();
     case 'notFound':
-      return showPlaceholder(null, 'Page not found', 'This page does not exist.', true);
+      return showPlaceholder(null, t('Page not found'), t('This page does not exist.'), true);
     default:
       return navigate('/requests', { replace: true, force: true });
   }
@@ -387,8 +388,9 @@ function renderStaffRoute(route, isCurrent) {
 function showRequestsError(err) {
   showConsoleError(err, () => render(currentRoute()));
   if (err.status === 0) {
-    tableContainer.querySelector('.error-state p').textContent =
-      'Your requests need a connection to the server.';
+    tableContainer.querySelector('.error-state p').textContent = t(
+      'Your requests need a connection to the server.',
+    );
   }
 }
 
@@ -398,9 +400,12 @@ function showRequestsError(err) {
  */
 async function showRequests(route, isCurrent, { quiet = false } = {}) {
   const all = route.scope === 'all';
-  leaveRecordViews(all ? 'requests_all' : 'requests', all ? 'All my requests' : 'My open requests');
+  leaveRecordViews(
+    all ? 'requests_all' : 'requests',
+    all ? t('All my requests') : t('My open requests'),
+  );
   if (!tableContainer.querySelector('.requests-page')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading your requests…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading your requests…')));
   }
   let data;
   try {
@@ -425,7 +430,7 @@ async function showRequests(route, isCurrent, { quiet = false } = {}) {
 }
 
 async function showRequestCreate(isCurrent) {
-  leaveRecordViews('request_new', 'New request');
+  leaveRecordViews('request_new', t('New request'));
   renderPage();
   const { sites, places } = await getRefs();
   if (!isCurrent()) return;
@@ -436,7 +441,7 @@ async function showRequestCreate(isCurrent) {
     onSubmit: async (body, form) => {
       try {
         const { item } = await apiFetch('/requests', { method: 'POST', body });
-        announce(`Request ${item.number} sent to the maintenance team.`);
+        announce(t('Request {number} sent to the maintenance team.', { number: item.number }));
         navigate(`/requests/${item.id}`, { force: true });
         return true;
       } catch (err) {
@@ -444,7 +449,7 @@ async function showRequestCreate(isCurrent) {
           form,
           apiFieldErrors(err),
           err.status === 0
-            ? 'You are offline: your request is kept on this page, send it once connected.'
+            ? t('You are offline: your request is kept on this page, send it once connected.')
             : err.message,
         );
         return false;
@@ -455,9 +460,9 @@ async function showRequestCreate(isCurrent) {
 }
 
 async function showRequest(route, isCurrent) {
-  leaveRecordViews('requests', 'My open requests');
+  leaveRecordViews('requests', t('My open requests'));
   if (!tableContainer.querySelector('.request-page')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the request…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the request…')));
   }
   let request;
   try {
@@ -467,8 +472,8 @@ async function showRequest(route, isCurrent) {
     if (err.status === 404) {
       return showPlaceholder(
         null,
-        'Request not found',
-        'This request does not exist, or another person sent it.',
+        t('Request not found'),
+        t('This request does not exist, or another person sent it.'),
         true,
       );
     }
@@ -478,7 +483,7 @@ async function showRequest(route, isCurrent) {
   // The top bar names the sidebar section (docs/ui-guidelines.md → Page title, DT6).
   const finished = ['CLOSED', 'CANCELLED'].includes(request.status);
   setActiveNav(finished ? 'requests_all' : 'requests');
-  setTitle(finished ? 'All my requests' : 'My open requests');
+  setTitle(finished ? t('All my requests') : t('My open requests'));
   renderPage();
   renderRequestDetail(tableContainer, {
     request,
@@ -487,12 +492,13 @@ async function showRequest(route, isCurrent) {
       (await apiFetch(`/requests/${request.id}/comments`, { method: 'POST', body: { body } })).item,
     cancelRequest: async () => {
       const answer = await confirmDialog({
-        title: 'Cancel this request?',
-        message:
+        title: t('Cancel this request?'),
+        message: t(
           'The maintenance team will not work on it, and this cannot be undone. To tell them why, add a comment. If the problem comes back, send a new request.',
+        ),
         actions: [
-          { value: 'withdraw', label: 'Cancel the request', primary: true },
-          { value: 'keep', label: 'Keep it' },
+          { value: 'withdraw', label: t('Cancel the request'), primary: true },
+          { value: 'keep', label: t('Keep it') },
         ],
         cancelValue: 'keep',
       });
@@ -542,14 +548,14 @@ const dashboardHeading = () => (hasRole('TECHNICIAN') ? '#mywork-heading' : '#kp
 
 /** Dashboard: the copy saved on this device first, then fresh figures from the server. */
 async function showDashboard(isCurrent) {
-  leaveRecordViews('dashboard', 'Dashboard');
+  leaveRecordViews('dashboard', t('Dashboard'));
   const cached = await DB.getConfig(DASHBOARD_CACHE);
   if (!isCurrent()) return;
   if (cached) {
     renderPage();
     await paintDashboard(cached, true, isCurrent);
   } else {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the dashboard…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the dashboard…')));
   }
   tableContainer.querySelector(dashboardHeading())?.focus();
   if (!isOnline() && cached) return;
@@ -573,7 +579,7 @@ async function showDashboard(isCurrent) {
     showConsoleError(err, () => render(currentRoute()));
     tableContainer.querySelector('.error-state p').textContent =
       err.status === 0
-        ? 'The dashboard has not been loaded on this device yet, so it is not available offline.'
+        ? t('The dashboard has not been loaded on this device yet, so it is not available offline.')
         : err.message;
   } finally {
     if (isCurrent()) {
@@ -594,9 +600,9 @@ function auditUrl(entityType, page) {
 }
 
 async function showAuditLog(route, isCurrent) {
-  leaveRecordViews('audit', 'Audit log');
+  leaveRecordViews('audit', t('Audit log'));
   if (!tableContainer.querySelector('.audit-table, .filter-row')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the audit log…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the audit log…')));
   }
   const query = new URLSearchParams({ page: String(route.page), size: '50' });
   if (route.entityType) query.set('entity_type', route.entityType);
@@ -607,8 +613,9 @@ async function showAuditLog(route, isCurrent) {
     if (isCurrent()) {
       showConsoleError(err, () => render(currentRoute()));
       if (err.status === 0) {
-        tableContainer.querySelector('.error-state p').textContent =
-          'The audit log needs a connection to the server.';
+        tableContainer.querySelector('.error-state p').textContent = t(
+          'The audit log needs a connection to the server.',
+        );
       }
     }
     return;
@@ -635,10 +642,10 @@ async function showAuditLog(route, isCurrent) {
 
 /** Usernames are unique; sites are suggested from the users already known. */
 async function showUsers(route, isCurrent) {
-  leaveRecordViews('users', 'Users');
+  leaveRecordViews('users', t('Users'));
   const filters = route.filters ?? {};
   if (!tableContainer.querySelector('.users-table, .filter-bar')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading users…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading users…')));
   }
   const query = new URLSearchParams({ page: String(route.page), size: '50' });
   if (filters.q) query.set('q', filters.q);
@@ -654,12 +661,13 @@ async function showUsers(route, isCurrent) {
   } catch (err) {
     if (!isCurrent()) return;
     if (err.status === 404) {
-      return showPlaceholder('users', 'User not found', 'This user does not exist.');
+      return showPlaceholder('users', t('User not found'), t('This user does not exist.'));
     }
     showConsoleError(err, () => render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'User administration needs a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'User administration needs a connection to the server.',
+      );
     }
     return;
   }
@@ -699,7 +707,7 @@ async function showUsers(route, isCurrent) {
       onCreate: async (values, form) => {
         try {
           const { item } = await apiFetch('/admin/users', { method: 'POST', body: values });
-          announce(`User ${item.username} created.`);
+          announce(t('User {username} created.', { username: item.username }));
           navigate(usersUrl({ ...filters, page: route.page, id: item.id }), { force: true });
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
@@ -723,7 +731,7 @@ async function showUsers(route, isCurrent) {
             saveUser({ ...currentUser(), ...item });
             showLoggedIn(currentUser());
           }
-          announce(updated ? 'Changes saved.' : 'Nothing to save.');
+          announce(updated ? t('Changes saved.') : t('Nothing to save.'));
           render(currentRoute());
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
@@ -731,11 +739,14 @@ async function showUsers(route, isCurrent) {
       },
       onResetPassword: async (password, form) => {
         const answer = await confirmDialog({
-          title: 'Set a new password?',
-          message: `${user.first_name} ${user.last_name} will have to log in again with the new password.`,
+          title: t('Set a new password?'),
+          message: t('{first_name} {last_name} will have to log in again with the new password.', {
+            first_name: user.first_name,
+            last_name: user.last_name,
+          }),
           actions: [
-            { value: 'set', label: 'Set password', primary: true },
-            { value: 'cancel', label: 'Cancel' },
+            { value: 'set', label: t('Set password'), primary: true },
+            { value: 'cancel', label: t('Cancel') },
           ],
         });
         if (answer !== 'set') return;
@@ -746,7 +757,7 @@ async function showUsers(route, isCurrent) {
           });
           form.reset();
           showErrors(form, {}, '');
-          announce('New password set. Give it to the user privately.');
+          announce(t('New password set. Give it to the user privately.'));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
         }
@@ -759,10 +770,10 @@ async function showUsers(route, isCurrent) {
 // --- Places (supervisors and admins, online only, D82) -----------------------------------
 
 async function showPlaces(route, isCurrent) {
-  leaveRecordViews('locations', 'Places');
+  leaveRecordViews('locations', t('Places'));
   const filters = route.filters ?? {};
   if (!tableContainer.querySelector('.place-tree, .filter-bar')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading places…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading places…')));
   }
   const admin = hasRole('ADMIN');
   let tree;
@@ -776,8 +787,9 @@ async function showPlaces(route, isCurrent) {
     if (!isCurrent()) return;
     showConsoleError(err, () => render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The places need a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The places need a connection to the server.',
+      );
     }
     return;
   }
@@ -785,7 +797,7 @@ async function showPlaces(route, isCurrent) {
   const index = placeIndex(tree);
   const place = route.name === 'place' ? index.byId.get(route.id) : null;
   if (route.name === 'place' && !place) {
-    return showPlaceholder('locations', 'Place not found', 'This place does not exist.');
+    return showPlaceholder('locations', t('Place not found'), t('This place does not exist.'));
   }
   // The forms read the tree from the cache: keep it as the server has it now.
   DB.setConfig('locations', tree);
@@ -820,8 +832,8 @@ async function showPlaces(route, isCurrent) {
       replaceChildren(detailContainer);
       return showPlaceholder(
         'locations',
-        'Access denied',
-        'Only administrators change level types.',
+        t('Access denied'),
+        t('Only administrators change level types.'),
       );
     }
     renderLevelTypes(detailContainer, {
@@ -834,7 +846,9 @@ async function showPlaces(route, isCurrent) {
           } else {
             await apiFetch('/admin/level-types', { method: 'POST', body });
           }
-          announce(type ? 'Level type saved.' : `Level type ${body.name} added.`);
+          announce(
+            type ? t('Level type saved.') : t('Level type {name} added.', { name: body.name }),
+          );
           changed(pageUrl('types'));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
@@ -845,7 +859,11 @@ async function showPlaces(route, isCurrent) {
     const parent = filters.parent ? (index.byId.get(filters.parent) ?? null) : null;
     if (!parent && !admin) {
       replaceChildren(detailContainer);
-      return showPlaceholder('locations', 'Access denied', 'Only administrators create sites.');
+      return showPlaceholder(
+        'locations',
+        t('Access denied'),
+        t('Only administrators create sites.'),
+      );
     }
     renderPlaceCreate(detailContainer, {
       index,
@@ -854,7 +872,7 @@ async function showPlaces(route, isCurrent) {
       onCreate: async (body, form) => {
         try {
           const { item } = await apiFetch('/admin/locations', { method: 'POST', body });
-          announce(`${item.name} created.`);
+          announce(t('{name} created.', { name: item.name }));
           changed(pageUrl(item.id));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
@@ -874,7 +892,7 @@ async function showPlaces(route, isCurrent) {
             method: 'PUT',
             body,
           });
-          announce(updated ? 'Changes saved.' : 'Nothing to save.');
+          announce(updated ? t('Changes saved.') : t('Nothing to save.'));
           changed(pageUrl(place.id));
         } catch (err) {
           showErrors(form, apiFieldErrors(err), err.message);
@@ -887,7 +905,7 @@ async function showPlaces(route, isCurrent) {
 
 /** "Change my password" (every role). */
 function showAccount() {
-  leaveRecordViews(null, 'Change my password');
+  leaveRecordViews(null, t('Change my password'));
   renderPage();
   renderAccount(tableContainer, {
     username: currentUser().username,
@@ -901,9 +919,10 @@ function showAccount() {
         saveSession(token, currentUser());
         form.reset();
         showErrors(form, {}, '');
-        announce('Your password has been changed.');
-        form.querySelector('.form-help').textContent =
-          'Password changed. Your other sessions have ended.';
+        announce(t('Your password has been changed.'));
+        form.querySelector('.form-help').textContent = t(
+          'Password changed. Your other sessions have ended.',
+        );
       } catch (err) {
         // The server checks the new password under the name `password`.
         const { password, ...fields } = apiFieldErrors(err);
@@ -911,7 +930,7 @@ function showAccount() {
         showErrors(
           form,
           fields,
-          err.status === 0 ? 'You are offline: try again once connected.' : err.message,
+          err.status === 0 ? t('You are offline: try again once connected.') : err.message,
         );
       }
     },
@@ -977,17 +996,17 @@ function openFeedback() {
     pageTitle: screenTitle(),
     send: (payload) => apiFetch('/feedback', { method: 'POST', body: payload }),
     onSent: () => {
-      announce('Thank you: your suggestion has been saved.');
+      announce(t('Thank you: your suggestion has been saved.'));
       document.getElementById('feedback-button').focus();
     },
   });
 }
 
 async function showFeedbackLog(route, isCurrent) {
-  leaveRecordViews('feedback', 'Suggestions');
+  leaveRecordViews('feedback', t('Suggestions'));
   const filters = route.filters ?? {};
   if (!tableContainer.querySelector('.feedback-table, .filter-row')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading suggestions…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading suggestions…')));
   }
   const query = new URLSearchParams({ page: String(route.page), size: '50' });
   if (filters.status) query.set('status', filters.status);
@@ -998,8 +1017,9 @@ async function showFeedbackLog(route, isCurrent) {
     if (!isCurrent()) return;
     showConsoleError(err, () => render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The suggestions need a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The suggestions need a connection to the server.',
+      );
     }
     return;
   }
@@ -1016,11 +1036,13 @@ async function showFeedbackLog(route, isCurrent) {
     onStatus: async (id, status, select) => {
       try {
         await apiFetch(`/feedback/${id}`, { method: 'PUT', body: { status } });
-        announce('Status saved.');
+        announce(t('Status saved.'));
         render(currentRoute());
       } catch (err) {
         select.value = data.items.find((i) => i.id === id).status;
-        announce(err.status === 0 ? 'You are offline: the status was not changed.' : err.message);
+        announce(
+          err.status === 0 ? t('You are offline: the status was not changed.') : err.message,
+        );
       }
     },
     pagination: renderPagination(data, onPage),
@@ -1047,16 +1069,18 @@ function showConsoleError(err, retry) {
       h(
         'p',
         {},
-        err.status === 0 ? 'The conflict console needs a connection to the server.' : err.message,
+        err.status === 0
+          ? t('The conflict console needs a connection to the server.')
+          : err.message,
       ),
-      h('button', { type: 'button', class: 'button button-secondary', onClick: retry }, 'Retry'),
+      h('button', { type: 'button', class: 'button button-secondary', onClick: retry }, t('Retry')),
     ),
   );
 }
 
 async function showConflictList(isCurrent) {
-  leaveRecordViews('conflicts', 'Conflicts');
-  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading conflicts…'));
+  leaveRecordViews('conflicts', t('Conflicts'));
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading conflicts…')));
   let items;
   try {
     ({ items } = await apiFetch('/conflicts'));
@@ -1084,9 +1108,9 @@ async function conflictLookups(conflict) {
 }
 
 async function showConflict(route, isCurrent, error = '') {
-  leaveRecordViews('conflicts', 'Conflicts');
+  leaveRecordViews('conflicts', t('Conflicts'));
   if (!error)
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the conflict…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the conflict…')));
   let conflict;
   try {
     conflict = await apiFetch(`/conflicts/${route.id}`);
@@ -1097,8 +1121,8 @@ async function showConflict(route, isCurrent, error = '') {
         h(
           'div',
           { class: 'placeholder' },
-          h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Conflict not found'),
-          h('p', {}, h('a', { href: '/conflicts', 'data-link': true }, 'Back to the conflicts')),
+          h('h2', { class: 'placeholder-title', tabindex: '-1' }, t('Conflict not found')),
+          h('p', {}, h('a', { href: '/conflicts', 'data-link': true }, t('Back to the conflicts'))),
         ),
       );
     } else {
@@ -1115,11 +1139,13 @@ async function showConflict(route, isCurrent, error = '') {
     error,
     onResolve: async (choice, fields) => {
       const answer = await confirmDialog({
-        title: 'Resolve this conflict?',
-        message: `${resolutionSummary(choice, conflict)} This cannot be undone.`,
+        title: t('Resolve this conflict?'),
+        message: t('{resolutionSummary} This cannot be undone.', {
+          resolutionSummary: resolutionSummary(choice, conflict),
+        }),
         actions: [
-          { value: 'resolve', label: 'Resolve', primary: true },
-          { value: 'cancel', label: 'Cancel' },
+          { value: 'resolve', label: t('Resolve'), primary: true },
+          { value: 'cancel', label: t('Cancel') },
         ],
       });
       if (answer !== 'resolve') return;
@@ -1136,11 +1162,11 @@ async function showConflict(route, isCurrent, error = '') {
           ...res.item,
           _fetched_at: new Date().toISOString(),
         });
-        announce(`Conflict on ${conflict.label} resolved.`);
+        announce(t('Conflict on {label} resolved.', { label: conflict.label }));
         navigate('/conflicts', { force: true });
       } catch (err) {
         if (err.status === 409) {
-          announce('This conflict was already resolved by someone else.');
+          announce(t('This conflict was already resolved by someone else.'));
           render(currentRoute());
         } else {
           const seq = renderSeq;
@@ -1235,7 +1261,7 @@ function tableActions(route) {
       h(
         'a',
         { href: `/work-orders/new${page}`, 'data-link': true, class: 'button button-primary' },
-        '+ New work order',
+        t('+ New work order'),
       ),
     ];
   }
@@ -1244,7 +1270,7 @@ function tableActions(route) {
       h(
         'a',
         { href: `/assets/new${page}`, 'data-link': true, class: 'button button-primary' },
-        '+ New asset',
+        t('+ New asset'),
       ),
     ];
   }
@@ -1297,7 +1323,7 @@ async function showEntity(route, isCurrent) {
       if (!area.querySelector('.data-table')) {
         replaceChildren(
           area,
-          h('p', { class: 'loading-state', role: 'status' }, `Loading ${cfg.label.toLowerCase()}…`),
+          h('p', { class: 'loading-state', role: 'status' }, cfg.text.loadingList),
         );
       }
       area.setAttribute('aria-busy', 'true');
@@ -1340,8 +1366,8 @@ async function showEntity(route, isCurrent) {
     } else {
       clearEditor();
       renderDetailMessage(detailContainer, {
-        title: 'New asset',
-        message: 'Only supervisors and administrators can create assets.',
+        title: t('New asset'),
+        message: t('Only supervisors and administrators can create assets.'),
         onClose,
       });
     }
@@ -1408,16 +1434,16 @@ function offerUpdate(route) {
     clearEditor();
     await showDetail(route, () => true);
     detailContainer.querySelector('.detail-title')?.focus();
-    announce('The record now shows the latest version.');
+    announce(t('The record now shows the latest version.'));
   });
-  announce('An update is available for the open record.');
+  announce(t('An update is available for the open record.'));
 }
 
 async function showDetail(route, isCurrent) {
   const cfg = ENTITIES[route.entity];
   // Opened from another page (My week, the dashboard…): "Back" returns there (M8).
   const origin = returnPage(cameFrom());
-  const backLabel = origin ? `Back to ${origin}` : undefined;
+  const backLabel = origin ? t('Back to {origin}', { origin }) : undefined;
   const onClose = origin
     ? () => history.back()
     : () => navigate(listUrl(route.entity, route.page, route.filters));
@@ -1438,7 +1464,7 @@ async function showDetail(route, isCurrent) {
   if (!record) {
     renderDetailMessage(detailContainer, {
       title: cfg.singular,
-      message: `Loading ${cfg.singular.toLowerCase()}…`,
+      message: cfg.text.loadingRecord,
       onClose,
       backLabel,
     });
@@ -1449,10 +1475,9 @@ async function showDetail(route, isCurrent) {
       );
     } catch (err) {
       if (!isCurrent()) return;
-      const singular = cfg.singular.toLowerCase();
       let message = err.message;
-      if (err.status === 404) message = `This ${singular} does not exist.`;
-      else if (err.status === 0) message = `This ${singular} is not available offline.`;
+      if (err.status === 404) message = cfg.text.notFound;
+      else if (err.status === 0) message = cfg.text.notOffline;
       renderDetailMessage(detailContainer, {
         title: cfg.singular,
         message,
@@ -1520,13 +1545,15 @@ function showTableError(area, err, cfg, route) {
   let message = err.message;
   if (err.status === 0) {
     if (filtered) {
-      message =
-        'Search and filters need a connection to the server. Without filters, the pages saved on this device are available.';
+      message = t(
+        'Search and filters need a connection to the server. Without filters, the pages saved on this device are available.',
+      );
     } else if (sorted) {
-      message =
-        'Sorting needs a connection to the server. In the default order, the pages saved on this device are available.';
+      message = t(
+        'Sorting needs a connection to the server. In the default order, the pages saved on this device are available.',
+      );
     } else {
-      message = `Page ${route.page} of ${cfg.label.toLowerCase()} has not been loaded before, so it is not available offline.`;
+      message = cfg.text.pageNotSaved(route.page);
     }
   }
   replaceChildren(
@@ -1545,13 +1572,13 @@ function showTableError(area, err, cfg, route) {
             class: 'button button-secondary',
             onClick: () => render(currentRoute()),
           },
-          'Retry',
+          t('Retry'),
         ),
         filtered
           ? h(
               'a',
               { href: listUrl(route.entity), 'data-link': true, class: 'button button-secondary' },
-              'Clear filters',
+              t('Clear filters'),
             )
           : null,
         sorted
@@ -1562,7 +1589,7 @@ function showTableError(area, err, cfg, route) {
                 'data-link': true,
                 class: 'button button-secondary',
               },
-              'Default order',
+              t('Default order'),
             )
           : null,
       ),
@@ -1609,9 +1636,8 @@ function handleQueueResults() {
   setQueueHandlers({
     onSuccess(entry, item) {
       updateShownRecord(entry.entity, item);
-      const singular = ENTITIES[entry.entity].singular;
       if (entry.op === 'create') {
-        announce(`Work order ${item.number} created.`);
+        announce(t('Work order {number} created.', { number: item.number }));
         if (openDetail?.id === entry.record_id) {
           navigate(detailUrl('work_orders', item.id, shownPage?.page ?? 1), {
             replace: true,
@@ -1622,7 +1648,7 @@ function handleQueueResults() {
         }
         revalidateCurrent({ force: true });
       } else {
-        announce(`${singular} saved.`);
+        announce(ENTITIES[entry.entity].text.saved);
         refreshAfterWrite(entry.entity, entry.record_id);
       }
     },
@@ -1630,13 +1656,17 @@ function handleQueueResults() {
       if (body?.server_version) updateShownRecord(entry.entity, body.server_version);
       announce(
         body?.locked
-          ? 'Not saved: this record is waiting for a supervisor to resolve a conflict. Your edits are kept as a draft.'
-          : 'Conflict: someone changed this record before you. A supervisor will choose which version to keep.',
+          ? t(
+              'Not saved: this record is waiting for a supervisor to resolve a conflict. Your edits are kept as a draft.',
+            )
+          : t(
+              'Conflict: someone changed this record before you. A supervisor will choose which version to keep.',
+            ),
       );
       refreshAfterWrite(entry.entity, entry.record_id);
     },
     onRejected(entry, err) {
-      announce(`Not saved: ${err.message}`);
+      announce(t('Not saved: {message}', { message: err.message }));
       refreshAfterWrite(entry.entity, entry.record_id);
     },
   });
@@ -1652,11 +1682,15 @@ async function onLogout() {
   const waiting = pendingCount();
   if (waiting > 0) {
     const choice = await confirmDialog({
-      title: 'Changes not sent',
-      message: `${waiting} change${waiting === 1 ? ' has' : 's have'} not been sent to the server yet. If you log out now, ${waiting === 1 ? 'it' : 'they'} will be lost.`,
+      title: t('Changes not sent'),
+      message: tn(
+        waiting,
+        '{n} change has not been sent to the server yet. If you log out now, it will be lost.',
+        '{n} changes have not been sent to the server yet. If you log out now, they will be lost.',
+      ),
       actions: [
-        { value: 'stay', label: 'Stay logged in', primary: true },
-        { value: 'logout', label: 'Log out anyway' },
+        { value: 'stay', label: t('Stay logged in'), primary: true },
+        { value: 'logout', label: t('Log out anyway') },
       ],
       cancelValue: 'stay',
     });
@@ -1667,12 +1701,13 @@ async function onLogout() {
   await DB.clearAll(); // D22: no local data left behind
   await loadQueue();
   navigate('/login', { force: true });
-  announce('You are logged out.');
+  announce(t('You are logged out.'));
 }
 
 function init() {
   initNetwork();
-  initLayout({ onLogout });
+  // An unsaved form gets the usual choices before the page reloads in the other language.
+  initLayout({ onLogout, beforeLanguageChange: () => leaveGuard(location.pathname) });
   document.getElementById('find-button').addEventListener('click', openFind);
   document.getElementById('feedback-button').addEventListener('click', openFeedback);
   const pageHooks = { render, leaveRecordViews, showConsoleError, showPlaceholder };
@@ -1692,7 +1727,7 @@ function init() {
     clearSession();
     const next = encodeURIComponent(location.pathname + location.search);
     navigate(`/login?next=${next}`, { replace: true, force: true });
-    announce('Your session has expired. Log in again.');
+    announce(t('Your session has expired. Log in again.'));
   });
 
   // Escape closes the detail panel and returns to the table (dialogs handle their own Escape).
@@ -1717,7 +1752,7 @@ function init() {
     refreshRequestList();
   });
   onNetworkChange((online) => {
-    announce(online ? 'Back online.' : 'You are offline. Local data is shown.');
+    announce(online ? t('Back online.') : t('You are offline. Local data is shown.'));
     if (online) {
       revalidateCurrent({ force: true });
       refreshRequestList();

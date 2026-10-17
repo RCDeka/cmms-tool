@@ -6,11 +6,46 @@
 import { APP_NAME } from './config.js';
 import { h, replaceChildren } from './dom.js';
 import { valueLabel } from './labels.js';
+import { LANGUAGES, language, setLanguage, t, tn, translateStatic } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
+const FLAGS = { en: '/assets/img/flag-gb.svg', fr: '/assets/img/flag-fr.svg' };
+
+/**
+ * Flags to choose the language of the interface (D85): one button per language, named in its
+ * own language; the current one is pressed. A click on another saves it and reloads the page.
+ * @param {() => Promise<boolean> | boolean} [beforeChange] false keeps the page as it is
+ */
+export function languageSwitch(beforeChange = () => true) {
+  return h(
+    'div',
+    { class: 'language-switch', role: 'group', 'aria-label': t('Language of the interface') },
+    LANGUAGES.map(({ code, name }) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'language-button',
+          lang: code,
+          title: name,
+          'aria-label': name,
+          'aria-pressed': String(code === language()),
+          dataset: { language: code },
+          onClick: async () => {
+            if (code !== language() && (await beforeChange())) setLanguage(code);
+          },
+        },
+        h('img', { src: FLAGS[code], alt: '', width: '24', height: '16' }),
+      ),
+    ),
+  );
+}
+
 /** Wires the static shell from index.html. */
-export function initLayout({ onLogout }) {
+export function initLayout({ onLogout, beforeLanguageChange }) {
+  translateStatic();
+  $('feedback-button').after(languageSwitch(beforeLanguageChange));
   for (const el of document.querySelectorAll('[data-app-name]')) el.textContent = APP_NAME;
   $('menu-button').addEventListener('click', () =>
     setMenuOpen(!document.body.classList.contains('menu-open')),
@@ -35,7 +70,7 @@ export function initLayout({ onLogout }) {
 function setMenuOpen(open) {
   document.body.classList.toggle('menu-open', open);
   $('menu-button').setAttribute('aria-expanded', String(open));
-  $('menu-button').setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  $('menu-button').setAttribute('aria-label', open ? t('Close menu') : t('Open menu'));
 }
 
 /**
@@ -58,7 +93,10 @@ export function showLoggedIn(user) {
   for (const el of document.querySelectorAll('[data-roles]')) {
     el.hidden = !el.dataset.roles.split(' ').includes(user.role);
   }
-  $('session-status').textContent = `Signed in as ${user.first_name} ${user.last_name}`;
+  $('session-status').textContent = t('Signed in as {first_name} {last_name}', {
+    first_name: user.first_name,
+    last_name: user.last_name,
+  });
 }
 
 /** Hides the app shell and shows the login page. */
@@ -166,6 +204,6 @@ export function confirmDialog({ title, message, actions, cancelValue = 'cancel' 
 /** Status bar: number of writes waiting to be sent. */
 export function setSyncStatus(count) {
   $('sync-status').textContent = count
-    ? `${count} change${count === 1 ? '' : 's'} waiting to sync`
+    ? tn(count, '{n} change waiting to sync', '{n} changes waiting to sync')
     : '';
 }

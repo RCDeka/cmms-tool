@@ -41,6 +41,17 @@ describe('network state on the page', () => {
     expect(button.title).toMatch(/needs a connection/);
     reportOnline();
     expect(button.disabled).toBe(false);
+    expect(button.hasAttribute('title')).toBe(false);
+  });
+
+  it("gives a button its own tooltip back once online (the top bar's, D85)", () => {
+    document.body.innerHTML = '<button class="ai-only" title="Find a work order">Find</button>';
+    const button = document.querySelector('.ai-only');
+    reportOffline();
+    applyToPage();
+    expect(button.title).toMatch(/offline/i);
+    reportOnline();
+    expect(button.title).toBe('Find a work order');
   });
 });
 

@@ -9,6 +9,7 @@ import { storesOf } from './db.js';
 import { ENTITIES } from './entities.js';
 import { isOnline, onNetworkChange } from './network.js';
 import { deleteDraft, saveDraft } from './save-modes.js';
+import { t } from './i18n.js';
 
 const STORE = 'sync_queue';
 /** Retry delays after network or server errors: 5 s, 15 s, 60 s, then every 5 min. */
@@ -255,7 +256,7 @@ async function handleConflict(entry, body) {
       base_version: entry.base_version,
       changes: entry.changes,
       error: {
-        message: 'This record is waiting for a supervisor to resolve a conflict.',
+        message: t('This record is waiting for a supervisor to resolve a conflict.'),
         locked: true,
       },
     });

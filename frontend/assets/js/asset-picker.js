@@ -9,18 +9,19 @@ import { ASSET_STATUSES, CATEGORIES } from './enums.js';
 import { badge } from './format.js';
 import { valueLabel } from './labels.js';
 import { renderPagination } from './table.js';
+import { t, tn } from './i18n.js';
 
 export const PICKER_PAGE_SIZE = 20;
 
 /** Columns of the picker; `sort`: the API sort key, when the column can be sorted. */
 export const PICKER_COLUMNS = [
-  { key: 'code', label: 'Code', sort: 'code' },
-  { key: 'name', label: 'Name', sort: 'name' },
-  { key: 'location', label: 'Location' },
-  { key: 'site', label: 'Site', sort: 'site' },
-  { key: 'category', label: 'Trade', sort: 'category' },
-  { key: 'status', label: 'Status', sort: 'status' },
-  { key: 'criticality', label: 'Criticality', sort: 'criticality' },
+  { key: 'code', label: t('Code'), sort: 'code' },
+  { key: 'name', label: t('asset|Name'), sort: 'name' },
+  { key: 'location', label: t('Location') },
+  { key: 'site', label: t('Site'), sort: 'site' },
+  { key: 'category', label: t('Trade'), sort: 'category' },
+  { key: 'status', label: t('Status'), sort: 'status' },
+  { key: 'criticality', label: t('Criticality'), sort: 'criticality' },
 ];
 
 /** Query of GET /api/assets for the picker's state. Pure. */
@@ -81,7 +82,7 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
           id: `asset-picker-${key}`,
           onChange: (e) => load({ ...state, [key]: e.target.value || undefined, page: 1 }),
         },
-        h('option', { value: '' }, 'All'),
+        h('option', { value: '' }, t('All')),
         options.map(([value, text]) => h('option', { value }, text)),
       );
       control.value = state[key] ?? '';
@@ -93,7 +94,7 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
       id: 'asset-picker-q',
       type: 'search',
       value: state.q ?? '',
-      placeholder: 'Code, name, place, location, brand…',
+      placeholder: t('Code, name, place, location, brand…'),
       autocomplete: 'off',
       onInput: (e) => {
         clearTimeout(searchTimer);
@@ -155,20 +156,16 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
               {
                 type: 'button',
                 class: 'button button-secondary',
-                'aria-label': `Choose ${asset.code} — ${asset.name}`,
+                'aria-label': t('Choose {code} — {name}', { code: asset.code, name: asset.name }),
                 onClick: () => finish(asset),
               },
-              'Choose',
+              t('Choose'),
             ),
           ),
         ),
       );
       return [
-        h(
-          'p',
-          { class: 'muted asset-picker-count' },
-          `${data.total} asset${data.total === 1 ? '' : 's'}`,
-        ),
+        h('p', { class: 'muted asset-picker-count' }, tn(data.total, '{n} asset', '{n} assets')),
         data.items.length
           ? h(
               'div',
@@ -179,13 +176,13 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
                 h(
                   'caption',
                   { class: 'visually-hidden' },
-                  `Assets, page ${data.page} of ${data.pages}`,
+                  t('Assets, page {page} of {pages}', { page: data.page, pages: data.pages }),
                 ),
-                h('thead', {}, h('tr', {}, header, h('th', { scope: 'col' }, 'Choose'))),
+                h('thead', {}, h('tr', {}, header, h('th', { scope: 'col' }, t('Choose')))),
                 h('tbody', {}, rows),
               ),
             )
-          : h('p', { class: 'empty-state' }, 'No asset matches this search.'),
+          : h('p', { class: 'empty-state' }, t('No asset matches this search.')),
         data.pages > 1 ? renderPagination(data, (page) => load({ ...state, page })) : null,
       ];
     }
@@ -209,7 +206,7 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
           h(
             'p',
             { class: 'error-state', role: 'alert' },
-            err.status === 0 ? 'The asset list needs a connection to the server.' : err.message,
+            err.status === 0 ? t('The asset list needs a connection to the server.') : err.message,
           ),
         );
       } finally {
@@ -222,13 +219,13 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
       h(
         'div',
         { class: 'asset-picker-head' },
-        h('h2', { id: 'asset-dialog-title', class: 'dialog-title' }, 'Choose an asset'),
+        h('h2', { id: 'asset-dialog-title', class: 'dialog-title' }, t('Choose an asset')),
         h(
           'button',
           {
             type: 'button',
             class: 'icon-button',
-            'aria-label': 'Close without choosing',
+            'aria-label': t('Close without choosing'),
             onClick: () => finish(null),
           },
           h('span', { 'aria-hidden': 'true' }, '✕'),
@@ -237,20 +234,20 @@ export function openAssetPicker({ dialog, fetchPage, sites = [], initial = {} })
       h(
         'div',
         { class: 'filter-bar asset-picker-filters', role: 'search' },
-        h('div', { class: 'filter-field' }, h('label', { for: search.id }, 'Search'), search),
+        h('div', { class: 'filter-field' }, h('label', { for: search.id }, t('Search')), search),
         select(
           'site',
-          'Site',
+          t('Site'),
           sites.map((s) => [s, s]),
         ),
         select(
           'category',
-          'Trade',
+          t('Trade'),
           CATEGORIES.map((c) => [c, valueLabel('category', c)]),
         ),
         select(
           'status',
-          'Status',
+          t('Status'),
           ASSET_STATUSES.map((s) => [s, valueLabel('asset_status', s)]),
         ),
       ),

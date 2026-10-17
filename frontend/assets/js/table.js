@@ -5,6 +5,7 @@
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
 import { isEmpty, renderValue } from './format.js';
+import { t, tn } from './i18n.js';
 
 /** Row ids are numbers, or `tmp-<uuid>` strings for creations not yet on the server. */
 export const parseRowId = (value) => (/^\d+$/.test(value) ? Number(value) : value);
@@ -63,7 +64,15 @@ export function renderTable(
   const table = h(
     'table',
     { class: `data-table ${cfg.prefix}-table`, 'aria-describedby': `${cfg.prefix}-table-help` },
-    h('caption', { class: 'visually-hidden' }, `${cfg.label}, page ${data.page} of ${data.pages}`),
+    h(
+      'caption',
+      { class: 'visually-hidden' },
+      t('{label}, page {page} of {pages}', {
+        label: cfg.label,
+        page: data.page,
+        pages: data.pages,
+      }),
+    ),
     h(
       'thead',
       {},
@@ -88,24 +97,20 @@ export function renderTable(
       h(
         'p',
         { class: 'table-count', role: 'status' },
-        `${data.total} ${filtered ? 'matching ' : ''}${data.total === 1 ? 'record' : 'records'}`,
+        filtered
+          ? tn(data.total, '{n} matching record', '{n} matching records')
+          : tn(data.total, '{n} record', '{n} records'),
       ),
       actions,
     ),
     h(
       'p',
       { id: `${cfg.prefix}-table-help`, class: 'visually-hidden' },
-      'Use the up and down arrow keys to move between rows, and Enter to open one.',
+      t('Use the up and down arrow keys to move between rows, and Enter to open one.'),
     ),
     rows.length
       ? h('div', { class: 'table-scroll' }, table)
-      : h(
-          'p',
-          { class: 'empty-state' },
-          filtered
-            ? `No ${cfg.singular.toLowerCase()} matches this search.`
-            : `No ${cfg.label.toLowerCase()} on this page.`,
-        ),
+      : h('p', { class: 'empty-state' }, filtered ? cfg.noMatch : cfg.emptyPage),
     renderPagination(data, onPage),
   );
 }
@@ -167,12 +172,16 @@ function renderRow(cfg, record, selected) {
   const cells = cfg.columns.map((field, index) =>
     h(
       'td',
-      { class: columnClass(cfg, field) },
+      {
+        class: columnClass(cfg, field),
+        // Phones show the due date of a work order card as "Due 23 Oct 2026" (table.css).
+        dataset: field === 'due_on' ? { before: `${t('card|Due')} ` } : undefined,
+      },
       // Conflict: color + icon + text, never color alone (brief → Accessibility).
       index === 0 && record.has_conflict ? conflictMarker() : null,
-      index === 0 && record._pendingCreate ? pendingMarker('Pending creation') : null,
+      index === 0 && record._pendingCreate ? pendingMarker(t('Pending creation')) : null,
       index === 0 && record._pending && !record._pendingCreate
-        ? pendingMarker('Pending sync')
+        ? pendingMarker(t('Pending sync'))
         : null,
       isEmpty(record[field]) ? '' : renderValue(field, cfg.fields[field], record[field]),
     ),
@@ -194,7 +203,7 @@ function conflictMarker() {
     'span',
     { class: 'badge badge-conflict badge-tone-warning' },
     h('span', { 'aria-hidden': 'true' }, '⚠'),
-    'Conflict',
+    t('Conflict'),
   );
 }
 
@@ -309,12 +318,12 @@ export function renderPagination({ page, pages }, onPage, position = 'bottom') {
     'nav',
     {
       class: top ? 'pagination pagination-top' : 'pagination',
-      'aria-label': top ? 'Pagination, top' : 'Pagination',
+      'aria-label': top ? t('Pagination, top') : t('Pagination'),
     },
-    button('first', 'First', '◀◀', 1, true),
-    button('previous', 'Previous', '◀', page - 1, true),
-    h('span', { class: 'pagination-status' }, `Page ${page} / ${pages}`),
-    button('next', 'Next', '▶', page + 1, false),
-    button('last', 'Last', '▶▶', pages, false),
+    button('first', t('First'), '◀◀', 1, true),
+    button('previous', t('Previous'), '◀', page - 1, true),
+    h('span', { class: 'pagination-status' }, t('Page {page} / {pages}', { page, pages })),
+    button('next', t('Next'), '▶', page + 1, false),
+    button('last', t('Last'), '▶▶', pages, false),
   );
 }

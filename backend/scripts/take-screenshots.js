@@ -60,7 +60,8 @@ const scrollToWidget = (
  * The pictures, grouped by user (one login each; the login is rate limited). `url(ids, call)`
  * gives the page (none: stay on the previous one); `call(method, path, body)` calls the API as the logged-in user. `action` runs
  * in the page once it has opened, `after` ms before the picture; `offline` cuts the network
- * first. README pictures sit in docs/img/, the showcase ones (docs/showcase.md) in showcase/.
+ * first; `language: 'fr'` shows the interface in French for that picture (D85). README
+ * pictures sit in docs/img/, the showcase ones (docs/showcase.md) in showcase/.
  */
 const SHOTS = [
   { name: 'showcase/login', user: null, url: () => '/login', size: COMPUTER },
@@ -132,6 +133,13 @@ const SHOTS = [
     size: COMPUTER,
     action: OPEN_HISTORY,
     after: 500,
+  },
+  {
+    name: 'showcase/french',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.workOrder}`,
+    size: COMPUTER,
+    language: 'fr',
   },
   {
     name: 'showcase/review-request',
@@ -611,6 +619,8 @@ async function takeScreenshots(page, password, ids) {
       if (signedIn !== shot.user) throw new Error(`Logging in as ${shot.user} failed.`);
       currentUser = shot.user;
     }
+    // The language is read when the page loads: set it before opening the page.
+    if (shot.language) await evaluate(`localStorage.setItem('tacto.language', '${shot.language}')`);
     // No `url`: the picture is taken on the page of the previous one.
     if (shot.url) await go(await shot.url(ids, call), shot.wait ?? 2500);
     if (shot.offline) {
@@ -623,6 +633,7 @@ async function takeScreenshots(page, password, ids) {
     }
     const { data } = await send('Page.captureScreenshot', { format: 'png' });
     if (shot.offline) await send('Network.emulateNetworkConditions', ONLINE);
+    if (shot.language) await evaluate(`localStorage.removeItem('tacto.language')`);
     // Two identical pictures mean a page did not open (e.g. a redirect): stop.
     const hash = crypto.createHash('sha256').update(data).digest('hex');
     if (seen.has(hash)) throw new Error(`${shot.name} is the same picture as ${seen.get(hash)}.`);

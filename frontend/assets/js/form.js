@@ -10,6 +10,7 @@ import { isEmpty, renderValue } from './format.js';
 import { valueLabel } from './labels.js';
 import { placeIndex, placePicker } from './places.js';
 import { statusOptions } from './rules.js';
+import { t } from './i18n.js';
 
 const MULTILINE = new Set(['description', 'comment', 'work_report']);
 const MAX_LENGTH = { title: 200, name: 200, comment: 2000, description: 4000, work_report: 4000 };
@@ -43,7 +44,7 @@ function buildControl(entity, apiField, value, ctx) {
   const id = `f-${apiField}`;
   const common = { id, name: apiField, 'aria-describedby': `${id}-error` };
 
-  const select = (options, { allowBlank, blankLabel = '— None —' } = {}) => {
+  const select = (options, { allowBlank, blankLabel = t('— None —') } = {}) => {
     const el = h(
       'select',
       common,
@@ -65,7 +66,7 @@ function buildControl(entity, apiField, value, ctx) {
     const choose = !nullable && ctx.mode === 'create' && (value === null || value === undefined);
     const el = select(
       ENUMS[def.enum].map((code) => [code, valueLabel(def.enum, code)]),
-      { allowBlank: nullable || choose, blankLabel: nullable ? '— None —' : '— Choose —' },
+      { allowBlank: nullable || choose, blankLabel: nullable ? t('— None —') : t('— Choose —') },
     );
     return {
       el,
@@ -96,7 +97,7 @@ function buildControl(entity, apiField, value, ctx) {
     const sites = [...new Set([...(ctx.refs.sites ?? []), ...(value ? [value] : [])])].sort();
     const el = select(
       sites.map((s) => [s, s]),
-      { allowBlank: ctx.mode === 'create', blankLabel: '— Choose a site —' },
+      { allowBlank: ctx.mode === 'create', blankLabel: t('— Choose a site —') },
     );
     return {
       el,
@@ -116,7 +117,7 @@ function buildControl(entity, apiField, value, ctx) {
         String(u.id),
         `${u.first_name} ${u.last_name}${u.role ? ` (${valueLabel('role', u.role)})` : ''}`,
       ]),
-      { allowBlank: true, blankLabel: '— Unassigned —' },
+      { allowBlank: true, blankLabel: t('— Unassigned —') },
     );
     el.value = value === null || value === undefined ? '' : String(value);
     return {
@@ -132,7 +133,7 @@ function buildControl(entity, apiField, value, ctx) {
     const el = h('input', {
       ...common,
       type: 'week',
-      placeholder: 'YYYY-Www, e.g. 2026-W43',
+      placeholder: t('YYYY-Www, e.g. 2026-W43'),
       value: value ?? '',
     });
     return {
@@ -189,7 +190,7 @@ function buildAssetControl(common, id, value, ctx) {
   const input = h('input', {
     ...common,
     type: 'text',
-    placeholder: 'Asset code, e.g. AST-0042',
+    placeholder: t('Asset code, e.g. AST-0042'),
     autocomplete: 'off',
     'aria-describedby': `${id}-hint ${id}-error`,
     value: value?.code ?? '',
@@ -197,24 +198,24 @@ function buildAssetControl(common, id, value, ctx) {
   const hint = h(
     'p',
     { id: `${id}-hint`, class: 'field-hint' },
-    value ? `${value.code} — ${value.name}` : 'No asset',
+    value ? `${value.code} — ${value.name}` : t('No asset'),
   );
 
   const resolve = async () => {
     const code = input.value.trim();
     if (!code) {
       resolved = null;
-      hint.textContent = 'No asset';
+      hint.textContent = t('No asset');
       ctx.onAsset?.(null);
       ctx.onChange?.();
       return;
     }
-    hint.textContent = 'Looking up…';
+    hint.textContent = t('Looking up…');
     const asset = await ctx.findAssetByCode(code);
     resolved = asset ? asset.id : undefined;
     hint.textContent = asset
       ? `${asset.code} — ${asset.name} (${asset.site})`
-      : 'Unknown asset code';
+      : t('Unknown asset code');
     ctx.onAsset?.(asset);
     ctx.onChange?.();
   };
@@ -238,7 +239,7 @@ function buildAssetControl(common, id, value, ctx) {
             input.focus();
           },
         },
-        'Browse assets…',
+        t('Browse assets…'),
       )
     : null;
 
@@ -255,13 +256,15 @@ function buildAssetControl(common, id, value, ctx) {
       resolved = v ?? null;
       if (v === null || v === undefined) {
         input.value = '';
-        hint.textContent = 'No asset';
+        hint.textContent = t('No asset');
         ctx.onAsset?.(null);
         return;
       }
       const asset = await ctx.findAssetById(v);
       input.value = asset?.code ?? '';
-      hint.textContent = asset ? `${asset.code} — ${asset.name} (${asset.site})` : `Asset #${v}`;
+      hint.textContent = asset
+        ? `${asset.code} — ${asset.name} (${asset.site})`
+        : t('Asset #{v}', { v });
       ctx.onAsset?.(asset);
     },
   };
@@ -352,7 +355,10 @@ function errorApi(form, controls, summary) {
         else control.input.removeAttribute('aria-invalid');
       }
       const unknownFields = Object.keys(fields).filter((f) => !controls.has(f));
-      summary.textContent = [message, ...unknownFields.map((f) => `${f}: ${fields[f]}`)]
+      summary.textContent = [
+        message,
+        ...unknownFields.map((f) => t('{label}: {value}', { label: f, value: fields[f] })),
+      ]
         .filter(Boolean)
         .join(' ');
     },
@@ -383,12 +389,12 @@ export function buildEditForm({
   const save = h(
     'button',
     { type: 'submit', class: 'button button-primary', disabled: true },
-    'Save',
+    t('Save'),
   );
   const discard = h(
     'button',
     { type: 'button', class: 'button button-secondary', disabled: true, onClick: onDiscard },
-    'Discard changes',
+    t('Discard changes'),
   );
   const form = h(
     'form',
@@ -469,12 +475,16 @@ const CREATION = {
   work_orders: {
     order: CREATION_ORDER,
     defaults: { type: 'CORRECTIVE', priority: 'NORMAL' },
-    help: 'Fields marked * are required. Choose an asset, or a place if the work is not about one asset.',
+    help: t(
+      'Fields marked * are required. Choose an asset, or a place if the work is not about one asset.',
+    ),
   },
   assets: {
     order: ASSET_CREATION_ORDER,
     defaults: { status: 'IN_SERVICE' },
-    help: 'Fields marked * are required. Leave the asset code empty to number the asset automatically (AST-0501, …).',
+    help: t(
+      'Fields marked * are required. Leave the asset code empty to number the asset automatically (AST-0501, …).',
+    ),
   },
 };
 

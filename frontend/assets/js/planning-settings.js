@@ -7,11 +7,12 @@
 import { formRow } from './admin-users.js';
 import { h, replaceChildren } from './dom.js';
 import { formatDateTime, personName } from './format.js';
+import { locale, t, tn } from './i18n.js';
 
 /** Working days a week counted in the capacity (BR-Y2). */
 const WORKING_DAYS = 5;
 const WEEKS = 52;
-const hoursFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const hoursFormat = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 /**
  * Capacity of the next 52 weeks for some settings (BR-Y2): every person counted works the
@@ -26,7 +27,11 @@ export function capacityPreview(current, next, people) {
   const before = yearCapacity(current, people);
   const after = yearCapacity(next, people);
   if (!Number.isFinite(after) || Math.abs(after - before) < 0.05) return null;
-  return `Capacity of the next ${WEEKS} weeks: ${hoursFormat.format(before)} h → ${hoursFormat.format(after)} h`;
+  return t('Capacity of the next {WEEKS} weeks: {before} h → {after} h', {
+    WEEKS,
+    before: hoursFormat.format(before),
+    after: hoursFormat.format(after),
+  });
 }
 
 /** Form values → API body: only the fields that changed, with the version. Pure. */
@@ -63,7 +68,10 @@ export function renderPlanningSettings(container, { settings, onSave }) {
         const next = { ...settings, ...settingsChanges(settings, raw) };
         preview.textContent =
           capacityPreview(settings, next, settings.capacity_people) ??
-          `Capacity of the next ${WEEKS} weeks: ${hoursFormat.format(yearCapacity(settings, settings.capacity_people))} h`;
+          t('Capacity of the next {WEEKS} weeks: {yearCapacity} h', {
+            WEEKS,
+            yearCapacity: hoursFormat.format(yearCapacity(settings, settings.capacity_people)),
+          });
       },
       onSubmit: (event) => {
         event.preventDefault();
@@ -73,47 +81,58 @@ export function renderPlanningSettings(container, { settings, onSave }) {
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
     formRow(
       's-reserve_percent',
-      'Corrective reserve (%)',
+      t('Corrective reserve (%)'),
       number('reserve_percent', { min: '0', max: '80', step: '1' }),
       {
-        hint: 'Share of each week kept free for breakdowns and staff requests (0 to 80).',
+        hint: t('Share of each week kept free for breakdowns and staff requests (0 to 80).'),
       },
     ),
     formRow(
       's-daily_hours',
-      'Daily capacity (hours)',
+      t('Daily capacity (hours)'),
       number('daily_hours', { min: '0.5', max: '12', step: '0.5' }),
       {
-        hint: 'Hours each technician and supervisor works on a working day.',
+        hint: t('Hours each technician and supervisor works on a working day.'),
       },
     ),
     formRow(
       's-release_weeks_ahead',
-      'Release horizon (weeks)',
+      t('Release horizon (weeks)'),
       number('release_weeks_ahead', { min: '1', max: '12', step: '1' }),
-      { hint: 'Work orders of plan visits are created this many weeks ahead.' },
+      { hint: t('Work orders of plan visits are created this many weeks ahead.') },
     ),
     formRow(
       's-max_block_hours',
-      'Longest block (hours)',
+      t('Longest block (hours)'),
       number('max_block_hours', { min: '0.5', max: '8', step: '0.5' }),
       {
-        hint: 'Longer visits are flagged in the year planner: they will be split.',
+        hint: t('Longer visits are flagged in the year planner: they will be split.'),
       },
     ),
     preview,
     h(
       'p',
       { class: 'muted' },
-      `${settings.capacity_people} technicians and supervisors count as capacity.`,
+      tn(
+        settings.capacity_people,
+        '{n} technician or supervisor counts as capacity.',
+        '{n} technicians and supervisors count as capacity.',
+      ),
       settings.updated_by
-        ? ` Last changed by ${personName(settings.updated_by)} on ${formatDateTime(settings.updated_at)}.`
+        ? t(' Last changed by {updated_by} on {updated_at}.', {
+            updated_by: personName(settings.updated_by),
+            updated_at: formatDateTime(settings.updated_at),
+          })
         : '',
     ),
     h(
       'div',
       { class: 'form-actions' },
-      h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Save settings'),
+      h(
+        'button',
+        { type: 'submit', class: 'button button-primary online-only' },
+        t('Save settings'),
+      ),
     ),
   );
   replaceChildren(
@@ -121,11 +140,13 @@ export function renderPlanningSettings(container, { settings, onSave }) {
     h(
       'div',
       { class: 'settings-page' },
-      h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'Planning settings'),
+      h('h2', { class: 'placeholder-title', tabindex: '-1' }, t('Planning settings')),
       h(
         'p',
         {},
-        'These settings apply at once to every figure of the year planner. Each change is recorded in the audit log.',
+        t(
+          'These settings apply at once to every figure of the year planner. Each change is recorded in the audit log.',
+        ),
       ),
       form,
     ),

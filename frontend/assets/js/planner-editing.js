@@ -15,6 +15,7 @@ import {
   seriesBlocker,
   weeksBetween,
 } from './planning-rules.js';
+import { t } from './i18n.js';
 
 /** Pixels the pointer must travel before a press becomes a drag (a shorter one is a click). */
 const DRAG_THRESHOLD = 6;
@@ -298,19 +299,19 @@ export function attachPlannerEditing(
     if (moving && event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      cancel('Move cancelled.');
+      cancel(t('Move cancelled.'));
       return;
     }
     if (moving && event.key === 'Enter') {
       event.preventDefault();
       const result = active.result;
       drop();
-      if (!result || result.same) announce('Nothing moved.');
+      if (!result || result.same) announce(t('Nothing moved.'));
       return;
     }
     if (horizontal && event.shiftKey) {
       if (!chip.classList.contains('is-movable')) {
-        announce('This visit cannot be moved: only planned visits from this week on can.');
+        announce(t('This visit cannot be moved: only planned visits from this week on can.'));
         return;
       }
       event.preventDefault();
@@ -323,14 +324,19 @@ export function attachPlannerEditing(
       const next = Math.min(Math.max(active.target + step, 0), data.weeks.length - 1);
       const result = update(next);
       const week = formatWeek(data.weeks[next].week);
-      const what = active.kind === 'series' ? 'Series' : 'Visit';
-      if (result.blocker) announce(`${week}: ${result.blocker.message}`);
-      else if (result.same) announce(`${week}: where it is now.`);
+      const what = active.kind === 'series' ? t('Series') : t('Visit');
+      if (result.blocker)
+        announce(t('{label}: {value}', { label: week, value: result.blocker.message }));
+      else if (result.same) announce(t('{week}: where it is now.', { week }));
       else {
         const load = result.preview?.figures?.[next]?.load;
         const share =
-          load === null || load === undefined ? '' : `, load ${Math.round(load * 100)}%`;
-        announce(`${what} to ${week}${share}. Enter to confirm, Escape to cancel.`);
+          load === null || load === undefined
+            ? ''
+            : t(', load {value}%', { value: Math.round(load * 100) });
+        announce(
+          t('{what} to {week}{share}. Enter to confirm, Escape to cancel.', { what, week, share }),
+        );
       }
       return;
     }

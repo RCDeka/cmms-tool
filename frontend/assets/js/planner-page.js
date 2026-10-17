@@ -36,6 +36,7 @@ import { formatWeek } from './format.js';
 import { renderPlanningSettings } from './planning-settings.js';
 import { openAssetPicker } from './asset-picker.js';
 import { currentRoute, navigate } from './router.js';
+import { t, tn } from './i18n.js';
 
 const tableContainer = document.getElementById('table-container');
 const detailContainer = document.getElementById('detail-container');
@@ -71,15 +72,23 @@ function changeText(change) {
   const week = (w) => formatWeek(w).replace(/, \d{4}$/, '');
   switch (change.kind) {
     case 'occurrence':
-      return `${change.code}: visit ${week(change.from)} → ${week(change.week)}`;
+      return t('{code}: visit {week} → {week2}', {
+        code: change.code,
+        week: week(change.from),
+        week2: week(change.week),
+      });
     case 'series':
-      return `${change.code}: series from ${week(change.from)} → ${week(change.anchor)}`;
+      return t('{code}: series from {week} → {week2}', {
+        code: change.code,
+        week: week(change.from),
+        week2: week(change.anchor),
+      });
     case 'skip':
-      return `${change.code}: visit of ${week(change.week)} skipped`;
+      return t('{code}: visit of {week} skipped', { code: change.code, week: week(change.week) });
     case 'batch':
-      return `Balancing: ${change.changes.length} visit${change.changes.length === 1 ? '' : 's'} moved`;
+      return tn(change.changes.length, 'Balancing: {n} visit moved', 'Balancing: {n} visits moved');
     default:
-      return `${change.code}: visit of ${week(change.week)} restored`;
+      return t('{code}: visit of {week} restored', { code: change.code, week: week(change.week) });
   }
 }
 
@@ -103,7 +112,7 @@ async function sendPlannerChange(change) {
   }
   if (change.kind === 'series') {
     const plan = await apiFetch(`/plans/${change.planId}`);
-    if (plan.anchor_week !== change.from) throw new Error('This plan changed since: reload it.');
+    if (plan.anchor_week !== change.from) throw new Error(t('This plan changed since: reload it.'));
     return apiFetch(`/plans/${change.planId}/anchor`, {
       method: 'PUT',
       body: { anchor_week: change.anchor, version: plan.version },
@@ -114,7 +123,7 @@ async function sendPlannerChange(change) {
     change.kind === 'occurrence'
       ? visit.status === 'PLANNED' && visit.week === change.from
       : visit.status === (change.kind === 'skip' ? 'PLANNED' : 'SKIPPED');
-  if (!expected) throw new Error('This visit changed since: reload the planner.');
+  if (!expected) throw new Error(t('This visit changed since: reload the planner.'));
   const { version } = visit;
   if (change.kind === 'occurrence') {
     return apiFetch(`/plan-occurrences/${change.id}`, {
@@ -139,7 +148,9 @@ async function applyPlannerChange(change, mode = 'do') {
     await sendPlannerChange(sent);
   } catch (err) {
     const message =
-      err.status === 0 ? 'You are offline: nothing was changed.' : `Not changed: ${err.message}`;
+      err.status === 0
+        ? t('You are offline: nothing was changed.')
+        : t('Not changed: {message}', { message: err.message });
     announce(message);
     if (mode !== 'do') {
       // Show what is there now, then why: drawing the planner again empties its message line.
@@ -155,7 +166,7 @@ async function applyPlannerChange(change, mode = 'do') {
     if (mode === 'do') plannerHistory.redo = [];
   }
   // Name the change itself ("Undone: visit week 17 → week 18"), not the opposite call.
-  const text = `${{ do: '', undo: 'Undone: ', redo: 'Redone: ' }[mode]}${changeText(change)}.`;
+  const text = `${{ do: '', undo: t('Undone: '), redo: t('Redone: ') }[mode]}${changeText(change)}.`;
   announce(text);
   plannerFocus =
     change.kind === 'series'
@@ -196,12 +207,12 @@ function planUrl(filters, planId, occurrenceId = null) {
 }
 
 export async function showPlanning(route, isCurrent) {
-  app.leaveRecordViews('planning', 'Year planner');
+  app.leaveRecordViews('planning', t('Year planner'));
   const filters = route.filters ?? {};
   const query = timelineQuery(filters);
   const cached = plannerCache?.query === query ? plannerCache.data : null;
   if (!tableContainer.querySelector('.planner')) {
-    renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the year planner…'));
+    renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the year planner…')));
   }
   let data;
   let plan = null;
@@ -229,14 +240,15 @@ export async function showPlanning(route, isCurrent) {
     if (err.status === 404) {
       return app.showPlaceholder(
         'planning',
-        'Plan not found',
-        'This maintenance plan does not exist.',
+        t('Plan not found'),
+        t('This maintenance plan does not exist.'),
       );
     }
     app.showConsoleError(err, () => app.render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The year planner needs a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The year planner needs a connection to the server.',
+      );
     }
     return;
   }
@@ -339,13 +351,13 @@ export async function showPlanning(route, isCurrent) {
         try {
           await apiFetch('/planning/blocked-weeks', { method: 'POST', body: values });
           plannerCache = null;
-          announce(`${formatWeek(values.week)} blocked.`);
+          announce(t('{week} blocked.', { week: formatWeek(values.week) }));
           app.render(currentRoute());
         } catch (err) {
           showErrors(
             form,
             apiFieldErrors(err),
-            err.status === 0 ? 'You are offline: nothing was saved.' : err.message,
+            err.status === 0 ? t('You are offline: nothing was saved.') : err.message,
           );
         }
       },
@@ -353,10 +365,10 @@ export async function showPlanning(route, isCurrent) {
         try {
           await apiFetch(`/planning/blocked-weeks/${item.id}`, { method: 'DELETE' });
           plannerCache = null;
-          announce(`${formatWeek(item.week)} is no longer blocked.`);
+          announce(t('{week} is no longer blocked.', { week: formatWeek(item.week) }));
           app.render(currentRoute());
         } catch (err) {
-          announce(err.status === 0 ? 'You are offline: nothing was removed.' : err.message);
+          announce(err.status === 0 ? t('You are offline: nothing was removed.') : err.message);
         }
       },
     });
@@ -466,7 +478,7 @@ async function acceptProposal(moves, filters) {
       await sendPlannerChange(change);
       done.push(change);
     } catch (err) {
-      refused.push({ change, message: err.status === 0 ? 'you are offline' : err.message });
+      refused.push({ change, message: err.status === 0 ? t('you are offline') : err.message });
       if (err.status === 0) break;
     }
   }
@@ -477,9 +489,17 @@ async function acceptProposal(moves, filters) {
   suggestionState = null;
   plannerCache = null;
   const text = [
-    done.length ? `${changeText({ kind: 'batch', changes: done })}.` : 'No visit was moved.',
+    done.length ? `${changeText({ kind: 'batch', changes: done })}.` : t('No visit was moved.'),
     refused.length
-      ? `${refused.length} not moved (${refused[0].change.code}: ${refused[0].message})`
+      ? tn(
+          refused.length,
+          '{n} not moved ({code}: {message})',
+          '{n} not moved ({code}: {message})',
+          {
+            code: refused[0].change.code,
+            message: refused[0].message,
+          },
+        )
       : '',
   ]
     .filter(Boolean)
@@ -497,8 +517,8 @@ async function submitPlan(raw, form, assetCode, plan, filters) {
     if (!asset) {
       return showErrors(
         form,
-        { asset_code: 'No asset has this code' },
-        'Check the highlighted fields.',
+        { asset_code: t('No asset has this code') },
+        t('Check the highlighted fields.'),
       );
     }
     assetId = asset.id;
@@ -506,7 +526,7 @@ async function submitPlan(raw, form, assetCode, plan, filters) {
   const body = planBody(raw, { editing: Boolean(plan), assetId });
   const errors = checkPlanForm(body, { hasAssetCode: Boolean(assetId) });
   if (Object.keys(errors).length) {
-    return showErrors(form, errors, 'Check the highlighted fields.');
+    return showErrors(form, errors, t('Check the highlighted fields.'));
   }
   try {
     const result = plan
@@ -519,9 +539,9 @@ async function submitPlan(raw, form, assetCode, plan, filters) {
     announce(
       plan
         ? result.updated
-          ? 'Plan saved.'
-          : 'Nothing to save.'
-        : `Plan ${result.item.code} created.`,
+          ? t('Plan saved.')
+          : t('Nothing to save.')
+        : t('Plan {code} created.', { code: result.item.code }),
     );
     const url = planUrl(filters, result.item.id);
     if (url === location.pathname + location.search) app.render(currentRoute());
@@ -530,15 +550,15 @@ async function submitPlan(raw, form, assetCode, plan, filters) {
     showErrors(
       form,
       planFieldErrors(apiFieldErrors(err)),
-      err.status === 0 ? 'You are offline: the plan was not saved.' : err.message,
+      err.status === 0 ? t('You are offline: the plan was not saved.') : err.message,
     );
   }
 }
 
 /** Planning settings (administrators, P16). */
 export async function showPlanningSettings(isCurrent) {
-  app.leaveRecordViews('planning_settings', 'Planning settings');
-  renderPage(h('p', { class: 'loading-state', role: 'status' }, 'Loading the settings…'));
+  app.leaveRecordViews('planning_settings', t('Planning settings'));
+  renderPage(h('p', { class: 'loading-state', role: 'status' }, t('Loading the settings…')));
   let settings;
   try {
     settings = await apiFetch('/planning/settings');
@@ -546,8 +566,9 @@ export async function showPlanningSettings(isCurrent) {
     if (!isCurrent()) return;
     app.showConsoleError(err, () => app.render(currentRoute()));
     if (err.status === 0) {
-      tableContainer.querySelector('.error-state p').textContent =
-        'The planning settings need a connection to the server.';
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The planning settings need a connection to the server.',
+      );
     }
     return;
   }
@@ -555,17 +576,17 @@ export async function showPlanningSettings(isCurrent) {
   renderPlanningSettings(tableContainer, {
     settings,
     onSave: async (body, form) => {
-      if (!body) return showErrors(form, {}, 'Nothing to save: no value was changed.');
+      if (!body) return showErrors(form, {}, t('Nothing to save: no value was changed.'));
       try {
         await apiFetch('/planning/settings', { method: 'PUT', body });
         plannerCache = null;
-        announce('Planning settings saved.');
+        announce(t('Planning settings saved.'));
         app.render(currentRoute());
       } catch (err) {
         showErrors(
           form,
           apiFieldErrors(err),
-          err.status === 0 ? 'You are offline: the settings were not saved.' : err.message,
+          err.status === 0 ? t('You are offline: the settings were not saved.') : err.message,
         );
       }
     },

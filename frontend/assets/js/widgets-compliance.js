@@ -9,14 +9,14 @@ import { numberFormat, percentFormat } from './dashboard.js';
 import { h } from './dom.js';
 import { valueLabel } from './labels.js';
 import { drawRateBars, drawShareWithLine } from './widget-charts.js';
-import { bucketAxis, bucketTitle, bucketKeyText, legend, tableElement } from './widgets-flow.js';
+import { bucketAxis, bucketTitle, bucketKeyInText, legend, tableElement } from './widgets-flow.js';
+import { locale, plural, t, tx } from './i18n.js';
 
-export const OUTCOME_LABELS = { on_time: 'On time', late: 'Late', skipped: 'Skipped' };
+export const OUTCOME_LABELS = { on_time: t('On time'), late: t('Late'), skipped: t('Skipped') };
 const OUTCOMES = ['on_time', 'late', 'skipped'];
 
 const rateText = (rate) => (rate === null ? '—' : percentFormat.format(rate));
-const plural = (n, word) => `${numberFormat.format(n)} ${word}${n === 1 ? '' : 's'}`;
-const oneDecimal = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const oneDecimal = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 function chartFrame(canvas, height) {
   const frame = h('div', { class: 'chart-frame' }, canvas);
@@ -28,7 +28,7 @@ const tableDetails = (table, caption) =>
   h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show as a table'),
+    h('summary', {}, t('Show as a table')),
     tableElement(table, caption),
   );
 
@@ -38,7 +38,7 @@ function outcomeTable(firstLabel, rows, { drill, labelOf, segmentOf }) {
     columns: [
       { label: firstLabel },
       ...OUTCOMES.map((o) => ({ label: OUTCOME_LABELS[o], numeric: true })),
-      { label: 'On time %', numeric: true },
+      { label: t('On time %'), numeric: true },
     ],
     rows: rows.map((r) => [labelOf(r), r.on_time, r.late, r.skipped, rateText(r.rate)]),
     links: drill
@@ -55,7 +55,7 @@ function outcomeTable(firstLabel, rows, { drill, labelOf, segmentOf }) {
 // --- Preventive maintenance compliance --------------------------------------------------------
 
 function pmTable(data, { drill }) {
-  return outcomeTable('Trade', data.items, {
+  return outcomeTable(t('Trade'), data.items, {
     drill,
     labelOf: (r) => valueLabel('category', r.category),
     segmentOf: (r) => r.category,
@@ -69,16 +69,18 @@ function pmBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        'No preventive visit had its deadline in this period.',
+        t('No preventive visit had its deadline in this period.'),
       ),
     };
   }
   const labels = data.items.map((i) => valueLabel('category', i.category));
   const canvas = h('canvas', {
     role: 'img',
-    'aria-label': `Bar chart, visits on time per trade. ${data.items
-      .map((i, n) => `${labels[n]}: ${rateText(i.rate)}`)
-      .join(', ')}.`,
+    'aria-label': t('Bar chart, visits on time per trade. {map}.', {
+      map: data.items
+        .map((i, n) => t('{label}: {value}', { label: labels[n], value: rateText(i.rate) }))
+        .join(', '),
+    }),
   });
   const late = (text, segment) =>
     context.drill && data.late
@@ -92,14 +94,26 @@ function pmBody(data, context) {
         'p',
         { class: 'widget-figure' },
         h('span', { class: 'kpi-value' }, rateText(data.rate)),
-        h('span', { class: 'muted' }, ' on time'),
+        h('span', { class: 'muted' }, t(' on time')),
       ),
       h(
         'p',
         { class: 'widget-summary' },
-        `${numberFormat.format(data.on_time)} of ${plural(counted, 'visit')} done by their deadline; `,
-        late(`${numberFormat.format(data.late)} late`, 'late'),
-        data.skipped ? `; ${numberFormat.format(data.skipped)} skipped (not counted).` : '.',
+        tx(
+          plural(
+            counted,
+            '{on_time} of {n} visit done by their deadline; {late}',
+            '{on_time} of {n} visits done by their deadline; {late}',
+          ),
+          {
+            on_time: numberFormat.format(data.on_time),
+            n: numberFormat.format(counted),
+            late: late(t('{late} late', { late: numberFormat.format(data.late) }), 'late'),
+          },
+        ),
+        data.skipped
+          ? t('; {skipped} skipped (not counted).', { skipped: numberFormat.format(data.skipped) })
+          : '.',
       ),
       reg.on_time + reg.late + reg.skipped
         ? h(
@@ -110,19 +124,30 @@ function pmBody(data, context) {
                   'span',
                   { class: 'badge badge-tone-warning' },
                   h('span', { 'aria-hidden': 'true' }, '⚠'),
-                  'Regulatory',
+                  t('Regulatory'),
                 )
               : null,
-            ` Regulatory visits: ${numberFormat.format(reg.on_time)} on time, ${numberFormat.format(reg.late)} late${reg.skipped ? `, ${numberFormat.format(reg.skipped)} skipped` : ''}.`,
+            reg.skipped
+              ? t(' Regulatory visits: {on_time} on time, {late} late, {skipped} skipped.', {
+                  on_time: numberFormat.format(reg.on_time),
+                  late: numberFormat.format(reg.late),
+                  skipped: numberFormat.format(reg.skipped),
+                })
+              : t(' Regulatory visits: {on_time} on time, {late} late.', {
+                  on_time: numberFormat.format(reg.on_time),
+                  late: numberFormat.format(reg.late),
+                }),
           )
         : null,
       data.items.length ? chartFrame(canvas, data.items.length * 40 + 36) : null,
       h(
         'p',
         { class: 'widget-note' },
-        'A visit counts once its deadline week is over: the planned week plus the plan’s tolerance; for a regulatory visit, its due week.',
+        t(
+          'A visit counts once its deadline week is over: the planned week plus the plan’s tolerance; for a regulatory visit, its due week.',
+        ),
       ),
-      tableDetails(pmTable(data, context), 'Preventive visits by trade and outcome'),
+      tableDetails(pmTable(data, context), t('Preventive visits by trade and outcome')),
     ],
     charts: data.items.length
       ? [
@@ -134,12 +159,17 @@ function pmBody(data, context) {
                 values: data.items.map((i) => i.rate),
                 tips: data.items.map((i) =>
                   i.rate === null
-                    ? 'all skipped'
+                    ? t('all skipped')
                     : `${rateText(i.rate)} (${i.on_time}/${i.on_time + i.late})`,
                 ),
                 tooltips: data.items.map((i) => [
-                  `${numberFormat.format(i.on_time)} on time, ${numberFormat.format(i.late)} late`,
-                  ...(i.skipped ? [`${numberFormat.format(i.skipped)} skipped`] : []),
+                  t('{on_time} on time, {late} late', {
+                    on_time: numberFormat.format(i.on_time),
+                    late: numberFormat.format(i.late),
+                  }),
+                  ...(i.skipped
+                    ? [t('{skipped} skipped', { skipped: numberFormat.format(i.skipped) })]
+                    : []),
                 ]),
                 onPick: context.open
                   ? (_s, n) => data.items[n].late && context.open(`late:${data.items[n].category}`)
@@ -156,12 +186,12 @@ function pmBody(data, context) {
 function scheduleTable(data, { drill }) {
   return {
     columns: [
-      { label: data.unit === 'week' ? 'Week' : 'Month' },
-      { label: 'Scheduled', numeric: true },
-      { label: 'Finished in the week', numeric: true },
-      { label: 'Kept %', numeric: true },
-      { label: 'Hours booked', numeric: true },
-      { label: 'Booked late %', numeric: true },
+      { label: data.unit === 'week' ? t('Week') : t('Month') },
+      { label: t('Scheduled'), numeric: true },
+      { label: t('Finished in the week'), numeric: true },
+      { label: t('Kept %'), numeric: true },
+      { label: t('Hours booked'), numeric: true },
+      { label: t('Booked late %'), numeric: true },
     ],
     rows: data.buckets.map((b) => [
       bucketTitle(b, data.unit),
@@ -190,7 +220,7 @@ function scheduleBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        'No finished week of this period had work orders scheduled in the week scheduler.',
+        t('No finished week of this period had work orders scheduled in the week scheduler.'),
       ),
     };
   }
@@ -198,9 +228,16 @@ function scheduleBody(data, context) {
   const titles = data.buckets.map((b) => bucketTitle(b, data.unit));
   const canvas = h('canvas', {
     role: 'img',
-    'aria-label': `Column chart, share of scheduled work orders finished in their week, per ${data.unit}. ${data.buckets
-      .map((b, i) => `${titles[i]}: ${rateText(b.rate)}`)
-      .join('; ')}.`,
+    'aria-label': t(
+      data.unit === 'week'
+        ? 'Column chart, share of scheduled work orders finished in their week, per week. {map}.'
+        : 'Column chart, share of scheduled work orders finished in their week, per month. {map}.',
+      {
+        map: data.buckets
+          .map((b, i) => t('{label}: {value}', { label: titles[i], value: rateText(b.rate) }))
+          .join('; '),
+      },
+    ),
   });
   const missed = data.scheduled - data.kept;
   return {
@@ -209,36 +246,51 @@ function scheduleBody(data, context) {
         'p',
         { class: 'widget-figure' },
         h('span', { class: 'kpi-value' }, rateText(data.rate)),
-        h('span', { class: 'muted' }, ' kept'),
+        h('span', { class: 'muted' }, t(' kept')),
       ),
       h(
         'p',
         { class: 'widget-summary' },
-        `${numberFormat.format(data.kept)} of ${plural(data.scheduled, 'scheduled work order')} finished in their week; `,
-        context.drill && missed
-          ? h(
-              'a',
-              { href: context.drill('missed'), 'data-link': true },
-              `${numberFormat.format(missed)} not`,
-            )
-          : `${numberFormat.format(missed)} not`,
-        '.',
+        tx(
+          plural(
+            data.scheduled,
+            '{kept} of {n} scheduled work order finished in their week; {missed}.',
+            '{kept} of {n} scheduled work orders finished in their week; {missed}.',
+          ),
+          {
+            kept: numberFormat.format(data.kept),
+            n: numberFormat.format(data.scheduled),
+            missed:
+              context.drill && missed
+                ? h(
+                    'a',
+                    { href: context.drill('missed'), 'data-link': true },
+                    t('{missed} not', { missed: numberFormat.format(missed) }),
+                  )
+                : t('{missed} not', { missed: numberFormat.format(missed) }),
+          },
+        ),
       ),
       legend([
-        ['Finished in the week', 0],
-        ['Hours booked after the week started', 2],
+        [t('Finished in the week'), 0],
+        [t('Hours booked after the week started'), 2],
       ]),
       chartFrame(canvas, 220),
       h(
         'p',
         { class: 'widget-note' },
-        'Finished weeks only. Hours booked late are blocks added once the week had begun: work that broke into the plan.',
+        t(
+          'Finished weeks only. Hours booked late are blocks added once the week had begun: work that broke into the plan.',
+        ),
       ),
-      tableDetails(scheduleTable(data, context), `Schedule kept per ${data.unit}`),
+      tableDetails(
+        scheduleTable(data, context),
+        data.unit === 'week' ? t('Schedule kept per week') : t('Schedule kept per month'),
+      ),
     ],
     legend: [
-      ['Finished in the week', 0],
-      ['Hours booked after the week started', 2],
+      [t('Finished in the week'), 0],
+      [t('Hours booked after the week started'), 2],
     ],
     charts: [
       {
@@ -247,15 +299,21 @@ function scheduleBody(data, context) {
           drawShareWithLine(canvas, {
             labels,
             titles,
-            columns: { label: 'Finished in the week', values: data.buckets.map((b) => b.rate) },
+            columns: { label: t('Finished in the week'), values: data.buckets.map((b) => b.rate) },
             line: {
-              label: 'Booked after the week started',
+              label: t('Booked after the week started'),
               values: data.buckets.map((b) => b.break_in),
               slot: 2,
             },
             details: data.buckets.map((b) => [
-              `${numberFormat.format(b.kept)} of ${numberFormat.format(b.scheduled)} work orders`,
-              `${oneDecimal.format(b.break_in_hours)} of ${oneDecimal.format(b.hours)} h booked late`,
+              t('{kept} of {scheduled} work orders', {
+                kept: numberFormat.format(b.kept),
+                scheduled: numberFormat.format(b.scheduled),
+              }),
+              t('{break_in_hours} of {hours} h booked late', {
+                break_in_hours: oneDecimal.format(b.break_in_hours),
+                hours: oneDecimal.format(b.hours),
+              }),
             ]),
             onPick: context.open
               ? (_s, i) => {
@@ -289,12 +347,12 @@ export function sortContractors(items, sort = 'rate') {
 
 function contractorTable(data, { drill, sort }) {
   const rows = sortContractors(data.items, sort);
-  const table = outcomeTable('Contractor', rows, {
+  const table = outcomeTable(t('Contractor'), rows, {
     drill,
-    labelOf: (r) => r.supplier || 'Unnamed contractor',
+    labelOf: (r) => r.supplier || t('Unnamed contractor'),
     segmentOf: (r) => r.supplier,
   });
-  table.columns.splice(1, 0, { label: 'Visits', numeric: true });
+  table.columns.splice(1, 0, { label: t('Visits'), numeric: true });
   table.rows.forEach((row, i) => row.splice(1, 0, rows[i].visits));
   table.links?.forEach((row, i) =>
     row.splice(1, 0, rows[i].visits && drill ? drill(`:${rows[i].supplier}`) : null),
@@ -308,7 +366,7 @@ function contractorBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        'No contractor visit had its deadline in this period.',
+        t('No contractor visit had its deadline in this period.'),
       ),
     };
   }
@@ -317,7 +375,7 @@ function contractorBody(data, context) {
   const keys = ['supplier', 'visits', 'on_time', 'late', 'skipped', 'rate'];
   const paint = (focusKey) => {
     const table = contractorTable(data, { ...context, sort });
-    const element = tableElement(table, 'Contractor visits by outcome');
+    const element = tableElement(table, t('Contractor visits by outcome'));
     // Sortable headers: a button in each, aria-sort on the column in use.
     element.querySelectorAll('thead th').forEach((th, i) => {
       const key = keys[i];
@@ -351,11 +409,13 @@ function contractorBody(data, context) {
         'p',
         { class: 'widget-summary' },
         data.rate === null
-          ? 'No contractor visit counted (all skipped).'
-          : ['Contractor visits on time: ', h('strong', {}, rateText(data.rate)), '.'],
+          ? t('No contractor visit counted (all skipped).')
+          : tx('Contractor visits on time: {rate}.', {
+              rate: h('strong', {}, rateText(data.rate)),
+            }),
       ),
       h('div', { class: 'heatmap-scroll' }, holder),
-      h('p', { class: 'widget-note' }, 'The worst first. Select a column title to sort by it.'),
+      h('p', { class: 'widget-note' }, t('The worst first. Select a column title to sort by it.')),
     ],
   };
 }
@@ -375,13 +435,11 @@ function segmentText(key, segment) {
     case 'schedule_compliance': {
       const kind =
         {
-          scheduled: 'scheduled',
-          kept: 'finished in their week',
-          missed: 'not finished in their week',
+          scheduled: t('scheduled'),
+          kept: t('finished in their week'),
+          missed: t('not finished in their week'),
         }[first] ?? first;
-      return [second ? bucketKeyText(second).replace(/^Week/, 'week') : null, kind]
-        .filter(Boolean)
-        .join(', ');
+      return [second ? bucketKeyInText(second) : null, kind].filter(Boolean).join(', ');
     }
     default:
       return segment;
@@ -400,20 +458,20 @@ for (const [key, widget] of Object.entries(COMPLIANCE_WIDGETS)) {
 
 /** Columns of the Visits (CSV) export. */
 export const VISIT_COLUMNS = [
-  ['Plan', (v) => v.plan_code],
-  ['Title', (v) => v.plan_title],
-  ['Type', (v) => valueLabel('work_order_type', v.type)],
-  ['Trade', (v) => valueLabel('category', v.category)],
-  ['Site', (v) => v.site],
+  [t('Plan'), (v) => v.plan_code],
+  [t('Title'), (v) => v.plan_title],
+  [t('Type'), (v) => valueLabel('work_order_type', v.type)],
+  [t('Trade'), (v) => valueLabel('category', v.category)],
+  [t('Site'), (v) => v.site],
   [
-    'Done by',
-    (v) => (v.performed_by === 'CONTRACTOR' ? v.supplier || 'Contractor' : 'Internal team'),
+    t('Done by'),
+    (v) => (v.performed_by === 'CONTRACTOR' ? v.supplier || t('Contractor') : t('Internal team')),
   ],
-  ['Due week', (v) => v.due_week],
-  ['Planned week', (v) => v.week],
-  ['Deadline', (v) => v.deadline_on],
-  ['Outcome', (v) => OUTCOME_LABELS[v.outcome]],
-  ['Reason skipped', (v) => v.skip_reason],
-  ['Work order', (v) => v.work_order_number],
-  ['Closed', (v) => v.closed_on],
+  [t('Due week'), (v) => v.due_week],
+  [t('Planned week'), (v) => v.week],
+  [t('Deadline'), (v) => v.deadline_on],
+  [t('Outcome'), (v) => OUTCOME_LABELS[v.outcome]],
+  [t('Reason skipped'), (v) => v.skip_reason],
+  [t('Work order'), (v) => v.work_order_number],
+  [t('Closed'), (v) => v.closed_on],
 ];

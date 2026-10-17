@@ -10,19 +10,25 @@ import { formatDate, formatDateTime, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { applyToPage } from './network.js';
 import { NOT_LISTED, PATH_SEPARATOR, placeIndex, placeOf, placePicker } from './places.js';
+import { t, tn } from './i18n.js';
 
 export const REQUEST_SCOPES = ['open', 'all'];
 /** Steps shown above a request; "On hold" takes the place of "In progress". */
-export const REQUEST_STEPS = ['Received', 'Approved and assigned', 'In progress', 'Done'];
+export const REQUEST_STEPS = [
+  t('Received'),
+  t('Approved and assigned'),
+  t('In progress'),
+  t('Done'),
+];
 
 /** Labels of the urgency choices (priority codes). */
 const URGENCY_LABELS = {
-  LOW: 'Low: it can wait',
-  NORMAL: 'Normal',
-  HIGH: 'High: it disturbs work',
-  URGENT: 'Urgent: safety risk, or work is impossible',
+  LOW: t('Low: it can wait'),
+  NORMAL: t('Normal'),
+  HIGH: t('High: it disturbs work'),
+  URGENT: t('Urgent: safety risk, or work is impossible'),
 };
-const DONT_KNOW = "I don't know";
+const DONT_KNOW = t("I don't know");
 
 /** Values typed in the request form but not sent yet; kept while the app is open. */
 let unsentRequest = null;
@@ -42,82 +48,106 @@ export function requestsUrl(scope = 'open', page = 1) {
  */
 export function requestProgress(request) {
   const who = request.assignee ? personName(request.assignee) : null;
-  const by = request.due_on ? ` by ${formatDate(request.due_on)}` : '';
+  const due = request.due_on ? formatDate(request.due_on) : null;
   if (request.review_status === 'PENDING') {
     return {
       stage: 'REVIEW',
-      label: 'Waiting for review',
+      label: t('Waiting for review'),
       tone: 'info',
       step: 0,
-      next: 'A supervisor will review your request, then assign a technician to it.',
+      next: t('A supervisor will review your request, then assign a technician to it.'),
     };
   }
   if (request.review_status === 'WITHDRAWN') {
     return {
       stage: 'WITHDRAWN',
-      label: 'Cancelled by you',
+      label: t('Cancelled by you'),
       tone: 'neutral',
       step: null,
-      next: 'Nothing: you cancelled this request. If the problem comes back, send a new request.',
+      next: t(
+        'Nothing: you cancelled this request. If the problem comes back, send a new request.',
+      ),
     };
   }
   if (request.review_status === 'REJECTED') {
     return {
       stage: 'REJECTED',
-      label: 'Rejected',
+      label: t('Rejected'),
       tone: 'danger',
       step: null,
-      next: `A supervisor rejected this request${request.review_note ? `: “${request.review_note}”` : ''}. If you disagree or the problem is still there, add a comment or send a new request.`,
+      next: request.review_note
+        ? t(
+            'A supervisor rejected this request: “{note}”. If you disagree or the problem is still there, add a comment or send a new request.',
+            { note: request.review_note },
+          )
+        : t(
+            'A supervisor rejected this request. If you disagree or the problem is still there, add a comment or send a new request.',
+          ),
     };
   }
   switch (request.status) {
     case 'CANCELLED':
       return {
         stage: 'CANCELLED',
-        label: 'Cancelled',
+        label: t('Cancelled'),
         tone: 'neutral',
         step: null,
-        next: 'The maintenance team cancelled this request: the comments may say why. If the problem is still there, send a new request.',
+        next: t(
+          'The maintenance team cancelled this request: the comments may say why. If the problem is still there, send a new request.',
+        ),
       };
     case 'CLOSED':
       return {
         stage: 'DONE',
-        label: 'Done',
+        label: t('Done'),
         tone: 'success',
         step: 3,
-        next: `The work is finished${request.closed_on ? ` (${formatDate(request.closed_on)})` : ''}. If the problem is still there, add a comment.`,
+        next: request.closed_on
+          ? t('The work is finished ({closed_on}). If the problem is still there, add a comment.', {
+              closed_on: formatDate(request.closed_on),
+            })
+          : t('The work is finished. If the problem is still there, add a comment.'),
       };
     case 'ON_HOLD':
       return {
         stage: 'ON_HOLD',
-        label: 'On hold',
+        label: t('On hold'),
         tone: 'warning',
         step: 2,
-        next: 'The work is paused, for example while waiting for a part, a supplier or access to the room. The comments give the details.',
+        next: t(
+          'The work is paused, for example while waiting for a part, a supplier or access to the room. The comments give the details.',
+        ),
       };
     case 'IN_PROGRESS':
       return {
         stage: 'IN_PROGRESS',
-        label: 'In progress',
+        label: t('In progress'),
         tone: 'primary',
         step: 2,
-        next: `${who ?? 'A technician'} is working on it${by ? `, planned to be done${by}` : ''}.`,
+        next: due
+          ? t('{who} is working on it, planned to be done by {due}.', {
+              who: who ?? t('A technician'),
+              due,
+            })
+          : t('{who} is working on it.', { who: who ?? t('A technician') }),
       };
     default:
       return who
         ? {
             stage: 'ASSIGNED',
-            label: 'Approved',
+            label: t('Approved'),
             tone: 'info',
             step: 1,
-            next: `${who} will take care of it${by}.`,
+            next: due
+              ? t('{who} will take care of it by {due}.', { who, due })
+              : t('{who} will take care of it.', { who }),
           }
         : {
             stage: 'RECEIVED',
-            label: 'Received',
+            label: t('Received'),
             tone: 'info',
             step: 0,
-            next: 'The maintenance team will review your request and assign a technician.',
+            next: t('The maintenance team will review your request and assign a technician.'),
           };
   }
 }
@@ -134,13 +164,13 @@ export const chosenPlaceId = (values) =>
 /** Errors of the request form (the server checks again). Pure. */
 export function checkRequest(values) {
   const errors = {};
-  if (!values.title.trim()) errors.title = 'Required';
-  if (!values.site) errors.site = 'Required';
+  if (!values.title.trim()) errors.title = t('Required');
+  if (!values.site) errors.site = t('Required');
   // A place of the list, or the place in words (BR-R1, BR-LOC9).
   if (chosenPlaceId(values) === null && !values.location.trim()) {
     errors.location = values.has_places
-      ? 'Required: pick a room, or say where the problem is.'
-      : 'Required: say where the problem is.';
+      ? t('Required: pick a room, or say where the problem is.')
+      : t('Required: say where the problem is.');
   }
   return errors;
 }
@@ -192,15 +222,15 @@ function requestCard(request) {
       ),
       stageBadge(progress),
     ),
-    h('p', { class: 'request-next' }, h('strong', {}, 'Next step: '), progress.next),
+    h('p', { class: 'request-next' }, h('strong', {}, t('Next step: ')), progress.next),
     h(
       'p',
       { class: 'request-meta' },
       [
         request.number,
         requestPlace(request),
-        `sent ${formatDate(request.created_on)}`,
-        comments ? `${comments} comment${comments === 1 ? '' : 's'}` : null,
+        t('sent {created_on}', { created_on: formatDate(request.created_on) }),
+        comments ? tn(comments, '{n} comment', '{n} comments') : null,
       ]
         .filter(Boolean)
         .join(' · '),
@@ -215,10 +245,12 @@ function requestCard(request) {
  */
 export function renderRequestList(container, { data, scope, pagination }) {
   const open = scope === 'open';
-  const title = open ? 'My open requests' : 'All my requests';
+  const title = open ? t('My open requests') : t('All my requests');
   const intro = open
-    ? 'Requests the maintenance team is still working on. Finished ones are under All my requests.'
-    : 'Every request you sent, newest first.';
+    ? t(
+        'Requests the maintenance team is still working on. Finished ones are under All my requests.',
+      )
+    : t('Every request you sent, newest first.');
   replaceChildren(
     container,
     h(
@@ -231,14 +263,14 @@ export function renderRequestList(container, { data, scope, pagination }) {
         h(
           'a',
           { href: '/requests/new', 'data-link': true, class: 'button button-primary' },
-          '+ New request',
+          t('+ New request'),
         ),
       ),
       h('p', { class: 'page-intro' }, intro),
       h(
         'p',
         { class: 'table-count', role: 'status' },
-        `${data.total} request${data.total === 1 ? '' : 's'}`,
+        tn(data.total, '{n} request', '{n} requests'),
       ),
       data.items.length
         ? h('ul', { class: 'request-list' }, data.items.map(requestCard))
@@ -246,8 +278,8 @@ export function renderRequestList(container, { data, scope, pagination }) {
             'p',
             { class: 'empty-state' },
             open
-              ? 'You have no open request. Something to fix? Send a new request.'
-              : 'You have not sent any request yet.',
+              ? t('You have no open request. Something to fix? Send a new request.')
+              : t('You have not sent any request yet.'),
           ),
       data.pages > 1 ? pagination : null,
     ),
@@ -281,7 +313,7 @@ function placeRow(control, star, hint) {
   return h(
     'div',
     { class: 'form-row' },
-    h('label', { for: control.id }, 'Where exactly?', star),
+    h('label', { for: control.id }, t('Where exactly?'), star),
     h(
       'div',
       { class: 'form-control' },
@@ -319,7 +351,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
   const site = h(
     'select',
     {},
-    h('option', { value: '' }, '— Choose —'),
+    h('option', { value: '' }, t('— Choose —')),
     sites.map((s) => h('option', { value: s }, s)),
   );
   const location = h('input', { type: 'text', maxlength: '200', autocomplete: 'off' });
@@ -365,10 +397,10 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
     placeStar.hidden = optional;
     location.toggleAttribute('aria-required', !optional);
     placeHint.textContent = optional
-      ? 'Optional: anything that helps find the place, e.g. “desk 12-21” or “by the window”.'
+      ? t('Optional: anything that helps find the place, e.g. “desk 12-21” or “by the window”.')
       : hasPlaces
-        ? 'Required when the room is not in the list: building, floor and room or desk.'
-        : 'Building, floor and room or desk, e.g. “Tower A, floor 12, desk 12-21”.';
+        ? t('Required when the room is not in the list: building, floor and room or desk.')
+        : t('Building, floor and room or desk, e.g. “Tower A, floor 12, desk 12-21”.');
   };
   const picker = placePicker({
     id: 'r-location_id',
@@ -390,7 +422,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
   const pickerRow = h(
     'div',
     { class: 'form-row place-row', role: 'group', 'aria-labelledby': 'r-place-label' },
-    h('span', { id: 'r-place-label', class: 'field-label' }, 'Room'),
+    h('span', { id: 'r-place-label', class: 'field-label' }, t('Room')),
     h(
       'div',
       { class: 'form-control' },
@@ -398,7 +430,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
       h(
         'p',
         { class: 'field-hint' },
-        'Not in the list? Choose “Not in the list” and say where it is below.',
+        t('Not in the list? Choose “Not in the list” and say where it is below.'),
       ),
       h('p', { id: 'r-location_id-error', class: 'field-error' }),
     ),
@@ -416,7 +448,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
   const submit = h(
     'button',
     { type: 'submit', class: 'button button-primary online-only' },
-    'Send request',
+    t('Send request'),
   );
   const form = h(
     'form',
@@ -431,7 +463,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
         const values = read();
         const errors = checkRequest(values);
         if (Object.keys(errors).length) {
-          return showRequestErrors(form, errors, 'Check the highlighted fields.');
+          return showRequestErrors(form, errors, t('Check the highlighted fields.'));
         }
         submit.disabled = true;
         try {
@@ -448,29 +480,35 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
     h(
       'p',
       { class: 'form-help' },
-      'Describe the problem and where it is: the maintenance team takes it from there. Fields marked * are required.',
+      t(
+        'Describe the problem and where it is: the maintenance team takes it from there. Fields marked * are required.',
+      ),
     ),
-    formRow('title', 'What is the problem?', title, {
+    formRow('title', t('What is the problem?'), title, {
       required: true,
-      hint: 'A short summary, e.g. “Light flickering in meeting room 8.03”.',
+      hint: t('A short summary, e.g. “Light flickering in meeting room 8.03”.'),
     }),
-    formRow('site', 'Site', site, { required: true }),
+    formRow('site', t('Site'), site, { required: true }),
     pickerRow,
     placeRow(location, placeStar, placeHint),
-    formRow('category', 'Kind of problem', category, {
-      hint: `Not sure? Keep “${DONT_KNOW}”: the maintenance team will decide.`,
+    formRow('category', t('Kind of problem'), category, {
+      hint: t('Not sure? Keep “{DONT_KNOW}”: the maintenance team will decide.', { DONT_KNOW }),
     }),
-    formRow('priority', 'How urgent is it?', priority, {
-      hint: `Not sure? Keep “${DONT_KNOW}”.`,
+    formRow('priority', t('How urgent is it?'), priority, {
+      hint: t('Not sure? Keep “{DONT_KNOW}”.', { DONT_KNOW }),
     }),
-    formRow('description', 'Details', description, {
-      hint: 'What happens, since when, and anything that can help the technician.',
+    formRow('description', t('Details'), description, {
+      hint: t('What happens, since when, and anything that can help the technician.'),
     }),
     h(
       'div',
       { class: 'form-actions' },
       submit,
-      h('a', { href: '/requests', 'data-link': true, class: 'button button-secondary' }, 'Cancel'),
+      h(
+        'a',
+        { href: '/requests', 'data-link': true, class: 'button button-secondary' },
+        t('Cancel'),
+      ),
     ),
   );
   replaceChildren(
@@ -478,7 +516,7 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
     h(
       'div',
       { class: 'account-page request-form-page' },
-      h('h2', { class: 'placeholder-title', tabindex: '-1' }, 'New request'),
+      h('h2', { class: 'placeholder-title', tabindex: '-1' }, t('New request')),
       form,
     ),
   );
@@ -490,9 +528,9 @@ export function renderRequestForm(container, { sites, defaultSite, places, onSub
 function stepList(progress) {
   return h(
     'ol',
-    { class: 'request-steps', 'aria-label': 'Progress' },
+    { class: 'request-steps', 'aria-label': t('Progress') },
     REQUEST_STEPS.map((label, i) => {
-      const text = i === 2 && progress.stage === 'ON_HOLD' ? 'On hold' : label;
+      const text = i === 2 && progress.stage === 'ON_HOLD' ? t('On hold') : label;
       const state = i < progress.step ? 'done' : i === progress.step ? 'current' : 'todo';
       return h(
         'li',
@@ -501,7 +539,11 @@ function stepList(progress) {
         h(
           'span',
           { class: 'visually-hidden' },
-          state === 'done' ? ' (done)' : state === 'current' ? ' (current step)' : ' (to come)',
+          state === 'done'
+            ? t(' (done)')
+            : state === 'current'
+              ? t(' (current step)')
+              : t(' (to come)'),
         ),
       );
     }),
@@ -509,14 +551,14 @@ function stepList(progress) {
 }
 
 const STATUS_STEP_LABELS = {
-  OPEN: 'Received',
-  APPROVED: 'Approved by a supervisor',
-  REJECTED: 'Rejected by a supervisor',
-  IN_PROGRESS: 'Work started',
-  ON_HOLD: 'Put on hold',
-  CLOSED: 'Work finished',
-  CANCELLED: 'Cancelled',
-  WITHDRAWN: 'Cancelled by you',
+  OPEN: t('Received'),
+  APPROVED: t('Approved by a supervisor'),
+  REJECTED: t('Rejected by a supervisor'),
+  IN_PROGRESS: t('Work started'),
+  ON_HOLD: t('Put on hold'),
+  CLOSED: t('Work finished'),
+  CANCELLED: t('Cancelled'),
+  WITHDRAWN: t('Cancelled by you'),
 };
 
 /**
@@ -537,14 +579,14 @@ function cancelSection(cancel) {
           await cancel();
         } catch (err) {
           error.textContent =
-            err.status === 0 ? 'You are offline: try again once connected.' : err.message;
+            err.status === 0 ? t('You are offline: try again once connected.') : err.message;
         } finally {
           button.disabled = false;
           applyToPage(section);
         }
       },
     },
-    'Cancel this request',
+    t('Cancel this request'),
   );
   const section = h(
     'div',
@@ -552,7 +594,7 @@ function cancelSection(cancel) {
     h(
       'p',
       { class: 'field-hint' },
-      'Not needed any more? You can cancel it until a technician starts the work.',
+      t('Not needed any more? You can cancel it until a technician starts the work.'),
     ),
     button,
     error,
@@ -590,7 +632,7 @@ export function renderRequestDetail(container, { request, viewer, sendComment, c
         h(
           'a',
           { href: requestsUrl(finished ? 'all' : 'open'), 'data-link': true },
-          finished ? '← All my requests' : '← My open requests',
+          finished ? t('← All my requests') : t('← My open requests'),
         ),
       ),
       h(
@@ -600,48 +642,54 @@ export function renderRequestDetail(container, { request, viewer, sendComment, c
         h(
           'p',
           { class: 'muted' },
-          `${request.number} · sent ${formatDateTime(request.created_at)}`,
+          t('{number} · sent {created_at}', {
+            number: request.number,
+            created_at: formatDateTime(request.created_at),
+          }),
         ),
       ),
       h(
         'section',
-        { class: 'request-status', 'aria-label': 'Status' },
-        h('p', { class: 'request-status-line' }, 'Status: ', stageBadge(progress)),
+        { class: 'request-status', 'aria-label': t('Status') },
+        h('p', { class: 'request-status-line' }, t('Status: '), stageBadge(progress)),
         progress.step === null ? null : stepList(progress),
-        h('p', { class: 'request-next' }, h('strong', {}, 'Next step: '), progress.next),
+        h('p', { class: 'request-next' }, h('strong', {}, t('Next step: ')), progress.next),
         canCancelRequest(request) ? cancelSection(cancelRequest) : null,
       ),
       request.status === 'CLOSED' && request.work_report
         ? h(
             'section',
             { class: 'request-section' },
-            h('h3', {}, 'What was done'),
+            h('h3', {}, t('What was done')),
             h('p', { class: 'request-report' }, request.work_report),
           )
         : null,
       h(
         'section',
         { class: 'request-section' },
-        h('h3', {}, 'Your request'),
+        h('h3', {}, t('Your request')),
         h(
           'dl',
           { class: 'detail-fields' },
-          field('Where', requestPlace(request)),
-          field('Site', request.site),
+          field(t('Where'), requestPlace(request)),
+          field(t('Site'), request.site),
           field(
-            'Kind of problem',
-            request.category ? valueLabel('category', request.category) : 'Not specified yet',
+            t('Kind of problem'),
+            request.category ? valueLabel('category', request.category) : t('Not specified yet'),
           ),
-          field('Urgency', valueLabel('work_order_priority', request.priority)),
-          field('Details', request.description),
-          field('Technician', request.assignee ? personName(request.assignee) : 'Not assigned yet'),
-          field('Planned by', request.due_on ? formatDate(request.due_on) : null),
+          field(t('Urgency'), valueLabel('work_order_priority', request.priority)),
+          field(t('Details'), request.description),
+          field(
+            t('Technician'),
+            request.assignee ? personName(request.assignee) : t('Not assigned yet'),
+          ),
+          field(t('Planned by'), request.due_on ? formatDate(request.due_on) : null),
         ),
       ),
       h(
         'section',
         { class: 'request-section' },
-        h('h3', {}, 'History'),
+        h('h3', {}, t('History')),
         h(
           'ol',
           { class: 'timeline' },
@@ -662,12 +710,14 @@ export function renderRequestDetail(container, { request, viewer, sendComment, c
       h(
         'section',
         { class: 'request-section comments' },
-        h('h3', {}, 'Comments'),
+        h('h3', {}, t('Comments')),
         conversation,
         commentForm({
           key: `request-${request.id}`,
-          label: 'Add a comment',
-          hint: 'More information, a question or a follow-up: the maintenance team reads your comments.',
+          label: t('Add a comment'),
+          hint: t(
+            'More information, a question or a follow-up: the maintenance team reads your comments.',
+          ),
           send: sendComment,
           onSent: (comment) => {
             comments = [...comments, comment];

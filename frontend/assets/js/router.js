@@ -10,6 +10,7 @@ import { AUDIT_TYPES } from './history.js';
 import { parsePlanningFilters } from './planning.js';
 import { parsePlaceFilters } from './places.js';
 import { parseSchedulePanel } from './schedule.js';
+import { t } from './i18n.js';
 
 const ID = /^[1-9]\d{0,15}$/;
 /** Work orders created offline have a temporary id until the server answers (D26). */
@@ -128,7 +129,7 @@ export function parseRoute(pathname, search = '') {
     return {
       name: 'audit',
       page,
-      entityType: AUDIT_TYPES.some((t) => t.value === type) ? type : null,
+      entityType: AUDIT_TYPES.some((audit) => audit.value === type) ? type : null,
     };
   }
   if (first === 'conflicts') {
@@ -200,14 +201,14 @@ let lastUrl = typeof location === 'undefined' ? '' : location.pathname + locatio
 
 /** Pages a record can be opened from, other than its own list, and their names (M8). */
 const RETURN_PAGES = {
-  dashboard: 'Dashboard',
-  myWeek: 'My week',
-  schedule: 'Week scheduler',
-  planning: 'Year planner',
-  plan: 'Year planner',
-  conflicts: 'Conflicts',
-  conflict: 'Conflicts',
-  audit: 'Audit log',
+  dashboard: t('Dashboard'),
+  myWeek: t('My week'),
+  schedule: t('Week scheduler'),
+  planning: t('Year planner'),
+  plan: t('Year planner'),
+  conflicts: t('Conflicts'),
+  conflict: t('Conflicts'),
+  audit: t('Audit log'),
 };
 
 /**

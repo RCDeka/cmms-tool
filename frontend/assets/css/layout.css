@@ -140,6 +140,8 @@ body:not(.is-logged-out) {
   min-height: 56px;
   background: var(--color-surface);
   border-bottom: 3px solid var(--color-brand-red);
+  /* Its own width decides when the buttons shrink to their icons (below). */
+  container: topbar / inline-size;
 }
 
 /* Find a work order (D67) and Suggest an improvement (D40): on every page, at the end of the
@@ -161,7 +163,59 @@ body:not(.is-logged-out) {
   height: 20px;
 }
 
+/* Language flags (D85): next to "Suggest an improvement", on every page and on the login page. */
+.language-switch {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.language-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+}
+
+.language-button img {
+  width: auto;
+  height: 16px;
+  box-shadow: 0 0 0 1px var(--color-border);
+  opacity: 0.55;
+}
+
+.language-button:hover {
+  background: var(--color-hover);
+}
+
+.language-button:hover img,
+.language-button[aria-pressed='true'] img {
+  opacity: 1;
+}
+
+.language-button[aria-pressed='true'] {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  cursor: default;
+}
+
 @media (max-width: 640px) {
+  /* Phones: the flag of the other language only, to keep room for the page title. */
+  .topbar .language-button[aria-pressed='true'] {
+    display: none;
+  }
+}
+
+/* A narrow bar (phones, tablets, a computer with the sidebar open and a small window): the two
+   buttons show their icon only, their words staying for screen readers. The French labels are
+   longer, and with the flags they would push the page wider than the screen (D85). */
+@container topbar (max-width: 960px) {
   .find-button,
   .feedback-button {
     width: var(--touch-target);

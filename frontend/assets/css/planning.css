@@ -618,7 +618,7 @@
 }
 
 .load-row.is-preview .load-title::after {
-  content: ' (preview)';
+  content: attr(data-preview);
   color: var(--color-brand-red);
 }
 

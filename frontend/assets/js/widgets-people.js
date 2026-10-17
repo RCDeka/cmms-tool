@@ -10,15 +10,18 @@ import { h } from './dom.js';
 import { personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { drawPriorityStack, drawRanges, drawValueBars } from './widget-charts.js';
-import { bucketTitle, tableElement } from './widgets-flow.js';
+import { bucketKeyInText, bucketTitle, tableElement } from './widgets-flow.js';
+import { locale, plural, t, tn, tx } from './i18n.js';
 
-const oneDecimal = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
+const oneDecimal = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 /** A duration in hours as people read it: "45 min", "6.5 h" under 48 hours, else "3.2 d". Pure. */
 export function durationText(hours) {
   if (hours === null || hours === undefined) return '—';
-  if (hours < 1) return `${Math.round(hours * 60)} min`;
-  return hours < 48 ? `${oneDecimal.format(hours)} h` : `${oneDecimal.format(hours / 24)} d`;
+  if (hours < 1) return t('{value} min', { value: Math.round(hours * 60) });
+  return hours < 48
+    ? `${oneDecimal.format(hours)} h`
+    : t('{days} d', { days: oneDecimal.format(hours / 24) });
 }
 
 const rateText = (rate) => (rate === null || rate === undefined ? '—' : percentFormat.format(rate));
@@ -34,7 +37,7 @@ const tableDetails = (table, caption) =>
   h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show as a table'),
+    h('summary', {}, t('Show as a table')),
     tableElement(table, caption),
   );
 const link = (href, text) => (href ? h('a', { href, 'data-link': true }, text) : text);
@@ -42,20 +45,20 @@ const link = (href, text) => (href ? h('a', { href, 'data-link': true }, text) :
 // --- Response times ----------------------------------------------------------------------------
 
 const KINDS = [
-  ['start', 'Time to start', 'From creation to the first “In progress”'],
-  ['close', 'Time to close', 'From creation to “Closed”'],
+  ['start', t('Time to start'), t('From creation to the first “In progress”')],
+  ['close', t('Time to close'), t('From creation to “Closed”')],
 ];
 
 function responseTable(data, { drill }) {
   return {
     columns: [
-      { label: 'Priority' },
-      { label: 'Started', numeric: true },
-      { label: 'Median to start', numeric: true },
-      { label: '90% started within', numeric: true },
-      { label: 'Closed', numeric: true },
-      { label: 'Median to close', numeric: true },
-      { label: '90% closed within', numeric: true },
+      { label: t('Priority') },
+      { label: t('count|Started'), numeric: true },
+      { label: t('Median to start'), numeric: true },
+      { label: t('90% started within'), numeric: true },
+      { label: t('count|Closed'), numeric: true },
+      { label: t('Median to close'), numeric: true },
+      { label: t('90% closed within'), numeric: true },
     ],
     rows: data.rows.map((r) => [
       valueLabel('work_order_priority', r.priority),
@@ -86,7 +89,7 @@ function responseBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        'No work order was started or closed in this period.',
+        t('No work order was started or closed in this period.'),
       ),
     };
   }
@@ -96,32 +99,37 @@ function responseBody(data, context) {
     h(
       'p',
       { class: 'widget-summary' },
-      'Half the work orders were started within ',
-      h('strong', {}, durationText(data.start.median)),
-      ' and closed within ',
-      h('strong', {}, durationText(data.close.median)),
-      '.',
+      tx('Half the work orders were started within {start} and closed within {close}.', {
+        start: h('strong', {}, durationText(data.start.median)),
+        close: h('strong', {}, durationText(data.close.median)),
+      }),
     ),
     h(
       'ul',
       { class: 'chart-legend' },
-      h('li', {}, h('span', { class: 'range-dot', 'aria-hidden': 'true' }), 'Median'),
+      h('li', {}, h('span', { class: 'range-dot', 'aria-hidden': 'true' }), t('Median')),
       h(
         'li',
         {},
         h('span', { class: 'range-bar', 'aria-hidden': 'true' }),
-        'Up to the 90th percentile',
+        t('Up to the 90th percentile'),
       ),
     ),
   ];
   for (const [kind, title, hint] of KINDS) {
     const canvas = canvasFor(
-      `${title} per priority. ${data.rows
-        .map(
-          (r, i) =>
-            `${labels[i]}: median ${durationText(r[kind].median)}, 90% within ${durationText(r[kind].p90)}`,
-        )
-        .join('; ')}.`,
+      t('{title} per priority. {map}.', {
+        title,
+        map: data.rows
+          .map((r, i) =>
+            t('{priority}: median {median}, 90% within {p90}', {
+              priority: labels[i],
+              median: durationText(r[kind].median),
+              p90: durationText(r[kind].p90),
+            }),
+          )
+          .join('; '),
+      }),
     );
     parts.push(
       h('h3', { class: 'chart-subtitle' }, `${title} `, h('span', { class: 'muted' }, `(${hint})`)),
@@ -144,7 +152,7 @@ function responseBody(data, context) {
         }),
     });
   }
-  parts.push(tableDetails(responseTable(data, context), 'Response times by priority'));
+  parts.push(tableDetails(responseTable(data, context), t('Response times by priority')));
   return { element: parts, charts };
 }
 
@@ -186,11 +194,11 @@ function sparkline(values, label) {
 function requestTable(data) {
   return {
     columns: [
-      { label: data.unit === 'week' ? 'Week' : 'Month' },
-      { label: 'Requests', numeric: true },
-      { label: 'Median to review', numeric: true },
-      { label: 'Median to done', numeric: true },
-      { label: 'Rejected', numeric: true },
+      { label: data.unit === 'week' ? t('Week') : t('Month') },
+      { label: t('Requests'), numeric: true },
+      { label: t('Median to review'), numeric: true },
+      { label: t('Median to done'), numeric: true },
+      { label: t('count|Rejected'), numeric: true },
     ],
     rows: data.buckets.map((b) => [
       bucketTitle(b, data.unit),
@@ -205,7 +213,7 @@ function requestTable(data) {
 function requestBody(data, context) {
   if (!data.count) {
     return {
-      element: h('p', { class: 'empty-state' }, 'No staff request was sent in this period.'),
+      element: h('p', { class: 'empty-state' }, t('No staff request was sent in this period.')),
     };
   }
   const figure = (label, value, series, trend) =>
@@ -216,47 +224,57 @@ function requestBody(data, context) {
       h('span', { class: 'mini-value' }, value),
       sparkline(series, trend),
     );
-  const per = data.unit === 'week' ? 'week' : 'month';
+  const weekly = data.unit === 'week';
   return {
     element: [
       h(
         'p',
         { class: 'widget-summary' },
-        `${numberFormat.format(data.count)} request${data.count === 1 ? '' : 's'} received, ${numberFormat.format(data.reviewed)} reviewed.`,
+        tn(
+          data.count,
+          '{n} request received, {reviewed} reviewed.',
+          '{n} requests received, {reviewed} reviewed.',
+          {
+            reviewed: numberFormat.format(data.reviewed),
+          },
+        ),
       ),
       h(
         'div',
         { class: 'mini-figures' },
         figure(
-          'Median time to review',
+          t('Median time to review'),
           durationText(data.review_median),
           data.buckets.map((b) => b.review_median),
-          `Median time to review per ${per}`,
+          weekly ? t('Median time to review per week') : t('Median time to review per month'),
         ),
         figure(
-          'Median time to done',
+          t('Median time to done'),
           durationText(data.done_median),
           data.buckets.map((b) => b.done_median),
-          `Median time to done per ${per}`,
+          weekly ? t('Median time to done per week') : t('Median time to done per month'),
         ),
         figure(
-          'Rejected',
+          t('count|Rejected'),
           link(
             data.rejected && context.drill ? context.drill('rejected') : null,
             rateText(data.rejected_share),
           ),
           data.buckets.map((b) => b.rejected_share),
-          `Share rejected per ${per}`,
+          weekly ? t('Share rejected per week') : t('Share rejected per month'),
         ),
       ),
       h(
         'p',
         { class: 'widget-note' },
-        link(context.drill?.('pending'), 'Requests waiting for review'),
+        link(context.drill?.('pending'), t('Requests waiting for review')),
         ' · ',
-        link(context.drill?.('rejected'), 'rejected requests, with their reason'),
+        link(context.drill?.('rejected'), t('rejected requests, with their reason')),
       ),
-      tableDetails(requestTable(data), `Staff requests per ${per}`),
+      tableDetails(
+        requestTable(data),
+        weekly ? t('Staff requests per week') : t('Staff requests per month'),
+      ),
     ],
   };
 }
@@ -270,11 +288,11 @@ function actorsTable(data, { drill, options }) {
   const { items } = actorsOf(data, options);
   return {
     columns: [
-      { label: 'Asset' },
-      { label: 'Site' },
-      { label: 'Criticality' },
-      { label: 'Corrective work orders', numeric: true },
-      { label: 'Cumulative share', numeric: true },
+      { label: t('Asset') },
+      { label: t('Site') },
+      { label: t('Criticality') },
+      { label: t('Corrective work orders'), numeric: true },
+      { label: t('Cumulative share'), numeric: true },
     ],
     rows: items.map((i) => [
       `${i.asset.code} — ${i.asset.name}`,
@@ -294,10 +312,10 @@ function actorsBody(data, context) {
   const actors = actorsOf(data, context.options);
   const switcher = h(
     'div',
-    { class: 'segmented', role: 'group', 'aria-label': 'Assets' },
+    { class: 'segmented', role: 'group', 'aria-label': t('Assets') },
     [
-      ['no', 'All assets'],
-      ['yes', 'High and critical'],
+      ['no', t('All assets')],
+      ['yes', t('High and critical')],
     ].map(([value, label]) =>
       h(
         'button',
@@ -318,13 +336,17 @@ function actorsBody(data, context) {
     return {
       element: [
         h('div', { class: 'widget-toolbar' }, switcher),
-        h('p', { class: 'empty-state' }, 'No corrective work on these assets in this period.'),
+        h('p', { class: 'empty-state' }, t('No corrective work on these assets in this period.')),
       ],
     };
   }
   const labels = actors.items.map((i) => i.asset.code);
   const canvas = canvasFor(
-    `Bar chart, corrective work orders per asset. ${actors.items.map((i) => `${i.asset.code}: ${i.count}`).join(', ')}.`,
+    t('Bar chart, corrective work orders per asset. {map}.', {
+      map: actors.items
+        .map((i) => t('{label}: {value}', { label: i.asset.code, value: i.count }))
+        .join(', '),
+    }),
   );
   const top = actors.items.at(-1);
   return {
@@ -333,12 +355,22 @@ function actorsBody(data, context) {
       h(
         'p',
         { class: 'widget-summary' },
-        `These ${actors.items.length} assets account for `,
-        h('strong', {}, rateText(top.cumulative)),
-        ` of the ${numberFormat.format(actors.total)} corrective work orders on ${numberFormat.format(actors.assets)} assets.`,
+        tx(
+          plural(
+            actors.items.length,
+            'This asset accounts for {share} of the {total} corrective work orders on {assets} assets.',
+            'These {count} assets account for {share} of the {total} corrective work orders on {assets} assets.',
+          ),
+          {
+            count: numberFormat.format(actors.items.length),
+            share: h('strong', {}, rateText(top.cumulative)),
+            total: numberFormat.format(actors.total),
+            assets: numberFormat.format(actors.assets),
+          },
+        ),
       ),
       chartFrame(canvas, actors.items.length * 32 + 36),
-      tableDetails(actorsTable(data, context), 'Assets with the most corrective work'),
+      tableDetails(actorsTable(data, context), t('Assets with the most corrective work')),
     ],
     charts: [
       {
@@ -347,11 +379,13 @@ function actorsBody(data, context) {
           drawValueBars(canvas, {
             labels,
             values: actors.items.map((i) => i.count),
-            tips: actors.items.map((i) => `${i.count} · ${rateText(i.cumulative)} cum.`),
+            tips: actors.items.map((i) =>
+              t('{count} · {rateText} cum.', { count: i.count, rateText: rateText(i.cumulative) }),
+            ),
             tooltips: actors.items.map((i) => [
               i.asset.name,
               `${i.asset.site} · ${valueLabel('criticality', i.asset.criticality)}`,
-              `${i.count} corrective work order${i.count === 1 ? '' : 's'}`,
+              tn(i.count, '{n} corrective work order', '{n} corrective work orders'),
             ]),
             // A bar opens the asset: its panel holds its history.
             onPick: context.navigate
@@ -368,10 +402,10 @@ function actorsBody(data, context) {
 function downtimeTable(data, { drill }) {
   return {
     columns: [
-      { label: 'Site' },
-      { label: 'Days broken down', numeric: true },
-      { label: 'Assets affected', numeric: true },
-      { label: 'Down today', numeric: true },
+      { label: t('Site') },
+      { label: t('Days broken down'), numeric: true },
+      { label: t('Assets affected'), numeric: true },
+      { label: t('Down today'), numeric: true },
     ],
     rows: data.items.map((i) => [i.site, i.days, i.assets, i.down_today]),
     links: drill ? data.items.map((i) => [null, drill(`site:${i.site}`), null, null]) : undefined,
@@ -384,12 +418,18 @@ function downtimeBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        `None of the ${numberFormat.format(data.watched)} high and critical assets was broken down in this period.`,
+        t('None of the {watched} high and critical assets was broken down in this period.', {
+          watched: numberFormat.format(data.watched),
+        }),
       ),
     };
   }
   const canvas = canvasFor(
-    `Bar chart, days high and critical assets were broken down, per site. ${data.items.map((i) => `${i.site}: ${i.days}`).join(', ')}.`,
+    t('Bar chart, days high and critical assets were broken down, per site. {map}.', {
+      map: data.items
+        .map((i) => t('{label}: {value}', { label: i.site, value: i.days }))
+        .join(', '),
+    }),
   );
   return {
     flagged: data.down_today > 0,
@@ -402,23 +442,32 @@ function downtimeBody(data, context) {
               'span',
               { class: 'badge badge-tone-warning' },
               h('span', { 'aria-hidden': 'true' }, '⚠'),
-              'Needs attention',
+              t('Needs attention'),
             ),
-            ` ${numberFormat.format(data.down_today)} high or critical asset${data.down_today === 1 ? ' is' : 's are'} broken down today.`,
+            tn(
+              data.down_today,
+              ' {n} high or critical asset is broken down today.',
+              ' {n} high or critical assets are broken down today.',
+            ),
           )
         : null,
       h(
         'p',
         { class: 'widget-summary' },
-        `${numberFormat.format(data.days)} days broken down in all, among ${numberFormat.format(data.watched)} high and critical assets.`,
+        t('{days} days broken down in all, among {watched} high and critical assets.', {
+          days: numberFormat.format(data.days),
+          watched: numberFormat.format(data.watched),
+        }),
       ),
       chartFrame(canvas, data.items.length * 36 + 36),
       h(
         'p',
         { class: 'widget-note' },
-        'Days on which an asset was broken down at some time; a breakdown still going on counts until today.',
+        t(
+          'Days on which an asset was broken down at some time; a breakdown still going on counts until today.',
+        ),
       ),
-      tableDetails(downtimeTable(data, context), 'Days broken down per site'),
+      tableDetails(downtimeTable(data, context), t('Days broken down per site')),
     ],
     charts: [
       {
@@ -427,12 +476,19 @@ function downtimeBody(data, context) {
           drawValueBars(canvas, {
             labels: data.items.map((i) => i.site),
             values: data.items.map((i) => i.days),
-            tips: data.items.map(
-              (i) => `${i.days} d · ${i.assets} asset${i.assets === 1 ? '' : 's'}`,
+            tips: data.items.map((i) =>
+              tn(i.assets, '{days} d · {n} asset', '{days} d · {n} assets', { days: i.days }),
             ),
             tooltips: data.items.map((i) => [
-              `${i.days} days broken down`,
-              `${i.assets} asset${i.assets === 1 ? '' : 's'} affected, ${i.down_today} down today`,
+              t('{days} days broken down', { days: i.days }),
+              tn(
+                i.assets,
+                '{n} asset affected, {down} down today',
+                '{n} assets affected, {down} down today',
+                {
+                  down: i.down_today,
+                },
+              ),
             ]),
             onPick: context.open
               ? (_s, i) => context.open(`site:${data.items[i].site}`)
@@ -452,7 +508,7 @@ function rowsOfWorkload(data) {
   return [
     ...data.people.map((p) => ({ ...p, label: personName(p), segment: `person:${p.id}` })),
     ...(data.unassigned.total
-      ? [{ ...data.unassigned, label: 'Unassigned', segment: 'UNASSIGNED' }]
+      ? [{ ...data.unassigned, label: t('Unassigned'), segment: 'UNASSIGNED' }]
       : []),
   ];
 }
@@ -461,15 +517,15 @@ function workloadTable(data, { drill }) {
   const rows = rowsOfWorkload(data);
   return {
     columns: [
-      { label: 'Person' },
+      { label: t('Person') },
       ...data.priorities.map((p) => ({
         label: valueLabel('work_order_priority', p),
         numeric: true,
       })),
-      { label: 'Unfinished', numeric: true },
-      { label: 'Hours left', numeric: true },
-      { label: 'Booked this week (h)', numeric: true },
-      { label: 'Capacity this week (h)', numeric: true },
+      { label: t('Unfinished'), numeric: true },
+      { label: t('Hours left'), numeric: true },
+      { label: t('Booked this week (h)'), numeric: true },
+      { label: t('Capacity this week (h)'), numeric: true },
     ],
     rows: rows.map((r) => [
       r.label,
@@ -495,10 +551,12 @@ function workloadTable(data, { drill }) {
 function workloadBody(data, context) {
   const rows = rowsOfWorkload(data);
   if (!rows.length) {
-    return { element: h('p', { class: 'empty-state' }, 'Nobody to show for these sites.') };
+    return { element: h('p', { class: 'empty-state' }, t('Nobody to show for these sites.')) };
   }
   const canvas = canvasFor(
-    `Stacked bar chart, unfinished work orders per person by priority. ${rows.map((r) => `${r.label}: ${r.total}`).join(', ')}.`,
+    t('Stacked bar chart, unfinished work orders per person by priority. {map}.', {
+      map: rows.map((r) => t('{label}: {value}', { label: r.label, value: r.total })).join(', '),
+    }),
   );
   const priorities = data.priorities.map((p) => [valueLabel('work_order_priority', p), STEPS[p]]);
   return {
@@ -519,9 +577,12 @@ function workloadBody(data, context) {
       h(
         'p',
         { class: 'widget-note' },
-        `Hours left: estimates minus the hours already worked. Booked: blocks of the week scheduler in ${data.week.replace('-W', ', week ')}.`,
+        t(
+          'Hours left: estimates minus the hours already worked. Booked: blocks of the week scheduler in {week}.',
+          { week: bucketKeyInText(data.week) },
+        ),
       ),
-      tableDetails(workloadTable(data, context), 'Unfinished work per person'),
+      tableDetails(workloadTable(data, context), t('Unfinished work per person')),
     ],
     legend: priorities.map(([label, step]) => [label, `--color-ordinal-${step}`]),
     charts: [
@@ -535,9 +596,14 @@ function workloadBody(data, context) {
               step: STEPS[p],
               values: rows.map((r) => r.counts[i]),
             })),
-            tips: rows.map(
-              (r) =>
-                `${r.total} · ${oneDecimal.format(r.hours_left)} h left${r.capacity ? ` · ${oneDecimal.format(r.booked)}/${oneDecimal.format(r.capacity)} h` : ''}`,
+            tips: rows.map((r) =>
+              t('{total} · {hours_left} h left{value}', {
+                total: r.total,
+                hours_left: oneDecimal.format(r.hours_left),
+                value: r.capacity
+                  ? ` · ${oneDecimal.format(r.booked)}/${oneDecimal.format(r.capacity)} h`
+                  : '',
+              }),
             ),
             onPick: context.open
               ? (series, i) => context.open(`${rows[i].segment}:${data.priorities[series]}`)
@@ -553,11 +619,11 @@ function workloadBody(data, context) {
 function accuracyTable(data, { drill }) {
   return {
     columns: [
-      { label: 'Trade' },
-      { label: 'Work orders', numeric: true },
-      { label: 'Estimated (h)', numeric: true },
-      { label: 'Actual (h)', numeric: true },
-      { label: 'Actual ÷ estimate', numeric: true },
+      { label: t('Trade') },
+      { label: t('Work orders'), numeric: true },
+      { label: t('Estimated (h)'), numeric: true },
+      { label: t('Actual (h)'), numeric: true },
+      { label: t('Actual ÷ estimate'), numeric: true },
     ],
     rows: data.items.map((i) => [
       valueLabel('category', i.category),
@@ -576,13 +642,17 @@ function accuracyBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        'No work order closed in this period has both an estimate and actual hours.',
+        t('No work order closed in this period has both an estimate and actual hours.'),
       ),
     };
   }
   const labels = data.items.map((i) => valueLabel('category', i.category));
   const canvas = canvasFor(
-    `Bar chart, actual hours divided by estimated hours per trade. ${data.items.map((i, n) => `${labels[n]}: ${ratioText(i.ratio)}`).join(', ')}.`,
+    t('Bar chart, actual hours divided by estimated hours per trade. {map}.', {
+      map: data.items
+        .map((i, n) => t('{label}: {value}', { label: labels[n], value: ratioText(i.ratio) }))
+        .join(', '),
+    }),
   );
   const total = data.ratio;
   return {
@@ -590,21 +660,24 @@ function accuracyBody(data, context) {
       h(
         'p',
         { class: 'widget-summary' },
-        'Work took ',
-        h('strong', {}, ratioText(total)),
-        total > 1.05
-          ? ' its estimate: estimates are too low.'
-          : total < 0.95
-            ? ' its estimate: estimates are too high.'
-            : ' its estimate: estimates are about right.',
+        tx(
+          total > 1.05
+            ? 'Work took {ratio} its estimate: estimates are too low.'
+            : total < 0.95
+              ? 'Work took {ratio} its estimate: estimates are too high.'
+              : 'Work took {ratio} its estimate: estimates are about right.',
+          { ratio: h('strong', {}, ratioText(total)) },
+        ),
       ),
       chartFrame(canvas, data.items.length * 36 + 36),
       h(
         'p',
         { class: 'widget-note' },
-        `Dashed line: 1.0×, the estimate. ${numberFormat.format(data.count)} closed work orders with both hours.`,
+        t('Dashed line: 1.0×, the estimate. {count} closed work orders with both hours.', {
+          count: numberFormat.format(data.count),
+        }),
       ),
-      tableDetails(accuracyTable(data, context), 'Estimates against actual hours, by trade'),
+      tableDetails(accuracyTable(data, context), t('Estimates against actual hours, by trade')),
     ],
     charts: [
       {
@@ -615,8 +688,11 @@ function accuracyBody(data, context) {
             values: data.items.map((i) => i.ratio),
             tips: data.items.map((i) => `${ratioText(i.ratio)} (${i.count})`),
             tooltips: data.items.map((i) => [
-              `${oneDecimal.format(i.actual)} h worked for ${oneDecimal.format(i.estimated)} h estimated`,
-              `${i.count} work order${i.count === 1 ? '' : 's'}`,
+              t('{actual} h worked for {estimated} h estimated', {
+                actual: oneDecimal.format(i.actual),
+                estimated: oneDecimal.format(i.estimated),
+              }),
+              tn(i.count, '{n} work order', '{n} work orders'),
             ]),
             tick: (v) => `${v}×`,
             reference: 1,
@@ -636,22 +712,25 @@ function segmentText(key, segment) {
   switch (key) {
     case 'response_times':
       return [
-        first === 'start' ? 'started' : 'closed',
+        first === 'start' ? t('started') : t('closed'),
         rest ? valueLabel('work_order_priority', rest) : null,
       ]
         .filter(Boolean)
         .join(', ');
     case 'request_service':
-      return { rejected: 'rejected', pending: 'waiting for review', done: 'done' }[first] ?? first;
+      return (
+        { rejected: t('rejected'), pending: t('waiting for review'), done: t('done') }[first] ??
+        first
+      );
     case 'bad_actors':
-      return first === 'critical' ? 'high and critical assets' : `asset ${rest}`;
+      return first === 'critical' ? t('high and critical assets') : t('asset {rest}', { rest });
     case 'critical_downtime':
       return rest ?? segment;
     case 'workload': {
       const [who, priority] =
         first === 'UNASSIGNED'
-          ? ['unassigned', rest]
-          : [`person ${rest?.split(':')[0]}`, rest?.split(':')[1]];
+          ? [t('unassigned'), rest]
+          : [t('person {split}', { split: rest?.split(':')[0] }), rest?.split(':')[1]];
       return [who, priority ? valueLabel('work_order_priority', priority) : null]
         .filter(Boolean)
         .join(', ');
@@ -678,16 +757,16 @@ for (const [key, widget] of Object.entries(PEOPLE_WIDGETS)) {
 
 /** Columns a widget adds to its exported records (from `dashboard` of each row). */
 export const EXTRA_COLUMNS = {
-  response_times: [['Hours', (r) => r.dashboard?.hours]],
+  response_times: [[t('Hours'), (r) => r.dashboard?.hours]],
   request_service: [
-    ['Hours to review', (r) => r.dashboard?.hours_to_review],
-    ['Hours to done', (r) => r.dashboard?.hours_to_done],
-    ['Reason rejected', (r) => r.review_note],
+    [t('Hours to review'), (r) => r.dashboard?.hours_to_review],
+    [t('Hours to done'), (r) => r.dashboard?.hours_to_done],
+    [t('Reason rejected'), (r) => r.review_note],
   ],
   repeat_failures: [
-    ['Previous work order', (r) => r.dashboard?.previous],
-    ['Days since it closed', (r) => r.dashboard?.days_since_previous],
+    [t('Previous work order'), (r) => r.dashboard?.previous],
+    [t('Days since it closed'), (r) => r.dashboard?.days_since_previous],
   ],
-  critical_downtime: [['Days broken down', (r) => r.dashboard?.days_down]],
-  estimate_accuracy: [['Actual ÷ estimate', (r) => r.dashboard?.ratio]],
+  critical_downtime: [[t('Days broken down'), (r) => r.dashboard?.days_down]],
+  estimate_accuracy: [[t('Actual ÷ estimate'), (r) => r.dashboard?.ratio]],
 };

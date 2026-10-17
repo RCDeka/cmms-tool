@@ -11,6 +11,7 @@ import { valueLabel } from './labels.js';
 import { placeIndex, placeOf, placePicker } from './places.js';
 import { formatHours, formatLoad, occurrenceBadge, planWarningText } from './planning.js';
 import { allowedWeeks, moveBlocker } from './planning-rules.js';
+import { t, tn } from './i18n.js';
 
 /** Frequencies offered first (spec §4), in weeks. */
 export const FREQUENCIES = [1, 2, 4, 8, 13, 26, 52];
@@ -18,14 +19,15 @@ export const FREQUENCIES = [1, 2, 4, 8, 13, 26, 52];
 /** "Every 13 weeks (quarterly)". Pure. */
 export function frequencyText(weeks) {
   const names = {
-    1: 'weekly',
-    2: 'every other week',
-    4: 'monthly',
-    13: 'quarterly',
-    26: 'twice a year',
-    52: 'yearly',
+    1: t('weekly'),
+    2: t('every other week'),
+    4: t('monthly'),
+    13: t('quarterly'),
+    26: t('twice a year'),
+    52: t('yearly'),
   };
-  return `Every ${weeks} week${weeks === 1 ? '' : 's'}${names[weeks] ? ` (${names[weeks]})` : ''}`;
+  const every = tn(weeks, 'Every {n} week', 'Every {n} weeks');
+  return names[weeks] ? `${every} (${names[weeks]})` : every;
 }
 
 /** Default tolerance, as the server computes it: a quarter of the period, at most 8. Pure. */
@@ -74,32 +76,33 @@ export function planBody(raw, { editing, assetId }) {
 /** Checks of the plan form before asking the server. Pure. */
 export function checkPlanForm(body, { hasAssetCode }) {
   const errors = {};
-  if (!body.title) errors.title = 'Required';
-  if (!hasAssetCode && !body.location_id) errors.location_id = 'Choose an asset or a place';
-  if (!hasAssetCode && !body.category) errors.category = 'Required without an asset';
+  if (!body.title) errors.title = t('Required');
+  if (!hasAssetCode && !body.location_id) errors.location_id = t('Choose an asset or a place');
+  if (!hasAssetCode && !body.category) errors.category = t('Required without an asset');
   if (
     !(body.estimated_hours > 0) ||
     body.estimated_hours * 2 !== Math.round(body.estimated_hours * 2)
   ) {
-    errors.estimated_hours = 'Hours in steps of half an hour';
+    errors.estimated_hours = t('Hours in steps of half an hour');
   }
   if (
     !Number.isInteger(body.frequency_weeks) ||
     body.frequency_weeks < 1 ||
     body.frequency_weeks > 104
   ) {
-    errors.frequency_weeks = 'Between 1 and 104 weeks';
+    errors.frequency_weeks = t('Between 1 and 104 weeks');
   }
-  if (!/^\d{4}-W\d{2}$/.test(body.anchor_week ?? '')) errors.anchor_week = 'Choose a week';
+  if (!/^\d{4}-W\d{2}$/.test(body.anchor_week ?? '')) errors.anchor_week = t('Choose a week');
   if (body.end_week && body.anchor_week && body.end_week < body.anchor_week) {
-    errors.end_week = 'The end week cannot be before the first visit.';
+    errors.end_week = t('The end week cannot be before the first visit.');
   }
   if (((body.season_from_week ?? null) === null) !== ((body.season_to_week ?? null) === null)) {
-    errors[body.season_from_week ? 'season_to_week' : 'season_from_week'] =
-      'Give both ends of the season, or neither.';
+    errors[body.season_from_week ? 'season_to_week' : 'season_from_week'] = t(
+      'Give both ends of the season, or neither.',
+    );
   }
   if (body.performed_by === 'CONTRACTOR' && !body.supplier) {
-    errors.supplier = 'Name the contractor who performs the visits.';
+    errors.supplier = t('Name the contractor who performs the visits.');
   }
   return errors;
 }
@@ -154,15 +157,19 @@ function actionForm(id, label, control, buttonText, submit, { hint = null, dange
 /** "Weeks 47 to 53 (± 3 weeks around week 50)". Pure. */
 export function allowedText(plan, occurrence, currentWeek) {
   const { from, to } = allowedWeeks(plan, occurrence, currentWeek);
-  if (from > to) return 'No week is available any more.';
+  if (from > to) return t('No week is available any more.');
   const n = (week) => Number(week.slice(6));
   const range =
-    from === to ? `Only ${formatWeek(from)}` : `${formatWeek(from)} to ${formatWeek(to)}`;
+    from === to
+      ? t('Only {from}', { from: formatWeek(from) })
+      : t('{from} to {to}', { from: formatWeek(from), to: formatWeek(to) });
   const why =
     plan.type === 'REGULATORY'
-      ? `regulatory: earlier only, up to week ${n(occurrence.due_week)}`
-      : `± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'} around week ${n(occurrence.due_week)}`;
-  return `Allowed: ${range} (${why}).`;
+      ? t('regulatory: earlier only, up to week {due_week}', { due_week: n(occurrence.due_week) })
+      : tn(plan.tolerance_weeks, '± {n} week around week {due}', '± {n} weeks around week {due}', {
+          due: n(occurrence.due_week),
+        });
+  return t('Allowed: {range} ({why}).', { range, why });
 }
 
 /** Move, skip and restore of the visit shown (supervisors, admins). */
@@ -180,7 +187,7 @@ function occurrenceActions(plan, occurrence, { currentWeek, onMove, onSkip, onRe
               class: 'button button-secondary online-only',
               onClick: () => onRestore(occurrence),
             },
-            'Restore this visit',
+            t('Restore this visit'),
           ),
         );
   }
@@ -190,12 +197,12 @@ function occurrenceActions(plan, occurrence, { currentWeek, onMove, onSkip, onRe
   return [
     actionForm(
       'occ-move-week',
-      'Move this visit to week',
+      t('Move this visit to week'),
       week,
-      'Move visit',
+      t('Move visit'),
       async (value) => {
-        if (!/^\d{4}-W\d{2}$/.test(value)) return 'Choose a week.';
-        if (value === occurrence.week) return 'The visit is already in this week.';
+        if (!/^\d{4}-W\d{2}$/.test(value)) return t('Choose a week.');
+        if (value === occurrence.week) return t('The visit is already in this week.');
         const blocker = moveBlocker(plan, occurrence, value, currentWeek);
         if (blocker) return blocker.message;
         return onMove({
@@ -212,12 +219,12 @@ function occurrenceActions(plan, occurrence, { currentWeek, onMove, onSkip, onRe
     ),
     actionForm(
       'occ-skip-reason',
-      'Skip this visit',
+      t('Skip this visit'),
       reason,
-      'Skip visit',
-      async (value) => (value ? onSkip(occurrence, value) : 'Say why the visit is skipped.'),
+      t('Skip visit'),
+      async (value) => (value ? onSkip(occurrence, value) : t('Say why the visit is skipped.')),
       {
-        hint: 'e.g. "Building closed for works". The visit leaves the load; it can be restored.',
+        hint: t('e.g. "Building closed for works". The visit leaves the load; it can be restored.'),
         danger: true,
       },
     ),
@@ -228,20 +235,24 @@ function occurrenceBox(plan, occurrence, actions) {
   return h(
     'section',
     { class: 'occurrence-box', 'aria-labelledby': 'occurrence-heading' },
-    h('h3', { id: 'occurrence-heading' }, `Visit of ${formatWeek(occurrence.week)}`),
+    h(
+      'h3',
+      { id: 'occurrence-heading' },
+      t('Visit of {week}', { week: formatWeek(occurrence.week) }),
+    ),
     h(
       'dl',
       { class: 'detail-fields' },
-      field('Status', occurrenceBadge(occurrence.status)),
-      field('Due week', formatWeek(occurrence.due_week)),
+      field(t('Status'), occurrenceBadge(occurrence.status)),
+      field(t('Due week'), formatWeek(occurrence.due_week)),
       field(
-        'Planned week',
+        t('Planned week'),
         occurrence.week === occurrence.due_week
           ? formatWeek(occurrence.week)
-          : `${formatWeek(occurrence.week)} (moved)`,
+          : t('{week} (moved)', { week: formatWeek(occurrence.week) }),
       ),
       field(
-        'Work order',
+        t('Work order'),
         occurrence.work_order
           ? h(
               'a',
@@ -249,17 +260,24 @@ function occurrenceBox(plan, occurrence, actions) {
               `${occurrence.work_order.number} (${valueLabel('work_order_status', occurrence.work_order.status)})`,
             )
           : occurrence.status === 'PLANNED'
-            ? `Created ${plan.release_weeks_ahead ?? 4} weeks before the visit`
+            ? tn(
+                plan.release_weeks_ahead ?? 4,
+                'Created {n} week before the visit',
+                'Created {n} weeks before the visit',
+              )
             : null,
       ),
-      field('Reason for skipping', occurrence.skip_reason),
+      field(t('Reason for skipping'), occurrence.skip_reason),
       field(
-        'Warning',
+        t('Warning'),
         [
           occurrence.warnings?.includes('OUT_OF_SEASON')
-            ? `⚠ Outside the season (weeks ${plan.season_from_week} to ${plan.season_to_week}). `
+            ? t('⚠ Outside the season (weeks {season_from_week} to {season_to_week}). ', {
+                season_from_week: plan.season_from_week,
+                season_to_week: plan.season_to_week,
+              })
             : '',
-          occurrence.warnings?.includes('BLOCKED_WEEK') ? '⚠ In a blocked week.' : '',
+          occurrence.warnings?.includes('BLOCKED_WEEK') ? t('⚠ In a blocked week.') : '',
         ].join('') || null,
       ),
     ),
@@ -273,15 +291,15 @@ function seriesForm(plan, { onMove }) {
   return h(
     'section',
     { class: 'plan-series', 'aria-labelledby': 'plan-series-heading' },
-    h('h3', { id: 'plan-series-heading' }, 'Move the series'),
+    h('h3', { id: 'plan-series-heading' }, t('Move the series')),
     actionForm(
       'plan-anchor-week',
-      'First visit of the series',
+      t('First visit of the series'),
       week,
-      'Move series',
+      t('Move series'),
       async (value) => {
-        if (!/^\d{4}-W\d{2}$/.test(value)) return 'Choose a week.';
-        if (value === plan.anchor_week) return 'The series already starts this week.';
+        if (!/^\d{4}-W\d{2}$/.test(value)) return t('Choose a week.');
+        if (value === plan.anchor_week) return t('The series already starts this week.');
         // An anchor in the past is fine: the series goes on from this week on its own weeks.
         return onMove({
           kind: 'series',
@@ -293,7 +311,9 @@ function seriesForm(plan, { onMove }) {
         });
       },
       {
-        hint: 'The planned visits follow; visits moved by hand keep their offset; visits with a work order stay.',
+        hint: t(
+          'The planned visits follow; visits moved by hand keep their offset; visits with a work order stay.',
+        ),
       },
     ),
   );
@@ -316,7 +336,7 @@ export function renderPlanPanel(
     panelHeader(`${plan.code} — ${plan.title}`, onClose),
     plan.is_active
       ? null
-      : h('p', { class: 'detail-message' }, 'This plan is inactive: it creates no more visits.'),
+      : h('p', { class: 'detail-message' }, t('This plan is inactive: it creates no more visits.')),
     occurrence
       ? occurrenceBox(
           { ...plan, release_weeks_ahead: settings.release_weeks_ahead },
@@ -331,7 +351,7 @@ export function renderPlanPanel(
           h(
             'button',
             { type: 'button', class: 'button button-secondary online-only', onClick: onEdit },
-            'Edit plan',
+            t('Edit plan'),
           ),
         )
       : null,
@@ -339,10 +359,10 @@ export function renderPlanPanel(
     h(
       'dl',
       { class: 'detail-fields' },
-      field('Type', valueLabel('work_order_type', plan.type)),
-      field('Trade', valueLabel('category', plan.category)),
+      field(t('Type'), valueLabel('work_order_type', plan.type)),
+      field(t('Trade'), valueLabel('category', plan.category)),
       field(
-        'Asset',
+        t('Asset'),
         plan.asset
           ? h(
               'a',
@@ -351,34 +371,44 @@ export function renderPlanPanel(
             )
           : null,
       ),
-      field('Site', plan.site),
-      field('Place', plan.place),
-      field('Exact location', plan.location),
-      field('Hours per visit', [formatHours(plan.estimated_hours), warning ? ` ⚠ ${warning}` : '']),
-      field('Frequency', frequencyText(plan.frequency_weeks)),
-      field('First visit', formatWeek(plan.anchor_week)),
-      field('Last week', plan.end_week ? formatWeek(plan.end_week) : 'Open-ended'),
-      field('Calendar', valueLabel('schedule_mode', plan.schedule_mode)),
-      field('Tolerance', `± ${plan.tolerance_weeks} week${plan.tolerance_weeks === 1 ? '' : 's'}`),
+      field(t('Site'), plan.site),
+      field(t('Place'), plan.place),
+      field(t('Exact location'), plan.location),
+      field(t('Hours per visit'), [
+        formatHours(plan.estimated_hours),
+        warning ? ` ⚠ ${warning}` : '',
+      ]),
+      field(t('Frequency'), frequencyText(plan.frequency_weeks)),
+      field(t('First visit'), formatWeek(plan.anchor_week)),
+      field(t('Last week'), plan.end_week ? formatWeek(plan.end_week) : t('Open-ended')),
+      field(t('Calendar'), valueLabel('schedule_mode', plan.schedule_mode)),
+      field(t('Tolerance'), tn(plan.tolerance_weeks, '± {n} week', '± {n} weeks')),
       field(
-        'Season',
-        plan.season_from_week ? `Weeks ${plan.season_from_week} to ${plan.season_to_week}` : null,
+        t('Season'),
+        plan.season_from_week
+          ? t('Weeks {season_from_week} to {season_to_week}', {
+              season_from_week: plan.season_from_week,
+              season_to_week: plan.season_to_week,
+            })
+          : null,
       ),
       field(
-        'Done by',
-        plan.performed_by === 'CONTRACTOR' ? `Contractor: ${plan.supplier}` : 'Internal team',
+        t('Done by'),
+        plan.performed_by === 'CONTRACTOR'
+          ? t('Contractor: {supplier}', { supplier: plan.supplier })
+          : t('Internal team'),
       ),
-      field('Instructions', plan.description),
-      field('Created by', plan.created_by ? personName(plan.created_by) : null),
+      field(t('Instructions'), plan.description),
+      field(t('Created by'), plan.created_by ? personName(plan.created_by) : null),
       field(
-        'Last modified',
-        `${formatDateTime(plan.updated_at)}${plan.updated_by ? ` by ${personName(plan.updated_by)}` : ''}`,
+        t('Last modified'),
+        `${formatDateTime(plan.updated_at)}${plan.updated_by ? t(' by {updated_by}', { updated_by: personName(plan.updated_by) }) : ''}`,
       ),
     ),
     h(
       'section',
       { class: 'plan-visits', 'aria-labelledby': 'plan-visits-heading' },
-      h('h3', { id: 'plan-visits-heading' }, 'Next visits'),
+      h('h3', { id: 'plan-visits-heading' }, t('Next visits')),
       plan.occurrences.length
         ? h(
             'ul',
@@ -403,7 +433,7 @@ export function renderPlanPanel(
               ),
             ),
           )
-        : h('p', { class: 'muted' }, 'No visit planned.'),
+        : h('p', { class: 'muted' }, t('No visit planned.')),
     ),
   );
 }
@@ -473,14 +503,14 @@ export function renderPlanForm(
         assetCode.focus();
       },
     },
-    'Browse assets…',
+    t('Browse assets…'),
   );
   const performer = select(
     'performed_by',
     PERFORMERS.map((p) => [p, valueLabel('performed_by', p)]),
   );
   const supplier = input('supplier', { maxlength: '150' });
-  const supplierRow = formRow('p-supplier', 'Contractor', supplier, { required: true });
+  const supplierRow = formRow('p-supplier', t('Contractor'), supplier, { required: true });
   supplierRow.hidden = performer.value !== 'CONTRACTOR';
   performer.addEventListener('change', () => {
     supplierRow.hidden = performer.value !== 'CONTRACTOR';
@@ -498,8 +528,8 @@ export function renderPlanForm(
     ? h('input', { name: 'is_active', type: 'checkbox', checked: plan.is_active })
     : null;
 
-  const assetRow = formRow('p-asset_code', 'Asset code', assetCode, {
-    hint: 'Type a code or browse the assets. The place and trade then follow the asset.',
+  const assetRow = formRow('p-asset_code', t('Asset code'), assetCode, {
+    hint: t('Type a code or browse the assets. The place and trade then follow the asset.'),
   });
   const pick = h('div', { class: 'asset-pick' });
   assetCode.before(pick);
@@ -520,49 +550,49 @@ export function renderPlanForm(
       },
     },
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
-    h('p', { class: 'form-help' }, 'Fields marked * are required.'),
-    formRow('p-title', 'What is done', input('title', { maxlength: '200' }), {
+    h('p', { class: 'form-help' }, t('Fields marked * are required.')),
+    formRow('p-title', t('What is done'), input('title', { maxlength: '200' }), {
       required: true,
-      hint: 'e.g. "Quarterly service, Tower A chiller"',
+      hint: t('e.g. "Quarterly service, Tower A chiller"'),
     }),
     formRow(
       'p-type',
-      'Type',
+      t('Type'),
       select(
         'type',
-        PLAN_TYPES.map((t) => [t, valueLabel('work_order_type', t)]),
+        PLAN_TYPES.map((type) => [type, valueLabel('work_order_type', type)]),
       ),
       {
         required: true,
-        hint: 'Regulatory visits have a legal deadline.',
+        hint: t('Regulatory visits have a legal deadline.'),
       },
     ),
     assetRow,
     h(
       'div',
       { class: 'form-row' },
-      h('label', { for: 'p-location_id' }, 'Place'),
+      h('label', { for: 'p-location_id' }, t('Place')),
       h(
         'div',
         { class: 'form-control' },
         place.element,
-        h('p', { class: 'field-hint' }, 'Without an asset: the site, or a place in it.'),
+        h('p', { class: 'field-hint' }, t('Without an asset: the site, or a place in it.')),
         h('p', { id: 'p-location_id-error', class: 'field-error' }),
       ),
     ),
     formRow(
       'p-category',
-      'Trade',
+      t('Trade'),
       select(
         'category',
         CATEGORIES.map((c) => [c, valueLabel('category', c)]),
-        { empty: "The asset's trade" },
+        { empty: t("The asset's trade") },
       ),
     ),
-    formRow('p-location', 'Exact location', input('location', { maxlength: '200' })),
+    formRow('p-location', t('Exact location'), input('location', { maxlength: '200' })),
     formRow(
       'p-estimated_hours',
-      'Hours per visit',
+      t('Hours per visit'),
       input('estimated_hours', {
         type: 'number',
         min: '0.5',
@@ -572,12 +602,12 @@ export function renderPlanForm(
       }),
       {
         required: true,
-        hint: 'In half hours. Above 3 h 30 the visit will be split into several blocks.',
+        hint: t('In half hours. Above 3 h 30 the visit will be split into several blocks.'),
       },
     ),
     formRow(
       'p-frequency_weeks',
-      'Every (weeks)',
+      t('Every (weeks)'),
       input('frequency_weeks', {
         type: 'number',
         min: '1',
@@ -585,11 +615,11 @@ export function renderPlanForm(
         step: '1',
         list: 'p-frequency-list',
       }),
-      { required: true, hint: '1, 2, 4, 8, 13 (quarterly), 26 or 52 (yearly).' },
+      { required: true, hint: t('1, 2, 4, 8, 13 (quarterly), 26 or 52 (yearly).') },
     ),
     formRow(
       'p-anchor_week',
-      'First visit',
+      t('First visit'),
       input('anchor_week', {
         type: 'week',
         value: plan?.anchor_week ?? defaultWeek,
@@ -598,54 +628,56 @@ export function renderPlanForm(
       {
         required: true,
         hint: editing
-          ? 'Changing it moves every planned visit.'
-          : 'The next visits follow every period.',
+          ? t('Changing it moves every planned visit.')
+          : t('The next visits follow every period.'),
       },
     ),
     formRow(
       'p-end_week',
-      'Last week',
+      t('Last week'),
       input('end_week', { type: 'week', placeholder: '2027-W52' }),
       {
-        hint: 'End of the contract. Empty: no end.',
+        hint: t('End of the contract. Empty: no end.'),
       },
     ),
     formRow(
       'p-schedule_mode',
-      'Calendar',
+      t('Calendar'),
       select(
         'schedule_mode',
         SCHEDULE_MODES.map((m) => [m, valueLabel('schedule_mode', m)]),
       ),
-      { hint: '"From the last visit": the next visits restart from the week a visit is closed.' },
+      {
+        hint: t('"From the last visit": the next visits restart from the week a visit is closed.'),
+      },
     ),
     formRow(
       'p-tolerance_weeks',
-      'Tolerance (weeks)',
+      t('Tolerance (weeks)'),
       input('tolerance_weeks', { type: 'number', min: '0', max: '8', step: '1' }),
-      { hint: 'How far one visit may move. Empty: a quarter of the period, at most 8.' },
+      { hint: t('How far one visit may move. Empty: a quarter of the period, at most 8.') },
     ),
     formRow(
       'p-season_from_week',
-      'Season from week',
+      t('Season from week'),
       input('season_from_week', { type: 'number', min: '1', max: '53', step: '1' }),
     ),
     formRow(
       'p-season_to_week',
-      'Season to week',
+      t('Season to week'),
       input('season_to_week', { type: 'number', min: '1', max: '53', step: '1' }),
-      { hint: 'e.g. 14 to 22 for checks before summer. May run over the new year (45 to 10).' },
+      { hint: t('e.g. 14 to 22 for checks before summer. May run over the new year (45 to 10).') },
     ),
-    formRow('p-performed_by', 'Done by', performer, { required: true }),
+    formRow('p-performed_by', t('Done by'), performer, { required: true }),
     supplierRow,
     formRow(
       'p-description',
-      'Instructions',
+      t('Instructions'),
       h('textarea', { name: 'description', rows: '3', maxlength: '4000' }, plan?.description ?? ''),
     ),
     active
-      ? formRow('p-is_active', 'Active', active, {
-          hint: 'An inactive plan keeps its history and creates no more visits.',
+      ? formRow('p-is_active', t('Active'), active, {
+          hint: t('An inactive plan keeps its history and creates no more visits.'),
         })
       : null,
     frequencyList,
@@ -655,14 +687,21 @@ export function renderPlanForm(
       h(
         'button',
         { type: 'submit', class: 'button button-primary online-only' },
-        editing ? 'Save' : 'Create plan',
+        editing ? t('Save') : t('Create plan'),
       ),
-      h('button', { type: 'button', class: 'button button-secondary', onClick: onClose }, 'Cancel'),
+      h(
+        'button',
+        { type: 'button', class: 'button button-secondary', onClick: onClose },
+        t('Cancel'),
+      ),
     ),
   );
   replaceChildren(
     container,
-    panelHeader(editing ? `Edit ${plan.code}` : 'New maintenance plan', onClose),
+    panelHeader(
+      editing ? t('Edit {code}', { code: plan.code }) : t('New maintenance plan'),
+      onClose,
+    ),
     form,
   );
 }
@@ -687,7 +726,7 @@ export function renderBlockedWeeksPanel(
   const site = h(
     'select',
     { name: 'site' },
-    h('option', { value: '' }, 'Every site'),
+    h('option', { value: '' }, t('Every site')),
     sites.map((s) => h('option', { value: s }, s)),
   );
   const form = canEdit
@@ -705,40 +744,46 @@ export function renderBlockedWeeksPanel(
             );
           },
         },
-        h('h3', {}, 'Block a week'),
+        h('h3', {}, t('Block a week')),
         h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
         formRow(
           'bw-week',
-          'Week',
+          t('Week'),
           h('input', { name: 'week', type: 'week', placeholder: '2026-W52' }),
           {
             required: true,
           },
         ),
-        formRow('bw-site', 'Site', site),
+        formRow('bw-site', t('Site'), site),
         formRow(
           'bw-reason',
-          'Reason',
+          t('Reason'),
           h('input', { name: 'reason', type: 'text', maxlength: '200' }),
           {
             required: true,
-            hint: 'e.g. "Data center change freeze", "Summer holidays".',
+            hint: t('e.g. "Data center change freeze", "Summer holidays".'),
           },
         ),
         h(
           'div',
           { class: 'form-actions' },
-          h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Block week'),
+          h(
+            'button',
+            { type: 'submit', class: 'button button-primary online-only' },
+            t('Block week'),
+          ),
         ),
       )
     : null;
   replaceChildren(
     container,
-    panelHeader('Blocked weeks', onClose),
+    panelHeader(t('Blocked weeks'), onClose),
     h(
       'p',
       {},
-      'Visits should avoid these weeks. The planner warns about visits planned in them (⛔ in the week header, ⚠ on the visit), it does not refuse them.',
+      t(
+        'Visits should avoid these weeks. The planner warns about visits planned in them (⛔ in the week header, ⚠ on the visit), it does not refuse them.',
+      ),
     ),
     items.length
       ? h(
@@ -749,30 +794,35 @@ export function renderBlockedWeeksPanel(
               'li',
               {},
               h('strong', {}, formatWeek(item.week)),
-              ` · ${item.site ?? 'Every site'} · ${item.reason}`,
+              ` · ${item.site ?? t('Every site')} · ${item.reason}`,
               canEdit
                 ? h(
                     'button',
                     {
                       type: 'button',
                       class: 'button button-secondary online-only',
-                      'aria-label': `Remove ${formatWeek(item.week)}, ${item.site ?? 'every site'}`,
+                      'aria-label': t('Remove {week}, {value}', {
+                        week: formatWeek(item.week),
+                        value: item.site ?? t('every site'),
+                      }),
                       onClick: () => onRemove(item),
                     },
-                    'Remove',
+                    t('Remove'),
                   )
                 : null,
             ),
           ),
         )
-      : h('p', { class: 'muted' }, 'No week is blocked from this week on.'),
+      : h('p', { class: 'muted' }, t('No week is blocked from this week on.')),
     form,
   );
 }
 
 /** 'Week 45' (the year only when it differs from the current week's). Pure. */
 const shortWeek = (week, currentWeek) =>
-  week.slice(0, 4) === currentWeek.slice(0, 4) ? `Week ${Number(week.slice(6))}` : formatWeek(week);
+  week.slice(0, 4) === currentWeek.slice(0, 4)
+    ? t('Week {week}', { week: Number(week.slice(6)) })
+    : formatWeek(week);
 
 /**
  * Highest load of one trade in one week (the trade imbalance the assistant lowers): the
@@ -806,11 +856,11 @@ export function proposalSummary(before, after, capacityByCategory) {
   });
   const work = (side) => side.tiles.workload;
   return [
-    line('Peak week load', work(before).peak_load ?? 0, work(after).peak_load ?? 0, formatLoad),
-    line('Weeks over capacity', work(before).weeks_over, work(after).weeks_over, String),
-    line('Tight weeks (85–100%)', work(before).weeks_tight, work(after).weeks_tight, String),
+    line(t('Peak week load'), work(before).peak_load ?? 0, work(after).peak_load ?? 0, formatLoad),
+    line(t('Weeks over capacity'), work(before).weeks_over, work(after).weeks_over, String),
+    line(t('Tight weeks (85–100%)'), work(before).weeks_tight, work(after).weeks_tight, String),
     line(
-      'Busiest week of one trade',
+      t('Busiest week of one trade'),
       peakTradeLoad(before.figures, capacityByCategory),
       peakTradeLoad(after.figures, capacityByCategory),
       formatLoad,
@@ -868,13 +918,19 @@ export function renderSuggestionsPanel(
                 'span',
                 { class: 'muted' },
                 `${m.title} · ${valueLabel('category', m.category)} · ${formatHours(m.estimated_hours)}${
-                  m.type === 'REGULATORY' ? ' · § regulatory' : ''
+                  m.type === 'REGULATORY' ? t(' · § regulatory') : ''
                 }`,
               ),
               h(
                 'span',
                 { class: 'muted' },
-                `Due ${week(m.due_week)}. Load now: ${week(m.from)} ${formatLoad(loadOf(m.from))}, ${week(m.to)} ${formatLoad(loadOf(m.to))}.`,
+                t('Due {week}. Load now: {week2} {loadOf}, {week3} {loadOf2}.', {
+                  week: week(m.due_week),
+                  week2: week(m.from),
+                  loadOf: formatLoad(loadOf(m.from)),
+                  week3: week(m.to),
+                  loadOf2: formatLoad(loadOf(m.to)),
+                }),
               ),
             ),
           );
@@ -884,27 +940,35 @@ export function renderSuggestionsPanel(
   const count = moves.filter((m) => selected.has(m.occurrence_id)).length;
   replaceChildren(
     container,
-    panelHeader('Suggested moves', onClose),
+    panelHeader(t('Suggested moves'), onClose),
     moves.length
       ? [
           h(
             'p',
             {},
-            `${moves.length} visit${moves.length === 1 ? '' : 's'} could move to smooth the weeks shown. Each stays within its plan's tolerance and season, outside blocked weeks, and a regulatory visit only moves earlier. Nothing is saved until you accept.`,
+            tn(
+              moves.length,
+              "{n} visit could move to smooth the weeks shown. Each stays within its plan's tolerance and season, outside blocked weeks, and a regulatory visit only moves earlier. Nothing is saved until you accept.",
+              "{n} visits could move to smooth the weeks shown. Each stays within its plan's tolerance and season, outside blocked weeks, and a regulatory visit only moves earlier. Nothing is saved until you accept.",
+            ),
           ),
           h(
             'table',
             { class: 'proposal-summary' },
-            h('caption', { class: 'visually-hidden' }, 'Figures before and after the moves ticked'),
+            h(
+              'caption',
+              { class: 'visually-hidden' },
+              t('Figures before and after the moves ticked'),
+            ),
             h(
               'thead',
               {},
               h(
                 'tr',
                 {},
-                h('th', { scope: 'col' }, 'Figure'),
-                h('th', { scope: 'col' }, 'Now'),
-                h('th', { scope: 'col' }, 'With the moves ticked'),
+                h('th', { scope: 'col' }, t('Figure')),
+                h('th', { scope: 'col' }, t('Now')),
+                h('th', { scope: 'col' }, t('With the moves ticked')),
               ),
             ),
             h(
@@ -920,7 +984,7 @@ export function renderSuggestionsPanel(
                     'td',
                     { class: `numeric${row.better ? ' is-better' : ''}` },
                     row.after,
-                    row.better ? h('span', { class: 'visually-hidden' }, ' (lower)') : null,
+                    row.better ? h('span', { class: 'visually-hidden' }, t(' (lower)')) : null,
                   ),
                 ),
               ),
@@ -936,7 +1000,7 @@ export function renderSuggestionsPanel(
                 class: 'button button-secondary',
                 onClick: () => onToggleAll(true),
               },
-              'Tick all',
+              t('Tick all'),
             ),
             h(
               'button',
@@ -945,7 +1009,7 @@ export function renderSuggestionsPanel(
                 class: 'button button-secondary',
                 onClick: () => onToggleAll(false),
               },
-              'Untick all',
+              t('Untick all'),
             ),
           ),
           list,
@@ -960,19 +1024,21 @@ export function renderSuggestionsPanel(
                 disabled: !count,
                 onClick: onAccept,
               },
-              `Accept ${count} move${count === 1 ? '' : 's'}`,
+              tn(count, 'Accept {n} move', 'Accept {n} moves'),
             ),
             h(
               'button',
               { type: 'button', class: 'button button-secondary', onClick: onClose },
-              'Discard',
+              t('Discard'),
             ),
           ),
         ]
       : h(
           'p',
           {},
-          'The weeks shown are already as smooth as the plans allow: no visit can move to lower the load within its rules.',
+          t(
+            'The weeks shown are already as smooth as the plans allow: no visit can move to lower the load within its rules.',
+          ),
         ),
   );
 }

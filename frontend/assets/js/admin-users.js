@@ -7,6 +7,7 @@ import { CATEGORIES, ROLES } from './enums.js';
 import { formatDateTime } from './format.js';
 import { valueLabel } from './labels.js';
 import { debounce } from './save-modes.js';
+import { t, tn, tx } from './i18n.js';
 
 /** Pause after the last key before the list follows the search, as in the other lists. */
 const SEARCH_DELAY_MS = 350;
@@ -38,14 +39,14 @@ export function parseUserFilters(query) {
 export function checkUserForm(values, { creating }) {
   const errors = {};
   if (creating && !/^[a-z0-9._-]{3,50}$/.test((values.username ?? '').trim().toLowerCase())) {
-    errors.username = 'Letters, digits, dot, dash or underscore, 3 to 50 characters';
+    errors.username = t('Letters, digits, dot, dash or underscore, 3 to 50 characters');
   }
   for (const field of ['first_name', 'last_name']) {
-    if (!String(values[field] ?? '').trim()) errors[field] = 'Required';
+    if (!String(values[field] ?? '').trim()) errors[field] = t('Required');
   }
-  if (!values.role) errors.role = 'Required';
+  if (!values.role) errors.role = t('Required');
   if (creating && String(values.password ?? '').length < PASSWORD_MIN_LENGTH) {
-    errors.password = `At least ${PASSWORD_MIN_LENGTH} characters`;
+    errors.password = t('At least {PASSWORD_MIN_LENGTH} characters', { PASSWORD_MIN_LENGTH });
   }
   return errors;
 }
@@ -60,7 +61,7 @@ const activeBadge = (active) =>
   h(
     'span',
     { class: badgeClass('active', String(active), active ? 'success' : 'neutral') },
-    active ? 'Active' : 'Inactive',
+    active ? t('Active') : t('Inactive'),
   );
 
 /**
@@ -80,21 +81,21 @@ export function renderUserList(
     type: 'search',
     maxlength: '100',
     value: filters.q ?? '',
-    placeholder: 'Name or username',
+    placeholder: t('Name or username'),
   });
   const role = h(
     'select',
     { id: 'users-role' },
-    h('option', { value: '' }, 'Any'),
+    h('option', { value: '' }, t('Any')),
     ROLES.map((r) => h('option', { value: r }, valueLabel('role', r))),
   );
   role.value = filters.role ?? '';
   const active = h(
     'select',
     { id: 'users-active' },
-    h('option', { value: '' }, 'Any'),
-    h('option', { value: 'true' }, 'Active'),
-    h('option', { value: 'false' }, 'Inactive'),
+    h('option', { value: '' }, t('Any')),
+    h('option', { value: 'true' }, t('Active')),
+    h('option', { value: 'false' }, t('Inactive')),
   );
   active.value = filters.active ?? '';
   const read = () => ({
@@ -141,13 +142,13 @@ export function renderUserList(
   );
   replaceChildren(
     container,
-    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, 'Users'),
+    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, t('Users')),
     h(
       'form',
       {
         class: 'filter-bar',
         role: 'search',
-        'aria-label': 'Search users',
+        'aria-label': t('Search users'),
         onSubmit: (event) => {
           event.preventDefault();
           apply();
@@ -156,25 +157,26 @@ export function renderUserList(
       h(
         'div',
         { class: 'filter-field filter-search' },
-        h('label', { for: 'users-q' }, 'Search'),
+        h('label', { for: 'users-q' }, t('Search')),
         search,
       ),
-      h('div', { class: 'filter-field' }, h('label', { for: 'users-role' }, 'Role'), role),
-      h('div', { class: 'filter-field' }, h('label', { for: 'users-active' }, 'Account'), active),
+      h('div', { class: 'filter-field' }, h('label', { for: 'users-role' }, t('Role')), role),
+      h(
+        'div',
+        { class: 'filter-field' },
+        h('label', { for: 'users-active' }, t('Account')),
+        active,
+      ),
     ),
     h(
       'div',
       { class: 'table-header' },
       paginationTop,
-      h(
-        'p',
-        { class: 'table-count', role: 'status' },
-        `${data.total} ${data.total === 1 ? 'user' : 'users'}`,
-      ),
+      h('p', { class: 'table-count', role: 'status' }, tn(data.total, '{n} user', '{n} users')),
       h(
         'a',
         { href: '/admin/users/new', 'data-link': true, class: 'button button-primary' },
-        '+ New user',
+        t('+ New user'),
       ),
     ),
     data.items.length
@@ -184,22 +186,30 @@ export function renderUserList(
           h(
             'table',
             { class: 'data-table users-table' },
-            h('caption', { class: 'visually-hidden' }, `Users, page ${data.page} of ${data.pages}`),
+            h(
+              'caption',
+              { class: 'visually-hidden' },
+              t('Users, page {page} of {pages}', { page: data.page, pages: data.pages }),
+            ),
             h(
               'thead',
               {},
               h(
                 'tr',
                 {},
-                ['Name', 'Username', 'Role', 'Site', 'Account'].map((t) =>
-                  h('th', { scope: 'col', class: t === 'Site' ? 'col-secondary' : null }, t),
-                ),
+                [
+                  [t('Name')],
+                  [t('Username')],
+                  [t('Role')],
+                  [t('Site'), 'col-secondary'],
+                  [t('Account')],
+                ].map(([label, cls]) => h('th', { scope: 'col', class: cls ?? null }, label)),
               ),
             ),
             h('tbody', {}, rows),
           ),
         )
-      : h('p', { class: 'empty-state' }, 'No user matches this search.'),
+      : h('p', { class: 'empty-state' }, t('No user matches this search.')),
     pagination,
   );
 }
@@ -262,7 +272,7 @@ function userFields(user, refs) {
   const role = h(
     'select',
     { name: 'role' },
-    user ? null : h('option', { value: '' }, '— Choose —'),
+    user ? null : h('option', { value: '' }, t('— Choose —')),
     ROLES.map((r) => h('option', { value: r }, valueLabel('role', r))),
   );
   role.value = user?.role ?? '';
@@ -274,7 +284,7 @@ function userFields(user, refs) {
   const specialty = h(
     'select',
     { name: 'specialty' },
-    h('option', { value: '' }, '— None —'),
+    h('option', { value: '' }, t('— None —')),
     CATEGORIES.map((c) => h('option', { value: c }, valueLabel('category', c))),
   );
   specialty.value = user?.specialty ?? '';
@@ -301,33 +311,35 @@ function userFields(user, refs) {
 
   const elements = [
     username
-      ? formRow('u-username', 'Username', username, {
+      ? formRow('u-username', t('Username'), username, {
           required: true,
-          hint: 'Used to log in; cannot be changed later.',
+          hint: t('Used to log in; cannot be changed later.'),
         })
       : null,
-    formRow('u-first_name', 'First name', first, { required: true }),
-    formRow('u-last_name', 'Last name', last, { required: true }),
-    formRow('u-role', 'Role', role, { required: true }),
-    formRow('u-site', 'Site', site),
+    formRow('u-first_name', t('First name'), first, { required: true }),
+    formRow('u-last_name', t('Last name'), last, { required: true }),
+    formRow('u-role', t('Role'), role, { required: true }),
+    formRow('u-site', t('Site'), site),
     h(
       'datalist',
       { id: 'user-site-options' },
       (refs.sites ?? []).map((s) => h('option', { value: s })),
     ),
-    formRow('u-specialty', 'Specialty', specialty),
-    formRow('u-power_user', 'Auto-save', power, {
-      hint: 'Changes are saved when leaving a record (power user).',
+    formRow('u-specialty', t('Specialty'), specialty),
+    formRow('u-power_user', t('Auto-save'), power, {
+      hint: t('Changes are saved when leaving a record (power user).'),
     }),
     active
-      ? formRow('u-is_active', 'Account active', active, {
-          hint: 'Inactive users cannot log in; their sessions end at once.',
+      ? formRow('u-is_active', t('Account active'), active, {
+          hint: t('Inactive users cannot log in; their sessions end at once.'),
         })
       : null,
     password
-      ? formRow('u-password', 'Password', password, {
+      ? formRow('u-password', t('Password'), password, {
           required: true,
-          hint: `At least ${PASSWORD_MIN_LENGTH} characters. Give it to the user privately.`,
+          hint: t('At least {PASSWORD_MIN_LENGTH} characters. Give it to the user privately.', {
+            PASSWORD_MIN_LENGTH,
+          }),
         })
       : null,
   ].filter(Boolean);
@@ -354,12 +366,12 @@ export const panelHeader = (title, onClose) =>
     h(
       'button',
       { type: 'button', class: 'button button-secondary back-to-list', onClick: onClose },
-      '← Back to list',
+      t('← Back to list'),
     ),
     h('h2', { class: 'detail-title', tabindex: '-1' }, title),
     h(
       'button',
-      { type: 'button', class: 'icon-button', 'aria-label': 'Close details', onClick: onClose },
+      { type: 'button', class: 'icon-button', 'aria-label': t('Close details'), onClick: onClose },
       h('span', { 'aria-hidden': 'true' }, '✕'),
     ),
   );
@@ -386,7 +398,7 @@ export function renderUserPanel(
         const values = read();
         const errors = checkUserForm(values, { creating: false });
         if (Object.keys(errors).length)
-          return showErrors(form, errors, 'Check the highlighted fields.');
+          return showErrors(form, errors, t('Check the highlighted fields.'));
         onSave(values, form);
       },
     },
@@ -394,14 +406,14 @@ export function renderUserPanel(
     h(
       'div',
       { class: 'form-row is-readonly' },
-      h('span', { class: 'field-label' }, 'Username'),
+      h('span', { class: 'field-label' }, t('Username')),
       h('div', { class: 'field-value' }, user.username),
     ),
     elements,
     h(
       'div',
       { class: 'form-actions' },
-      h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Save'),
+      h('button', { type: 'submit', class: 'button button-primary online-only' }, t('Save')),
     ),
   );
 
@@ -422,14 +434,14 @@ export function renderUserPanel(
         if (newPassword.value.length < PASSWORD_MIN_LENGTH) {
           return showErrors(
             resetForm,
-            { password: `At least ${PASSWORD_MIN_LENGTH} characters` },
+            { password: t('At least {PASSWORD_MIN_LENGTH} characters', { PASSWORD_MIN_LENGTH }) },
             '',
           );
         }
         onResetPassword(newPassword.value, resetForm);
       },
     },
-    h('h3', { id: 'reset-title' }, 'Reset password'),
+    h('h3', { id: 'reset-title' }, t('Reset password')),
     // Lets password managers know whose password this is.
     h('input', {
       type: 'text',
@@ -440,8 +452,8 @@ export function renderUserPanel(
       readonly: true,
     }),
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
-    formRow('u-new-password', 'New password', newPassword, {
-      hint: "The user's open sessions end at once.",
+    formRow('u-new-password', t('New password'), newPassword, {
+      hint: t("The user's open sessions end at once."),
     }),
     h(
       'div',
@@ -449,7 +461,7 @@ export function renderUserPanel(
       h(
         'button',
         { type: 'submit', class: 'button button-secondary online-only' },
-        'Set new password',
+        t('Set new password'),
       ),
     ),
   );
@@ -463,7 +475,9 @@ export function renderUserPanel(
       roleBadge(user.role),
       ' ',
       activeBadge(user.is_active),
-      user.updated_at ? ` · Last changed ${formatDateTime(user.updated_at)}` : '',
+      user.updated_at
+        ? t(' · Last changed {updated_at}', { updated_at: formatDateTime(user.updated_at) })
+        : '',
     ),
     form,
     // A reset of one's own password would end this session: the account page keeps it (BR-U8).
@@ -471,9 +485,9 @@ export function renderUserPanel(
       ? h(
           'p',
           { class: 'form-help' },
-          'To change your own password, use ',
-          h('a', { href: '/account', 'data-link': true }, 'Change my password'),
-          '.',
+          tx('To change your own password, use {link}.', {
+            link: h('a', { href: '/account', 'data-link': true }, t('Change my password')),
+          }),
         )
       : resetForm,
   );
@@ -495,18 +509,18 @@ export function renderUserCreate(container, { refs, onClose, onCreate }) {
         const values = read();
         const errors = checkUserForm(values, { creating: true });
         if (Object.keys(errors).length)
-          return showErrors(form, errors, 'Check the highlighted fields.');
+          return showErrors(form, errors, t('Check the highlighted fields.'));
         onCreate(values, form);
       },
     },
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
-    h('p', { class: 'form-help' }, 'Fields marked * are required.'),
+    h('p', { class: 'form-help' }, t('Fields marked * are required.')),
     elements,
     h(
       'div',
       { class: 'form-actions' },
-      h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Create user'),
+      h('button', { type: 'submit', class: 'button button-primary online-only' }, t('Create user')),
     ),
   );
-  replaceChildren(container, panelHeader('New user', onClose), form);
+  replaceChildren(container, panelHeader(t('New user'), onClose), form);
 }

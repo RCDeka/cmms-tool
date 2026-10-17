@@ -208,6 +208,14 @@
   display: none;
 }
 
+/* Small phones too: the French names (Précédente, Dernière…) would put the pager on three
+   lines (D85). */
+@media (max-width: 480px) {
+  .pager-label {
+    display: none;
+  }
+}
+
 .table-header {
   flex-wrap: wrap;
   align-items: center;
@@ -454,7 +462,7 @@
   }
 
   .wo-table .col-due-on:not(:empty)::before {
-    content: 'Due ';
+    content: attr(data-before);
   }
 
   .wo-table .col-site,

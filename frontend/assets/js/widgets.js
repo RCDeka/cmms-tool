@@ -26,6 +26,7 @@ import { valueLabel } from './labels.js';
 import { COMPLIANCE_WIDGETS, VISIT_COLUMNS } from './widgets-compliance.js';
 import { FLOW_WIDGETS, tableElement } from './widgets-flow.js';
 import { EXTRA_COLUMNS, PEOPLE_WIDGETS } from './widgets-people.js';
+import { t } from './i18n.js';
 
 /** Widgets defined in their own modules (Phases 22 to 24). */
 const MODULE_WIDGETS = { ...FLOW_WIDGETS, ...COMPLIANCE_WIDGETS, ...PEOPLE_WIDGETS };
@@ -35,14 +36,14 @@ export const DEFAULT_FILTERS = { period: 30, sites: [], categories: [] };
 
 /** Sidebar groups, in order. */
 export const WIDGET_GROUPS = [
-  'Key figures',
-  'Flow and backlog',
-  'Compliance',
-  'Responsiveness',
-  'Assets',
-  'People',
-  'Work orders',
-  'Lists',
+  t('Key figures'),
+  t('Flow and backlog'),
+  t('Compliance'),
+  t('Responsiveness'),
+  t('Assets'),
+  t('People'),
+  t('Work orders'),
+  t('Lists'),
 ];
 
 /**
@@ -53,8 +54,8 @@ export const WIDGET_GROUPS = [
 export const WIDGETS = [
   {
     key: 'open_work_orders',
-    label: 'Open work orders',
-    group: 'Key figures',
+    label: t('Open work orders'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -62,8 +63,8 @@ export const WIDGETS = [
   },
   {
     key: 'in_progress_work_orders',
-    label: 'Work orders in progress',
-    group: 'Key figures',
+    label: t('Work orders in progress'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -71,8 +72,8 @@ export const WIDGETS = [
   },
   {
     key: 'closed_this_month',
-    label: 'Closed this month',
-    group: 'Key figures',
+    label: t('Closed this month'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -80,8 +81,8 @@ export const WIDGETS = [
   },
   {
     key: 'overdue_work_orders',
-    label: 'Overdue work orders',
-    group: 'Key figures',
+    label: t('Overdue work orders'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -90,8 +91,8 @@ export const WIDGETS = [
   },
   {
     key: 'assets_broken_down',
-    label: 'Assets broken down',
-    group: 'Key figures',
+    label: t('Assets broken down'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'assets',
@@ -100,8 +101,8 @@ export const WIDGETS = [
   },
   {
     key: 'requests_to_review',
-    label: 'Staff requests to review',
-    group: 'Key figures',
+    label: t('Staff requests to review'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -110,8 +111,8 @@ export const WIDGETS = [
   },
   {
     key: 'requests_awaiting_reply',
-    label: 'Requests waiting for a reply',
-    group: 'Key figures',
+    label: t('Requests waiting for a reply'),
+    group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -120,8 +121,8 @@ export const WIDGETS = [
   },
   {
     key: 'pending_conflicts',
-    label: 'Conflicts to arbitrate',
-    group: 'Key figures',
+    label: t('Conflicts to arbitrate'),
+    group: t('Key figures'),
     size: 'S',
     filters: [],
     rows: null,
@@ -130,32 +131,32 @@ export const WIDGETS = [
   },
   {
     key: 'opened_vs_closed',
-    label: 'Opened vs closed',
-    group: 'Flow and backlog',
+    label: t('Opened vs closed'),
+    group: t('Flow and backlog'),
     size: 'L',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'backlog_age',
-    label: 'Backlog by age and priority',
-    group: 'Flow and backlog',
+    label: t('Backlog by age and priority'),
+    group: t('Flow and backlog'),
     size: 'M',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'backlog_weeks',
-    label: 'Backlog in weeks of work',
-    group: 'Flow and backlog',
+    label: t('Backlog in weeks of work'),
+    group: t('Flow and backlog'),
     size: 'M',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'planned_vs_reactive',
-    label: 'Planned vs reactive work',
-    group: 'Flow and backlog',
+    label: t('Planned vs reactive work'),
+    group: t('Flow and backlog'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
@@ -163,16 +164,16 @@ export const WIDGETS = [
   },
   {
     key: 'pm_compliance',
-    label: 'Preventive maintenance compliance',
-    group: 'Compliance',
+    label: t('Preventive maintenance compliance'),
+    group: t('Compliance'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'visits',
   },
   {
     key: 'regulatory_late',
-    label: 'Regulatory visits late',
-    group: 'Compliance',
+    label: t('Regulatory visits late'),
+    group: t('Compliance'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -180,40 +181,40 @@ export const WIDGETS = [
   },
   {
     key: 'schedule_compliance',
-    label: 'Week schedule kept',
-    group: 'Compliance',
+    label: t('Week schedule kept'),
+    group: t('Compliance'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'contractor_scorecard',
-    label: 'Contractors',
-    group: 'Compliance',
+    label: t('Contractors'),
+    group: t('Compliance'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'visits',
   },
   {
     key: 'response_times',
-    label: 'Time to start and to close',
-    group: 'Responsiveness',
+    label: t('Time to start and to close'),
+    group: t('Responsiveness'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'request_service',
-    label: 'Staff requests',
-    group: 'Responsiveness',
+    label: t('Staff requests'),
+    group: t('Responsiveness'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'bad_actors',
-    label: 'Assets with the most breakdowns',
-    group: 'Assets',
+    label: t('Assets with the most breakdowns'),
+    group: t('Assets'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
@@ -221,8 +222,8 @@ export const WIDGETS = [
   },
   {
     key: 'repeat_failures',
-    label: 'Repeat failures',
-    group: 'Assets',
+    label: t('Repeat failures'),
+    group: t('Assets'),
     size: 'S',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
@@ -230,49 +231,56 @@ export const WIDGETS = [
   },
   {
     key: 'critical_downtime',
-    label: 'Critical assets out of service',
-    group: 'Assets',
+    label: t('Critical assets out of service'),
+    group: t('Assets'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'assets',
   },
   {
     key: 'workload',
-    label: 'Workload per person',
-    group: 'People',
+    label: t('Workload per person'),
+    group: t('People'),
     size: 'L',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'estimate_accuracy',
-    label: 'Estimates vs actual hours',
-    group: 'People',
+    label: t('Estimates vs actual hours'),
+    group: t('People'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
   {
     key: 'by_category',
-    label: 'Work orders by category',
-    group: 'Work orders',
+    label: t('Work orders by category'),
+    group: t('Work orders'),
     size: 'M',
     filters: ['period', 'sites'],
     rows: 'work_orders',
   },
   {
     key: 'by_status',
-    label: 'Work orders by status',
-    group: 'Work orders',
+    label: t('Work orders by status'),
+    group: t('Work orders'),
     size: 'M',
     filters: ['period', 'sites', 'categories'],
     rows: 'work_orders',
   },
-  { key: 'my_work', label: 'My work', group: 'Lists', size: 'M', filters: [], rows: 'work_orders' },
+  {
+    key: 'my_work',
+    label: t('My work'),
+    group: t('Lists'),
+    size: 'M',
+    filters: [],
+    rows: 'work_orders',
+  },
   {
     key: 'recent_activity',
-    label: 'Recent activity',
-    group: 'Lists',
+    label: t('Recent activity'),
+    group: t('Lists'),
     size: 'M',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
@@ -290,13 +298,13 @@ const isTile = (def) => def.size === 'S';
 
 /** "Paris La Défense Headquarters" or "3 sites". Pure. */
 function sitesText(sites) {
-  return sites.length === 1 ? sites[0] : `${sites.length} sites`;
+  return sites.length === 1 ? sites[0] : t('{length} sites', { length: sites.length });
 }
 
 function categoriesText(categories) {
   return categories.length === 1
     ? valueLabel('category', categories[0])
-    : `${categories.length} trades`;
+    : t('{length} trades', { length: categories.length });
 }
 
 /**
@@ -309,18 +317,16 @@ function categoriesText(categories) {
 export function widgetScope(def, filters) {
   const parts = [];
   const uses = (name) => def.filters.includes(name);
-  if (uses('period')) parts.push(`Last ${filters.period} days`);
+  if (uses('period')) parts.push(t('Last {period} days', { period: filters.period }));
   if (uses('sites') && filters.sites.length) parts.push(sitesText(filters.sites));
   if (uses('categories') && filters.categories.length) {
     parts.push(categoriesText(filters.categories));
   }
-  const unused = [];
-  if (!uses('sites') && filters.sites.length) unused.push('site');
-  if (!uses('categories') && filters.categories.length) unused.push('trade');
-  if (unused.length) {
-    const names = unused.join(' and ');
-    parts.push(`${names[0].toUpperCase()}${names.slice(1)} filter not used`);
-  }
+  const sitesUnused = !uses('sites') && filters.sites.length;
+  const tradesUnused = !uses('categories') && filters.categories.length;
+  if (sitesUnused && tradesUnused) parts.push(t('Site and trade filter not used'));
+  else if (sitesUnused) parts.push(t('Site filter not used'));
+  else if (tradesUnused) parts.push(t('Trade filter not used'));
   return parts.join(' · ');
 }
 
@@ -370,7 +376,7 @@ function segmentLabel(key, segment) {
   if (MODULE_WIDGETS[key]) return MODULE_WIDGETS[key].segment(segment);
   if (key === 'by_category') return valueLabel('category', segment);
   if (key === 'by_status') return valueLabel('work_order_status', segment);
-  if (key === 'my_work') return segment === 'today' ? 'today' : 'next 7 days';
+  if (key === 'my_work') return segment === 'today' ? t('today') : t('next 7 days');
   return segment;
 }
 
@@ -387,7 +393,7 @@ export function drillLabel(drill, period) {
   if (!def) return null;
   const segment = at < 0 ? '' : segmentLabel(key, drill.slice(at + 1));
   const days = def.filters.includes('period')
-    ? ` (last ${period ?? DEFAULT_FILTERS.period} days)`
+    ? t(' (last {value} days)', { value: period ?? DEFAULT_FILTERS.period })
     : '';
   return `${def.label}${segment ? `: ${segment}` : ''}${days}`;
 }
@@ -408,22 +414,22 @@ export function widgetTable(key, data, { myWorkRange = 'today', options, drill }
   if (MODULE_WIDGETS[key]) return MODULE_WIDGETS[key].table(data, { options, drill });
   if (isTile(def)) {
     return {
-      columns: [{ label: 'Figure' }, { label: 'Value', numeric: true }],
+      columns: [{ label: t('Figure') }, { label: t('Value'), numeric: true }],
       rows: [[def.label, data.value]],
     };
   }
   switch (key) {
     case 'by_category':
       return {
-        columns: [{ label: 'Category' }, { label: 'Work orders', numeric: true }],
+        columns: [{ label: t('Category') }, { label: t('Work orders'), numeric: true }],
         rows: chartRows({ by_category: data.items }).map((r) => [r.label, r.count]),
       };
     case 'by_status':
       return {
         columns: [
-          { label: 'Status' },
-          { label: 'Work orders', numeric: true },
-          { label: 'Share', numeric: true },
+          { label: t('Status') },
+          { label: t('Work orders'), numeric: true },
+          { label: t('Share'), numeric: true },
         ],
         rows: statusRows({ by_status: data.items }).map((r) => [
           r.label,
@@ -433,20 +439,20 @@ export function widgetTable(key, data, { myWorkRange = 'today', options, drill }
       };
     case 'my_work':
       return {
-        columns: [{ label: 'Work order' }, { label: 'Priority' }, { label: 'Due' }],
+        columns: [{ label: t('Work order') }, { label: t('Priority') }, { label: t('Due') }],
         rows: (myWorkRange === 'week' ? data.week_items : data.today_items).map((wo) => [
           workOrderTitle(wo),
           valueLabel('work_order_priority', wo.priority),
-          wo.due_on ? formatDate(wo.due_on) : 'No due date',
+          wo.due_on ? formatDate(wo.due_on) : t('No due date'),
         ]),
       };
     case 'recent_activity':
       return {
         columns: [
-          { label: 'Work order' },
-          { label: 'Status' },
-          { label: 'Updated' },
-          { label: 'By' },
+          { label: t('Work order') },
+          { label: t('Status') },
+          { label: t('Updated') },
+          { label: t('By') },
         ],
         rows: data.items.map((wo) => [
           workOrderTitle(wo),
@@ -463,35 +469,35 @@ export function widgetTable(key, data, { myWorkRange = 'today', options, drill }
 /** Columns of the Work orders (CSV) and Assets (CSV) exports: label → value. */
 const RECORD_COLUMNS = {
   work_orders: [
-    ['Number', (wo) => wo.number],
-    ['Title', (wo) => wo.title],
-    ['Type', (wo) => valueLabel('work_order_type', wo.type)],
-    ['Status', (wo) => valueLabel('work_order_status', wo.status)],
-    ['Priority', (wo) => valueLabel('work_order_priority', wo.priority)],
-    ['Category', (wo) => valueLabel('category', wo.category ?? 'UNSPECIFIED')],
-    ['Site', (wo) => wo.site],
-    ['Location', (wo) => wo.location],
-    ['Asset', (wo) => wo.asset?.code],
-    ['Assignee', (wo) => (wo.assignee ? personName(wo.assignee) : '')],
-    ['Created', (wo) => wo.created_on],
-    ['Due', (wo) => wo.due_on],
-    ['Started', (wo) => wo.started_on],
-    ['Closed', (wo) => wo.closed_on],
-    ['Estimated hours', (wo) => wo.estimated_hours],
-    ['Actual hours', (wo) => wo.actual_hours],
+    [t('Number'), (wo) => wo.number],
+    [t('Title'), (wo) => wo.title],
+    [t('Type'), (wo) => valueLabel('work_order_type', wo.type)],
+    [t('Status'), (wo) => valueLabel('work_order_status', wo.status)],
+    [t('Priority'), (wo) => valueLabel('work_order_priority', wo.priority)],
+    [t('Category'), (wo) => valueLabel('category', wo.category ?? 'UNSPECIFIED')],
+    [t('Site'), (wo) => wo.site],
+    [t('Location'), (wo) => wo.location],
+    [t('Asset'), (wo) => wo.asset?.code],
+    [t('Assignee'), (wo) => (wo.assignee ? personName(wo.assignee) : '')],
+    [t('Created'), (wo) => wo.created_on],
+    [t('Due'), (wo) => wo.due_on],
+    [t('Started'), (wo) => wo.started_on],
+    [t('Closed'), (wo) => wo.closed_on],
+    [t('Estimated hours'), (wo) => wo.estimated_hours],
+    [t('Actual hours'), (wo) => wo.actual_hours],
   ],
   assets: [
-    ['Code', (a) => a.code],
-    ['Name', (a) => a.name],
-    ['Site', (a) => a.site],
-    ['Place', (a) => a.place],
-    ['Category', (a) => valueLabel('category', a.category)],
-    ['Criticality', (a) => valueLabel('criticality', a.criticality)],
-    ['Status', (a) => valueLabel('asset_status', a.status)],
-    ['Brand', (a) => a.brand],
-    ['Model', (a) => a.model],
-    ['Serial number', (a) => a.serial_number],
-    ['Last serviced', (a) => a.last_serviced_on],
+    [t('Code'), (a) => a.code],
+    [t('asset|Name'), (a) => a.name],
+    [t('Site'), (a) => a.site],
+    [t('Place'), (a) => a.place],
+    [t('Category'), (a) => valueLabel('category', a.category)],
+    [t('Criticality'), (a) => valueLabel('criticality', a.criticality)],
+    [t('Status'), (a) => valueLabel('asset_status', a.status)],
+    [t('Brand'), (a) => a.brand],
+    [t('Model'), (a) => a.model],
+    [t('Serial number'), (a) => a.serial_number],
+    [t('Last serviced'), (a) => a.last_serviced_on],
   ],
 };
 
@@ -517,7 +523,7 @@ function tableDetails(table, caption) {
   return h(
     'details',
     { class: 'chart-table' },
-    h('summary', {}, 'Show as a table'),
+    h('summary', {}, t('Show as a table')),
     tableElement(table, caption),
   );
 }
@@ -557,7 +563,7 @@ export function widgetBody(key, data, context) {
             class: 'kpi-value widget-value',
             href: tileHref(def, context.filters) ?? drillHref(def, null, context.filters),
             'data-link': true,
-            'aria-label': `${numberFormat.format(data.value)}: open the list`,
+            'aria-label': t('{value}: open the list', { value: numberFormat.format(data.value) }),
           },
           numberFormat.format(data.value),
         ),
@@ -565,7 +571,7 @@ export function widgetBody(key, data, context) {
           ? h(
               'span',
               { class: 'widget-tile-note' },
-              `${percentFormat.format(data.share)} of the corrective work`,
+              t('{share} of the corrective work', { share: percentFormat.format(data.share) }),
             )
           : null,
         flagged
@@ -573,7 +579,7 @@ export function widgetBody(key, data, context) {
               'span',
               { class: 'badge badge-tone-warning kpi-flag' },
               h('span', { 'aria-hidden': 'true' }, '⚠'),
-              'Needs attention',
+              t('Needs attention'),
             )
           : null,
       ),
@@ -582,8 +588,10 @@ export function widgetBody(key, data, context) {
   switch (key) {
     case 'by_category': {
       const rows = chartRows({ by_category: data.items });
-      const body = categoryChartBody(rows, `${def.label}, last ${data.period} days`, (r) =>
-        drill(r.code),
+      const body = categoryChartBody(
+        rows,
+        t('{label}, last {period} days', { label: def.label, period: data.period }),
+        (r) => drill(r.code),
       );
       const pick = open ? (r) => open(r.code) : undefined;
       return {
@@ -623,7 +631,7 @@ export function widgetBody(key, data, context) {
         ],
       };
     default:
-      return { element: h('p', { class: 'empty-state' }, 'No figures for this widget.') };
+      return { element: h('p', { class: 'empty-state' }, t('No figures for this widget.')) };
   }
 }
 

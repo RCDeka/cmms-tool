@@ -7,6 +7,7 @@
 import { formRow, panelHeader, showErrors } from './admin-users.js';
 import { badgeClass, h, replaceChildren } from './dom.js';
 import { formatDateTime } from './format.js';
+import { t, tn } from './i18n.js';
 
 /** Joins the names of a path: "Tower A › B1 › Plant room 2" (as the server does). */
 export const PATH_SEPARATOR = ' › ';
@@ -31,7 +32,7 @@ export function placeIndex(tree) {
     if (!children.has(key)) children.set(key, []);
     children.get(key).push(p);
   }
-  const types = new Map(tree.level_types.map((t) => [t.id, t]));
+  const types = new Map(tree.level_types.map((type) => [type.id, type]));
   const index = { byId, children, types, items: tree.items };
   indexes.set(tree, index);
   return index;
@@ -69,7 +70,7 @@ export const recordPlace = (record) => [record.site, record.place].filter(Boolea
  */
 export function levelLabel(index, places) {
   const ids = new Set(places.map((p) => p.level_type_id));
-  return ids.size === 1 ? (index.types.get([...ids][0])?.name ?? 'Place') : 'Place';
+  return ids.size === 1 ? (index.types.get([...ids][0])?.name ?? t('Place')) : t('Place');
 }
 
 /**
@@ -136,7 +137,7 @@ export function placePicker({
     type: 'search',
     class: 'place-picker-search',
     autocomplete: 'off',
-    placeholder: 'Search, e.g. “12.02” or “Tower A L3”',
+    placeholder: t('Search, e.g. “12.02” or “Tower A L3”'),
     'aria-controls': `${id}-results`,
   });
   const results = h('ul', { id: `${id}-results`, class: 'place-picker-results', hidden: true });
@@ -165,16 +166,20 @@ export function placePicker({
       const select = h('select', { id: selectId, 'data-level': String(level) });
       const blank =
         parentId === null || autoPick
-          ? '— Choose —'
-          : `— ${index.byId.get(parentId)?.name ?? ''} itself —`;
+          ? t('— Choose —')
+          : t('— {value} itself —', { value: index.byId.get(parentId)?.name ?? '' });
       select.append(
         h('option', { value: '' }, blank),
         ...choices.map((c) =>
-          h('option', { value: String(c.id) }, c.is_active ? c.name : `${c.name} (not in use)`),
+          h(
+            'option',
+            { value: String(c.id) },
+            c.is_active ? c.name : t('{name} (not in use)', { name: c.name }),
+          ),
         ),
       );
       if (notListed && deepest)
-        select.append(h('option', { value: NOT_LISTED }, 'Not in the list'));
+        select.append(h('option', { value: NOT_LISTED }, t('Not in the list')));
       select.value = unlisted && level === chain.length ? NOT_LISTED : String(chain[level] ?? '');
       select.disabled = disabled;
       select.addEventListener('change', () => {
@@ -184,7 +189,7 @@ export function placePicker({
         render(level + 1);
         onChange();
       });
-      const label = level === 0 && scope === null ? 'Site' : levelLabel(index, choices);
+      const label = level === 0 && scope === null ? t('Site') : levelLabel(index, choices);
       levels.append(
         h(
           'div',
@@ -225,7 +230,9 @@ export function placePicker({
           ),
         ),
       ),
-      search.value.trim() && !found.length ? h('li', { class: 'muted' }, 'No place found.') : null,
+      search.value.trim() && !found.length
+        ? h('li', { class: 'muted' }, t('No place found.'))
+        : null,
     );
     results.hidden = !search.value.trim();
   }
@@ -257,7 +264,7 @@ export function placePicker({
     h(
       'div',
       { class: 'place-picker-find' },
-      h('label', { for: searchId, class: 'place-picker-label' }, 'Find a place'),
+      h('label', { for: searchId, class: 'place-picker-label' }, t('Find a place')),
       search,
       results,
     ),
@@ -317,12 +324,12 @@ export function parsePlaceFilters(query) {
 /** Checks of the place form (the server checks again). Pure. */
 export function checkPlaceForm(values, { site }) {
   const errors = {};
-  if (!values.name.trim()) errors.name = 'Required';
-  else if (values.name.includes('›')) errors.name = 'The character › is not allowed';
+  if (!values.name.trim()) errors.name = t('Required');
+  else if (values.name.includes('›')) errors.name = t('The character › is not allowed');
   if (values.code && !/^[A-Z0-9]{1,10}$/.test(values.code)) {
-    errors.code = 'Capitals and digits only, 1 to 10 characters';
+    errors.code = t('Capitals and digits only, 1 to 10 characters');
   }
-  if (!site && !values.level_type_id) errors.level_type_id = 'Required';
+  if (!site && !values.level_type_id) errors.level_type_id = t('Required');
   return errors;
 }
 
@@ -330,7 +337,7 @@ const activeBadge = (active) =>
   h(
     'span',
     { class: badgeClass('active', String(active), active ? 'success' : 'neutral') },
-    active ? 'In use' : 'Not in use',
+    active ? t('In use') : t('Not in use'),
   );
 
 /** Places open in the tree, kept while the page is used (sites open by default). */
@@ -352,7 +359,7 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
     type: 'search',
     maxlength: '100',
     value: filters.q ?? '',
-    placeholder: 'Name or path, e.g. “Tower A L12”',
+    placeholder: t('Name or path, e.g. “Tower A L12”'),
   });
   const all = h('input', { id: 'places-all', type: 'checkbox', class: 'checkbox' });
   all.checked = Boolean(filters.all);
@@ -402,7 +409,7 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
                 type: 'button',
                 class: 'place-toggle',
                 'aria-expanded': String(open),
-                'aria-label': `${open ? 'Fold' : 'Unfold'} ${p.name} (${kids.length})`,
+                'aria-label': `${open ? t('Fold') : t('Unfold')} ${p.name} (${kids.length})`,
                 onClick: () => {
                   if (p.parent_id === null) {
                     if (open) closedSites.add(p.id);
@@ -440,13 +447,13 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
 
   replaceChildren(
     container,
-    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, 'Places'),
+    h('h2', { class: 'table-title visually-hidden', tabindex: '-1' }, t('Places')),
     h(
       'form',
       {
         class: 'filter-bar',
         role: 'search',
-        'aria-label': 'Search places',
+        'aria-label': t('Search places'),
         onSubmit: (event) => {
           event.preventDefault();
           onFilter(read());
@@ -455,14 +462,14 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
       h(
         'div',
         { class: 'filter-field filter-search' },
-        h('label', { for: 'places-q' }, 'Search'),
+        h('label', { for: 'places-q' }, t('Search')),
         search,
       ),
       h(
         'div',
         { class: 'filter-field filter-check' },
         all,
-        h('label', { for: 'places-all' }, 'Show places not in use'),
+        h('label', { for: 'places-all' }, t('Show places not in use')),
       ),
     ),
     h(
@@ -472,8 +479,8 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
         'p',
         { class: 'table-count', role: 'status' },
         found
-          ? `${found.length} ${found.length === 1 ? 'place matches' : 'places match'}`
-          : `${count} ${count === 1 ? 'place' : 'places'}`,
+          ? tn(found.length, '{n} place matches', '{n} places match')
+          : tn(count, '{n} place', '{n} places'),
       ),
       canAddSite
         ? h(
@@ -483,7 +490,7 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
               'data-link': true,
               class: 'button button-secondary',
             },
-            'Level types',
+            t('Level types'),
           )
         : null,
       canAddSite
@@ -494,7 +501,7 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
               'data-link': true,
               class: 'button button-primary',
             },
-            '+ New site',
+            t('+ New site'),
           )
         : null,
     ),
@@ -513,8 +520,8 @@ export function renderPlaceTree(container, { index, filters, selectedId, canAddS
                 ),
               ),
           )
-        : h('p', { class: 'empty-state' }, 'No place matches this search.')
-      : (branch(null) ?? h('p', { class: 'empty-state' }, 'No place yet.')),
+        : h('p', { class: 'empty-state' }, t('No place matches this search.'))
+      : (branch(null) ?? h('p', { class: 'empty-state' }, t('No place yet.'))),
   );
 }
 
@@ -535,11 +542,17 @@ function placeFields(index, place, { site }) {
     : h(
         'select',
         { name: 'level_type_id' },
-        h('option', { value: '' }, '— Choose —'),
+        h('option', { value: '' }, t('— Choose —')),
         [...index.types.values()]
-          .filter((t) => t.id !== SITE_TYPE && (t.is_active || t.id === place?.level_type_id))
-          .map((t) =>
-            h('option', { value: String(t.id) }, t.is_active ? t.name : `${t.name} (not in use)`),
+          .filter(
+            (type) => type.id !== SITE_TYPE && (type.is_active || type.id === place?.level_type_id),
+          )
+          .map((type) =>
+            h(
+              'option',
+              { value: String(type.id) },
+              type.is_active ? type.name : t('{name} (not in use)', { name: type.name }),
+            ),
           ),
       );
   if (type) type.value = place ? String(place.level_type_id) : '';
@@ -550,15 +563,17 @@ function placeFields(index, place, { site }) {
       ...(type && { level_type_id: type.value ? Number(type.value) : null }),
     }),
     elements: [
-      formRow('pl-name', site ? 'Site' : 'Name', name, {
+      formRow('pl-name', site ? t('Site') : t('Name'), name, {
         required: true,
         hint: site
-          ? 'Records copy the site’s name: it can change only while nothing uses the site.'
-          : 'The name people use, e.g. “Tower A”, “L12” or “Meeting room 12.02”.',
+          ? t('Records copy the site’s name: it can change only while nothing uses the site.')
+          : t('The name people use, e.g. “Tower A”, “L12” or “Meeting room 12.02”.'),
       }),
-      type ? formRow('pl-level_type_id', 'Level type', type, { required: true }) : null,
-      formRow('pl-code', 'Code', code, {
-        hint: 'Optional, for asset codes: capitals and digits, e.g. “2” for Tower 2, “01” for the first basement.',
+      type ? formRow('pl-level_type_id', t('Level type'), type, { required: true }) : null,
+      formRow('pl-code', t('Code'), code, {
+        hint: t(
+          'Optional, for asset codes: capitals and digits, e.g. “2” for Tower 2, “01” for the first basement.',
+        ),
       }),
     ],
   };
@@ -583,7 +598,7 @@ export function renderPlaceCreate(container, { index, parent, onClose, onCreate 
         const values = fields.read();
         const errors = checkPlaceForm(values, { site });
         if (Object.keys(errors).length) {
-          return showErrors(form, errors, 'Check the highlighted fields.');
+          return showErrors(form, errors, t('Check the highlighted fields.'));
         }
         onCreate({ parent_id: parent?.id ?? null, ...values }, form);
       },
@@ -593,8 +608,12 @@ export function renderPlaceCreate(container, { index, parent, onClose, onCreate 
       'p',
       { class: 'form-help' },
       site
-        ? 'A site is the top of a branch: an office tower, a branch, a data center. Fields marked * are required.'
-        : `In ${fullPath(index, parent.id)}. Fields marked * are required.`,
+        ? t(
+            'A site is the top of a branch: an office tower, a branch, a data center. Fields marked * are required.',
+          )
+        : t('In {fullPath}. Fields marked * are required.', {
+            fullPath: fullPath(index, parent.id),
+          }),
     ),
     fields.elements,
     h(
@@ -603,11 +622,11 @@ export function renderPlaceCreate(container, { index, parent, onClose, onCreate 
       h(
         'button',
         { type: 'submit', class: 'button button-primary online-only' },
-        site ? 'Create site' : 'Create place',
+        site ? t('Create site') : t('Create place'),
       ),
     ),
   );
-  replaceChildren(container, panelHeader(site ? 'New site' : 'New place', onClose), form);
+  replaceChildren(container, panelHeader(site ? t('New site') : t('New place'), onClose), form);
 }
 
 /**
@@ -661,7 +680,7 @@ export function renderPlacePanel(container, { index, place, canEdit, onClose, on
         if (parent) values.parent_id = Number(parent.value);
         const errors = checkPlaceForm(values, { site });
         if (Object.keys(errors).length) {
-          return showErrors(form, errors, 'Check the highlighted fields.');
+          return showErrors(form, errors, t('Check the highlighted fields.'));
         }
         onSave({ version: place.version, ...values }, form);
       },
@@ -669,22 +688,22 @@ export function renderPlacePanel(container, { index, place, canEdit, onClose, on
     h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
     fields.elements,
     parent
-      ? formRow('pl-parent_id', 'Inside', parent, {
-          hint: 'Move the place within its site: the records below follow, with their new path.',
+      ? formRow('pl-parent_id', t('Inside'), parent, {
+          hint: t('Move the place within its site: the records below follow, with their new path.'),
         })
       : null,
-    formRow('pl-is_active', 'In use', active, {
-      hint: 'A place not in use is no longer offered, nor the places below it; records keep it.',
+    formRow('pl-is_active', t('In use'), active, {
+      hint: t('A place not in use is no longer offered, nor the places below it; records keep it.'),
     }),
     canEdit
       ? h(
           'div',
           { class: 'form-actions' },
-          h('button', { type: 'submit', class: 'button button-primary online-only' }, 'Save'),
+          h('button', { type: 'submit', class: 'button button-primary online-only' }, t('Save')),
           h(
             'a',
             { href: addUrl, 'data-link': true, class: 'button button-secondary' },
-            '+ Add a place inside',
+            t('+ Add a place inside'),
           ),
         )
       : h(
@@ -693,7 +712,7 @@ export function renderPlacePanel(container, { index, place, canEdit, onClose, on
           h(
             'a',
             { href: addUrl, 'data-link': true, class: 'button button-secondary' },
-            '+ Add a place inside',
+            t('+ Add a place inside'),
           ),
         ),
   );
@@ -708,10 +727,10 @@ export function renderPlacePanel(container, { index, place, canEdit, onClose, on
       { class: 'muted user-meta' },
       activeBadge(place.is_active),
       ` · ${index.types.get(place.level_type_id)?.name ?? ''}`,
-      ` · Last changed ${formatDateTime(place.updated_at)}`,
+      t(' · Last changed {updated_at}', { updated_at: formatDateTime(place.updated_at) }),
     ),
     site ? null : h('p', { class: 'place-path' }, fullPath(index, place.id)),
-    canEdit ? null : h('p', { class: 'form-help' }, 'Only administrators change sites.'),
+    canEdit ? null : h('p', { class: 'form-help' }, t('Only administrators change sites.')),
     form,
   );
 }
@@ -761,36 +780,36 @@ export function renderLevelTypes(container, { types, onClose, onSave }) {
           }
           if (type && !isSite) values.is_active = active.checked;
           const errors = {};
-          if (!values.name) errors.name = 'Required';
+          if (!values.name) errors.name = t('Required');
           if (!isSite && !/^[A-Z][A-Z0-9_]{0,19}$/.test(values.token)) {
-            errors.token = 'A capital letter, then capitals, digits or _';
+            errors.token = t('A capital letter, then capitals, digits or _');
           }
           if (Object.keys(errors).length) {
-            return showErrors(form, errors, 'Check the highlighted fields.');
+            return showErrors(form, errors, t('Check the highlighted fields.'));
           }
           onSave(type, type ? { version: type.version, ...values } : values, form);
         },
       },
-      h('h3', { class: 'section-title' }, type ? type.name : 'New level type'),
+      h('h3', { class: 'section-title' }, type ? type.name : t('New level type')),
       h('p', { class: 'form-summary', role: 'alert', tabindex: '-1' }),
-      formRow(`${key}-name`, 'Name', name, { required: true }),
-      formRow(`${key}-token`, 'Token', token, {
+      formRow(`${key}-name`, t('Name'), name, { required: true }),
+      formRow(`${key}-token`, t('Token'), token, {
         required: true,
         hint: isSite
-          ? 'The site type keeps its token.'
-          : 'Its name in asset code patterns, e.g. BUILDING for {BUILDING}.',
+          ? t('The site type keeps its token.')
+          : t('Its name in asset code patterns, e.g. BUILDING for {BUILDING}.'),
       }),
-      formRow(`${key}-offered_to_staff`, 'Offered to staff', offered, {
-        hint: 'Staff can pick places of this type when they send a request.',
+      formRow(`${key}-offered_to_staff`, t('Offered to staff'), offered, {
+        hint: t('Staff can pick places of this type when they send a request.'),
       }),
-      type ? formRow(`${key}-is_active`, 'In use', active) : null,
+      type ? formRow(`${key}-is_active`, t('In use'), active) : null,
       h(
         'div',
         { class: 'form-actions' },
         h(
           'button',
           { type: 'submit', class: 'button button-primary online-only' },
-          type ? 'Save' : 'Add level type',
+          type ? t('Save') : t('Add level type'),
         ),
       ),
     );
@@ -798,11 +817,13 @@ export function renderLevelTypes(container, { types, onClose, onSave }) {
   };
   replaceChildren(
     container,
-    panelHeader('Level types', onClose),
+    panelHeader(t('Level types'), onClose),
     h(
       'p',
       { class: 'form-help' },
-      'The kinds of places: any type can sit under any place, so each site follows its own layout.',
+      t(
+        'The kinds of places: any type can sit under any place, so each site follows its own layout.',
+      ),
     ),
     types.map(typeForm),
     typeForm(null),
