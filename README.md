@@ -439,7 +439,8 @@ Then record the routine under `## Unreleased` in `CHANGELOG.md` (section **Maint
 │   ├── architecture.md       client/server, IndexedDB, sync, offline, conflicts
 │   ├── ui-guidelines.md      layout, design tokens, accessibility
 │   ├── showcase.md           every feature in pictures (img/showcase/)
-│   └── roadmap.md            phases, acceptance criteria, backlog
+│   ├── roadmap.md            open phases, acceptance criteria, backlog
+│   └── roadmap-done.md       completed phases and their acceptance criteria
 ├── .env.example
 ├── backend/
 │   ├── src/
