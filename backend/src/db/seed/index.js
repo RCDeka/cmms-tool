@@ -35,6 +35,13 @@ const RANDOM_SEED = 20261004;
 const REQUESTS_RANDOM_SEED = 20261008;
 // Maintenance plans too (D48).
 const PLANS_RANDOM_SEED = 20261009;
+// And the times of the work measured by the service levels (D86).
+const SLA_RANDOM_SEED = 20261019;
+/** Service levels (D86): days of work measured before today (`measured_from`, BR-SLA1). */
+const SLA_MEASURED_DAYS = 21;
+/** The default targets of migration 017, in hours: [response, resolution]. */
+const SLA_TARGETS = { URGENT: [1, 4], HIGH: [4, 24], NORMAL: [24, 72], LOW: [72, 240] };
+const HOUR_MS = 3_600_000;
 /**
  * Weeks after the current one where most long-period visits are placed, so the year planner
  * shows peaks to balance: a quarterly plan placed in the first comes back in each of the others.
@@ -269,9 +276,16 @@ export async function seedDatabase(
     const places = insertLocations(db, today);
     const assets = insertAssets(db, rng, timestamp, today, places);
     const requests = requestDrafts([...users, ...staff], requestTimestamp, today, places);
-    const workOrders = insertWorkOrders(db, rng, timestamp, today, users, assets, requests, places);
+    const { count: workOrders, moments } = insertWorkOrders(db, rng, timestamp, {
+      today,
+      now,
+      users,
+      assets,
+      requests,
+      places,
+    });
     insertRequestComments(db, [...users, ...staff], today, now);
-    insertHistory(db);
+    insertHistory(db, moments);
     const plans = insertPlans(
       db,
       today,
@@ -558,7 +572,7 @@ function insertRequestComments(db, users, today, now) {
   }
 }
 
-function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, places) {
+function insertWorkOrders(db, rng, timestamp, { today, now, users, assets, requests, places }) {
   const technicians = users.filter((u) => u.role === 'TECHNICIAN');
   const supervisors = users.filter((u) => u.role === 'SUPERVISOR');
   const creators = users.filter((u) => u.role !== 'TECHNICIAN');
@@ -692,6 +706,8 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
     });
   }
 
+  tuneSlaTimes(drafts, { today, now, technicians });
+
   // Numbers follow creation order, with a sequence per year (BR-W10).
   drafts.push(...requests);
   drafts.sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -709,10 +725,14 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
      @estimated_hours, @actual_hours, @work_report, @hold_reason, @created_at,
      @first_assigned_at, @completed_at, @created_by, @updated_by, @review_status, @reviewed_by,
      @reviewed_at, @review_note, @created_at, @updated_at)`);
-  for (const wo of drafts) {
+  /** The start and technical end chosen by tuneSlaTimes, by work order number. */
+  const moments = new Map();
+  for (const { _sla: sla, ...wo } of drafts) {
     const year = wo.created_on.slice(0, 4);
     const n = (sequence.get(year) ?? 0) + 1;
     sequence.set(year, n);
+    const number = `WO-${year}-${String(n).padStart(5, '0')}`;
+    if (sla) moments.set(number, sla);
     stmt.run({
       ...wo,
       completed_on: ['COMPLETED', 'CLOSED'].includes(wo.status) ? wo.completed_on : null,
@@ -720,10 +740,81 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
         ? `${wo.completed_on}T12:00:00.000Z`
         : null,
       first_assigned_at: wo.assignee_id ? (wo.reviewed_at ?? wo.created_at) : null,
-      number: `WO-${year}-${String(n).padStart(5, '0')}`,
+      number,
     });
   }
-  return drafts.length;
+  return { count: drafts.length, moments };
+}
+
+/**
+ * Service levels (D86): the corrective work reported in the measured window is mostly on
+ * time, as a working team's would be: about 93 % started within the response target and
+ * 90 % done within the resolution target, the others late by a fraction of it. An open job
+ * older than its response target has usually been started, and one started past its
+ * resolution target done. Own random stream, decided after the other draws, so the rest of
+ * the dataset is unchanged. Changes the drafts; `_sla` holds the moments for the history.
+ */
+function tuneSlaTimes(drafts, { today, now, technicians }) {
+  const rng = createRandom(SLA_RANDOM_SEED);
+  const from = addDays(today, -SLA_MEASURED_DAYS);
+  const latest = now.getTime() - 60_000;
+  const share = (min, max) => min + rng.next() * (max - min);
+  const iso = (ms) => new Date(Math.min(ms, latest)).toISOString();
+  for (const wo of drafts) {
+    if (wo.type !== 'CORRECTIVE' || wo.created_on < from || wo.status === 'CANCELLED') continue;
+    const [response, resolution] = SLA_TARGETS[wo.priority].map((h) => h * HOUR_MS);
+    const reported = Date.parse(wo.created_at);
+    const age = latest - reported;
+    const startIn = response * (rng.chance(0.93) ? share(0.1, 0.9) : share(1.2, 3));
+    const doneIn = resolution * (rng.chance(0.9) ? share(0.3, 0.95) : share(1.05, 1.8));
+    const startLate = rng.chance(0.93);
+    const doneLate = rng.chance(0.92);
+    const report = rng.pick(WORK_REPORTS.CORRECTIVE);
+    const worker = rng.pick(technicians);
+
+    if (wo.status === 'OPEN' && age > response && startLate) {
+      wo.status = 'IN_PROGRESS';
+      wo.assignee_id ??= worker.id;
+    }
+    // A hold before the start stays open (BR-W4).
+    const working = wo.status === 'IN_PROGRESS' || (wo.status === 'ON_HOLD' && wo.started_on);
+    if (working && age > resolution && doneLate) {
+      wo.status = 'CLOSED';
+      wo.hold_reason = null;
+    }
+    const done = ['COMPLETED', 'CLOSED'].includes(wo.status);
+    const started = done || wo.status === 'IN_PROGRESS' || wo.started_on !== null;
+    if (!started) continue;
+
+    const startedAt = iso(reported + startIn);
+    const doneAt = done
+      ? iso(Math.max(reported + doneIn, Date.parse(startedAt) + HOUR_MS / 4))
+      : null;
+    wo.started_on = startedAt.slice(0, 10);
+    let last = startedAt;
+    if (done) {
+      wo.completed_on = doneAt.slice(0, 10);
+      // As in insertWorkOrders: done in the last days waits for its closing (D86).
+      if (wo.completed_on >= addDays(today, -6)) {
+        wo.status = 'COMPLETED';
+        wo.closed_on = null;
+        last = doneAt;
+      } else {
+        wo.status = 'CLOSED';
+        wo.closed_on = addDays(wo.completed_on, 2) < today ? addDays(wo.completed_on, 2) : today;
+        last = iso(Math.max(Date.parse(`${wo.closed_on}T15:00:00.000Z`), Date.parse(doneAt)));
+      }
+      wo.work_report ??= report;
+      wo.actual_hours ??= Math.round((wo.estimated_hours ?? 2) * share(0.6, 1.6) * 4) / 4;
+    } else {
+      wo.completed_on = null;
+      wo.closed_on = null;
+      // A hold comes after the start.
+      if (wo.status === 'ON_HOLD') last = iso(Date.parse(startedAt) + share(1, 6) * HOUR_MS);
+    }
+    if (last > wo.updated_at) wo.updated_at = last;
+    wo._sla = { started_at: startedAt, done_at: doneAt };
+  }
 }
 
 /**
@@ -969,7 +1060,7 @@ function between(a, b, fraction) {
  * entry for every asset and work order, then the status changes of each work order, spread
  * between its creation and its last update.
  */
-function insertHistory(db) {
+function insertHistory(db, moments = new Map()) {
   const admin = db
     .prepare("SELECT id FROM users WHERE role = 'ADMIN' ORDER BY id LIMIT 1")
     .pluck()
@@ -1004,6 +1095,9 @@ function insertHistory(db) {
     // assigns them, or rejects them (D46, D47).
     const isRequest = staff.has(wo.created_by);
     const worker = wo.assignee_id ?? wo.created_by;
+    // The start and technical end chosen for the service levels (tuneSlaTimes), else spread.
+    const sla = moments.get(wo.number);
+    const startedAt = sla?.started_at ?? between(wo.created_at, wo.updated_at, 0.4);
     const entry = (action, changes, userId, at, note) =>
       recordAudit(db, {
         entityType: 'work_orders',
@@ -1077,7 +1171,7 @@ function insertHistory(db) {
           started_on: { from: null, to: wo.started_on },
         },
         worker,
-        between(wo.created_at, wo.updated_at, 0.4),
+        startedAt,
       );
     }
     const last = wo.started_on ? 'IN_PROGRESS' : 'OPEN';
@@ -1091,12 +1185,12 @@ function insertHistory(db) {
     } else if (wo.status === 'COMPLETED' || wo.status === 'CLOSED') {
       // Technically done (D86), then closed by a supervisor.
       // On its completion day (after the start), or at the last update for one not closed yet.
-      const startedAt = between(wo.created_at, wo.updated_at, 0.4);
       const dayEnd = `${wo.completed_on}T15:00:00.000Z`;
       const doneAt =
-        wo.status === 'COMPLETED'
+        sla?.done_at ??
+        (wo.status === 'COMPLETED'
           ? wo.updated_at
-          : [startedAt, dayEnd < wo.updated_at ? dayEnd : wo.updated_at].sort()[1];
+          : [startedAt, dayEnd < wo.updated_at ? dayEnd : wo.updated_at].sort()[1]);
       entry(
         'UPDATE',
         diffChanges(
@@ -1157,7 +1251,7 @@ function deriveMoments(db) {
 function insertSla(db, today, now, timeZone) {
   const stamp = now.toISOString();
   db.prepare('UPDATE sla_settings SET measured_from = ?, updated_at = ? WHERE id = 1').run(
-    `${addDays(today, -21)}T00:00:00.000Z`,
+    `${addDays(today, -SLA_MEASURED_DAYS)}T00:00:00.000Z`,
     stamp,
   );
   const holiday = db.prepare(

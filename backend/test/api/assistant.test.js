@@ -162,8 +162,13 @@ describe('POST /api/assistant/find-work-order', () => {
   });
 
   it('limits the candidates to the site given', async () => {
+    // Words of an open work order of that site, so the search finds candidates there.
+    const title = ctx.db
+      .prepare('SELECT title FROM work_orders WHERE id = ?')
+      .pluck()
+      .get(openOfAsset[0]);
     await post('supervisor1', {
-      raw_text: 'Replaced the filter and checked the fan',
+      raw_text: `Worked on it: ${title}`,
       site: asset.site,
     });
     const ids = sentIds(provider.calls[0].input);
