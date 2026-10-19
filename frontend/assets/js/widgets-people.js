@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Responsiveness, asset and people widgets of the dashboards (docs/spec-dashboards.md §6.4,
-// Phase 24): response times, staff request service, bad actors, critical downtime, workload
-// and estimate accuracy (the repeat failures are a tile, in widgets.js). Each has a body, a
+// Phase 24): response times, staff request service, SLA compliance (D86), bad actors, critical
+// downtime, workload and estimate accuracy (the repeat failures are a tile, in widgets.js). Each has a body, a
 // table view with links to the records behind its cells (K9), and its segment labels.
 import { numberFormat, percentFormat } from './dashboard.js';
 import { h } from './dom.js';
-import { personName } from './format.js';
+import { formatDate, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { drawPriorityStack, drawRanges, drawValueBars } from './widget-charts.js';
 import { bucketKeyInText, bucketTitle, tableElement } from './widgets-flow.js';
@@ -614,6 +614,80 @@ function workloadBody(data, context) {
   };
 }
 
+// --- SLA compliance (D86) -------------------------------------------------------------------------
+
+/** "82 % (41 of 50)", or a dash when nothing was counted. Pure. */
+const metText = (measure) =>
+  measure.counted
+    ? t('{share} ({met} of {counted})', {
+        share: rateText(measure.share),
+        met: numberFormat.format(measure.met),
+        counted: numberFormat.format(measure.counted),
+      })
+    : '—';
+
+function slaTable(data, { drill }) {
+  return {
+    columns: [
+      { label: t('Priority') },
+      { label: t('Response met'), numeric: true },
+      { label: t('Resolution met'), numeric: true },
+    ],
+    rows: data.rows.map((r) => [
+      valueLabel('work_order_priority', r.priority),
+      metText(r.response),
+      metText(r.resolution),
+    ]),
+    links: drill
+      ? data.rows.map((r) => [
+          null,
+          r.response.counted ? drill(`response:${r.priority}`) : null,
+          r.resolution.counted ? drill(`resolution:${r.priority}`) : null,
+        ])
+      : undefined,
+  };
+}
+
+function slaBody(data, context) {
+  const note = h(
+    'p',
+    { class: 'widget-note' },
+    t(
+      'Corrective work and staff requests reported since {date}. Unfinished work already late counts as missed.',
+      { date: formatDate(data.measured_from.slice(0, 10)) },
+    ),
+  );
+  if (!data.response.counted && !data.resolution.counted) {
+    return {
+      element: [
+        h(
+          'p',
+          { class: 'empty-state' },
+          t('No work order with a service level stopped its clock or is late in this period.'),
+        ),
+        note,
+      ],
+    };
+  }
+  return {
+    element: [
+      h(
+        'p',
+        { class: 'widget-summary' },
+        tx('Response met: {response}. Resolution met: {resolution}.', {
+          response: h('strong', {}, rateText(data.response.share)),
+          resolution: h('strong', {}, rateText(data.resolution.share)),
+        }),
+      ),
+      tableElement(slaTable(data, context), t('Service levels met, by priority')),
+      note,
+    ],
+  };
+}
+
+/** Outcome of a clock in the export. */
+const OUTCOME_LABELS = { met: t('Met'), missed: t('Missed') };
+
 // --- Estimate accuracy ----------------------------------------------------------------------------
 
 function accuracyTable(data, { drill }) {
@@ -717,6 +791,13 @@ function segmentText(key, segment) {
       ]
         .filter(Boolean)
         .join(', ');
+    case 'sla_compliance':
+      return [
+        first === 'response' ? t('response') : t('resolution'),
+        rest ? valueLabel('work_order_priority', rest) : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
     case 'request_service':
       return (
         { rejected: t('rejected'), pending: t('waiting for review'), done: t('done') }[first] ??
@@ -746,6 +827,7 @@ function segmentText(key, segment) {
 export const PEOPLE_WIDGETS = {
   response_times: { body: responseBody, table: responseTable },
   request_service: { body: requestBody, table: requestTable },
+  sla_compliance: { body: slaBody, table: slaTable },
   bad_actors: { body: actorsBody, table: actorsTable },
   critical_downtime: { body: downtimeBody, table: downtimeTable },
   workload: { body: workloadBody, table: workloadTable },
@@ -762,6 +844,10 @@ export const EXTRA_COLUMNS = {
     [t('Hours to review'), (r) => r.dashboard?.hours_to_review],
     [t('Hours to done'), (r) => r.dashboard?.hours_to_done],
     [t('Reason rejected'), (r) => r.review_note],
+  ],
+  sla_compliance: [
+    [t('Response'), (r) => OUTCOME_LABELS[r.dashboard?.response] ?? ''],
+    [t('Resolution'), (r) => OUTCOME_LABELS[r.dashboard?.resolution] ?? ''],
   ],
   repeat_failures: [
     [t('Previous work order'), (r) => r.dashboard?.previous],

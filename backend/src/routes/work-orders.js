@@ -42,6 +42,8 @@ const listQuery = z.strictObject({
   overdue: flagFilter,
   to_review: flagFilter,
   awaiting_reply: flagFilter,
+  // BR-SLA4 (D86): late on a deadline, or at risk of being.
+  sla: z.enum(['late', 'at_risk']).optional(),
   // A segment of a dashboard widget (D59, K9): "backlog_age:URGENT:31-90", with its period.
   drill: z.string().max(200).optional(),
   period: z.coerce
@@ -73,13 +75,19 @@ export function workOrdersRouter({ workOrders, widgets, widgetSettings, timeZone
     }
     // D65: no drill-down into a widget switched off (the widget key comes before the colon).
     if (drill !== undefined) widgetSettings.assertAvailable(drill.split(':')[0], req.user);
-    const today = dateInZone(timeZone, now());
+    const instant = now().toISOString();
+    const today = dateInZone(timeZone, new Date(instant));
     const userId = req.user.id;
     const extra =
       drill === undefined
         ? undefined
-        : widgets.drillWhere(drill, period ?? DEFAULT_PERIOD, { today, userId, timeZone });
-    res.json(workOrders.list(query, { userId, today, extra }));
+        : widgets.drillWhere(drill, period ?? DEFAULT_PERIOD, {
+            today,
+            now: instant,
+            userId,
+            timeZone,
+          });
+    res.json(workOrders.list(query, { userId, today, now: instant, extra }));
   });
 
   // All roles may create (D27); BR-W12 restricts technicians in the service.
@@ -113,7 +121,10 @@ export function workOrdersRouter({ workOrders, widgets, widgetSettings, timeZone
     requireRole('SUPERVISOR', 'ADMIN'),
     validate({ params: idParams }),
     (req, res) => {
-      const item = workOrders.review(req.valid.params.id, req.body, req.user, { now: now() });
+      const item = workOrders.review(req.valid.params.id, req.body, req.user, {
+        now: now(),
+        timeZone,
+      });
       res.json({ reviewed: true, version: item.version, item });
     },
   );

@@ -190,6 +190,7 @@ async function main() {
       const counts = await seedDatabase(db, {
         password: config.seedPassword,
         today: dateInZone(config.timeZone),
+        timeZone: config.timeZone,
         withConflicts: flags.includes('--with-conflicts'),
       });
       console.log(

@@ -35,7 +35,12 @@ export const USERNAMES = [
  */
 export async function createSeededApp({ preLogin = true, ...options } = {}) {
   const ctx = createTestDb();
-  await seedDatabase(ctx.db, { password: TEST_PASSWORD, today: TODAY, now: NOW });
+  await seedDatabase(ctx.db, {
+    password: TEST_PASSWORD,
+    today: TODAY,
+    now: NOW,
+    timeZone: TEST_CONFIG.timeZone,
+  });
   const app = createApp({
     db: ctx.db,
     config: TEST_CONFIG,

@@ -1085,6 +1085,62 @@ export const FR = {
   'Nothing to save: no value was changed.':
     "Rien à enregistrer\u00a0: aucune valeur n'a été modifiée.",
   'Planning settings saved.': 'Paramètres du planning enregistrés.',
+  // sla.js and its page in app.js (D86)
+  'Service levels': 'Niveaux de service',
+  'Loading the service levels…': 'Chargement des niveaux de service…',
+  'The service levels need a connection to the server.':
+    'Les niveaux de service nécessitent une connexion au serveur.',
+  'Service levels saved.': 'Niveaux de service enregistrés.',
+  'You are offline: the service levels were not saved.':
+    "Vous êtes hors ligne\u00a0: les niveaux de service n'ont pas été enregistrés.",
+  'Holiday added.': 'Jour férié ajouté.',
+  'You are offline: the holiday was not added.':
+    "Vous êtes hors ligne\u00a0: le jour férié n'a pas été ajouté.",
+  'Holiday removed.': 'Jour férié supprimé.',
+  'You are offline: the holiday was not removed.':
+    "Vous êtes hors ligne\u00a0: le jour férié n'a pas été supprimé.",
+  'Service level': 'Niveau de service',
+  'At risk': 'À risque',
+  Met: 'Respecté',
+  Missed: 'Dépassé',
+  Paused: 'En pause',
+  Running: 'En cours',
+  'SLA missed': 'SLA dépassé',
+  'SLA at risk': 'SLA à risque',
+  'No target for this priority.': "Pas d'objectif pour cette priorité.",
+  '{at}, due {due}': '{at}, échéance {due}',
+  'Due {due}': 'Échéance {due}',
+  Response: 'Prise en charge',
+  Resolution: 'Résolution',
+  'The clocks stop while the work waits for access or an approval.':
+    "Les délais sont suspendus tant que l'intervention attend un accès ou une validation.",
+  'Response stops at': 'Fin de la prise en charge',
+  'SLA hours': 'Heures du SLA',
+  'Business days': 'Jours ouvrés',
+  Opening: 'Ouverture',
+  Closing: 'Fermeture',
+  Holiday: 'Jour férié',
+  'Response target, {priority}': 'Objectif de prise en charge, {priority}',
+  'Resolution target, {priority}': 'Objectif de résolution, {priority}',
+  'No target': "Pas d'objectif",
+  'Targets in hours (empty: no target)': "Objectifs en heures (vide\u00a0: pas d'objectif)",
+  'The first start of the work, or its first assignment to someone.':
+    "Le premier démarrage de l'intervention, ou sa première affectation à quelqu'un.",
+  'Business hours count the business days and opening hours below, without the holidays.':
+    'Les heures ouvrées comptent les jours ouvrés et les horaires ci-dessous, sans les jours fériés.',
+  'Corrective work and staff requests reported since {date} are measured.':
+    "Les interventions correctives et les demandes d'intervention signalées depuis le {date} sont mesurées.",
+  'Save service levels': 'Enregistrer les niveaux de service',
+  'Add holiday': 'Ajouter le jour férié',
+  Holidays: 'Jours fériés',
+  'Days without business hours, on every site. Used in business hours only.':
+    'Jours sans heures ouvrées, sur tous les sites. Utilisés en heures ouvrées seulement.',
+  'Remove the holiday {name} of {day}': 'Supprimer le jour férié {name} du {day}',
+  'No holiday.': 'Aucun jour férié.',
+  'Response and resolution targets of corrective work, per priority. A change recomputes the deadlines of the unfinished work orders and is recorded in the audit log.':
+    "Objectifs de prise en charge et de résolution des interventions correctives, par priorité. Un changement recalcule les échéances des bons de travaux non terminés et est enregistré dans le journal d'audit.",
+  'Response and resolution targets of corrective work, per priority. Only administrators can change them.':
+    'Objectifs de prise en charge et de résolution des interventions correctives, par priorité. Seuls les administrateurs peuvent les modifier.',
   'You are offline: the settings were not saved.':
     "Vous êtes hors ligne\u00a0: les paramètres n'ont pas été enregistrés.",
   // planning-rules.js
@@ -1836,6 +1892,20 @@ export const FR = {
   'Week schedule kept': 'Respect du planning hebdomadaire',
   Contractors: 'Prestataires',
   'Time to start and to close': 'Délais de prise en charge et de clôture',
+  // widgets-people.js: SLA compliance (D86)
+  '{share} ({met} of {counted})': '{share} ({met} sur {counted})',
+  'Response met': 'Prise en charge respectée',
+  'Resolution met': 'Résolution respectée',
+  'Corrective work and staff requests reported since {date}. Unfinished work already late counts as missed.':
+    "Interventions correctives et demandes d'intervention signalées depuis le {date}. Le travail non terminé déjà en retard compte comme dépassé.",
+  'No work order with a service level stopped its clock or is late in this period.':
+    "Aucun bon de travaux soumis à un niveau de service n'a terminé un délai ni n'est en retard sur cette période.",
+  'Response met: {response}. Resolution met: {resolution}.':
+    'Prise en charge respectée\u00a0: {response}. Résolution respectée\u00a0: {resolution}.',
+  'Service levels met, by priority': 'Niveaux de service respectés, par priorité',
+  response: 'prise en charge',
+  resolution: 'résolution',
+  'Service levels met': 'Niveaux de service respectés',
   'Assets with the most breakdowns': 'Équipements les plus souvent en panne',
   'Repeat failures': 'Pannes répétées',
   'Critical assets out of service': 'Équipements critiques hors service',
@@ -2072,6 +2142,18 @@ export const FR_SERVER = {
   Forbidden: 'Accès refusé',
   'Not Found': 'Introuvable',
   'Bad Request': 'Requête non valide',
+  // Service levels (D86)
+  'The service levels changed since you opened them. Reload and try again.':
+    'Les niveaux de service ont changé depuis leur ouverture. Rechargez et réessayez.',
+  'This day is already a holiday.': 'Ce jour est déjà un jour férié.',
+  'Already a holiday': 'Déjà un jour férié',
+  'Holiday not found': 'Jour férié introuvable',
+  'The resolution target cannot be shorter than the response target':
+    "L'objectif de résolution ne peut pas être plus court que celui de prise en charge",
+  'Each priority once': 'Chaque priorité une seule fois',
+  'Choose at least one day': 'Choisissez au moins un jour',
+  'Each day once': 'Chaque jour une seule fois',
+  'The opening comes before the closing': "L'ouverture doit précéder la fermeture",
 };
 
 /**
@@ -2146,6 +2228,8 @@ export const FR_VALUES = {
     WEEKEND: 'Travail le week-end',
     OTHER: 'Autre',
   },
+  sla_response_stop: { START: 'Premier démarrage', ASSIGNMENT: 'Première affectation' },
+  sla_hours_mode: { CALENDAR: 'Heures calendaires', BUSINESS: 'Heures ouvrées' },
 };
 
 const status = (code) => FR_VALUES.work_order_status[code] ?? code;

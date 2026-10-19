@@ -7,6 +7,7 @@ import { addWeeks, formatWeek, weekOfDate, weekParts } from '../../lib/iso-week.
 import { auditLabel, creationChanges, diffChanges } from '../../rules/audit.js';
 import { snapshotToApi } from '../../rules/conflict-diff.js';
 import { recordAudit } from '../../services/audit.js';
+import { recomputeSla } from '../../services/sla.js';
 import { generateOccurrences } from '../../services/occurrences.js';
 import { defaultTolerance, nextPlanCode } from '../../rules/planning.js';
 import { HOLD_REASONS } from '../../rules/enums.js';
@@ -240,11 +241,12 @@ const STAFF_REQUESTS = [
  * @param {string} options.password  password given to every mock user (SEED_PASSWORD)
  * @param {string} options.today     'YYYY-MM-DD' in APP_TIMEZONE
  * @param {Date}   [options.now]     current instant, upper bound for generated timestamps
+ * @param {string} [options.timeZone] APP_TIMEZONE, for the SLA deadlines in business hours
  * @param {boolean} [options.withConflicts] also create 3 open conflicts (dev demo)
  */
 export async function seedDatabase(
   db,
-  { password, today, now = new Date(), withConflicts = false },
+  { password, today, now = new Date(), timeZone = 'Europe/Paris', withConflicts = false },
 ) {
   if (!password || password.length < 10) {
     throw new Error('SEED_PASSWORD must be set and at least 10 characters long (BR-U2).');
@@ -279,6 +281,7 @@ export async function seedDatabase(
     const allocations = insertSchedule(db, today, now);
     const past = insertPastWork(db, { today, now });
     deriveMoments(db);
+    insertSla(db, today, now, timeZone);
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return {
       users: users.length + staff.length,
@@ -1147,6 +1150,24 @@ function deriveMoments(db) {
  * Dev demo: three records where a supervisor's change (version A) was saved first and a
  * technician's change based on the old version (version B) was rejected (BR-V3).
  */
+/**
+ * Service levels (D86): measured from 21 days ago, so the recent work orders have their
+ * deadlines and the older ones none (BR-SLA1); a bank holiday in the past and one ahead.
+ */
+function insertSla(db, today, now, timeZone) {
+  const stamp = now.toISOString();
+  db.prepare('UPDATE sla_settings SET measured_from = ?, updated_at = ? WHERE id = 1').run(
+    `${addDays(today, -21)}T00:00:00.000Z`,
+    stamp,
+  );
+  const holiday = db.prepare(
+    'INSERT INTO sla_holidays (day, name, created_by, created_at) VALUES (?, ?, 1, ?)',
+  );
+  holiday.run(addDays(today, -12), 'Bank holiday', stamp);
+  holiday.run(addDays(today, 40), 'Bank holiday', stamp);
+  recomputeSla(db, { now: stamp, timeZone, all: true });
+}
+
 function insertConflicts(db, users, now) {
   const supervisor = users.find((u) => u.username === 'supervisor1');
   const technician = users.find((u) => u.username === 'technician1');

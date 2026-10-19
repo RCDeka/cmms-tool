@@ -5,7 +5,7 @@
 // the tray and carry-over (BR-S1 to BR-S10).
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createSeededApp, expectNoSecrets } from '../helpers/app.js';
+import { NOW, createSeededApp, expectNoSecrets } from '../helpers/app.js';
 
 let ctx;
 beforeAll(async () => {
@@ -238,10 +238,13 @@ describe('POST /api/schedule/allocations', () => {
     expect(after.assignee_id).toBe(userId('technician2'));
     expect(after.planned_week).toBe('2026-W41');
     expect(after.version).toBe(wo.version + 1);
+    // Regression: the scheduler's assignment is the first one (BR-W18, SLA response stop).
+    expect(after.first_assigned_at).toBe(NOW.toISOString());
     const history = (await sup().get(`/api/work-orders/${wo.id}/history`).expect(200)).body;
     expect(history.items[0].changes).toEqual({
       planned_week: { from: null, to: '2026-W41' },
       assignee_id: { from: null, to: userId('technician2') },
+      first_assigned_at: { from: null, to: NOW.toISOString() },
     });
   });
 

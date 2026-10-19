@@ -525,10 +525,14 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
     };
   }
 
-  /** Context of a widget: today, the user, the time zone, and only the filters it uses. */
-  const contextFor = (key, filters, { today, userId, timeZone }) => ({
+  /**
+   * Context of a widget: today, the current instant (ISO, the SLA widget), the user, the time
+   * zone, and only the filters it uses.
+   */
+  const contextFor = (key, filters, { today, now, userId, timeZone }) => ({
     ...filtersFor(key, filters),
     today,
+    now: now ?? new Date().toISOString(),
     userId,
     timeZone,
   });
@@ -538,7 +542,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
      * GET /api/dashboard/widgets: figures of the listed widgets, in one read transaction.
      * @param {string[]} keys
      * @param {{ period: number, sites: string[], categories: string[] }} filters
-     * @param {{ today: string, userId: number, timeZone: string }} context
+     * @param {{ today: string, now?: string, userId: number, timeZone: string }} context
      */
     figures(keys, filters, context) {
       return db.transaction(() =>

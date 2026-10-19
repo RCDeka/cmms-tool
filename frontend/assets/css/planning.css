@@ -760,3 +760,74 @@
   gap: 2px;
   min-height: var(--touch-target);
 }
+
+/* Service levels (D86, /admin/sla). */
+.sla-targets {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  border-collapse: collapse;
+}
+
+.sla-targets caption {
+  text-align: start;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.sla-targets th,
+.sla-targets td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  text-align: start;
+  vertical-align: top;
+}
+
+.sla-targets input {
+  width: 100%;
+  max-width: 8rem;
+}
+
+.sla-days {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+}
+
+.sla-days legend {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.sla-days label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  margin-right: var(--space-3);
+}
+
+.sla-holidays {
+  margin-top: var(--space-5);
+}
+
+.sla-holiday-list {
+  list-style: none;
+  padding: 0;
+}
+
+.sla-holiday-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* The fieldset only disables the form for supervisors: no frame of its own. */
+.settings-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

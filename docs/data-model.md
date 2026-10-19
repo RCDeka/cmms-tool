@@ -57,8 +57,10 @@ erDiagram
 | Occurrence status (D48) | `PLANNED` (Planned), `RELEASED` (Work order created), `SKIPPED` (Skipped) |
 | Allocation kind (D52) | `WORK` (Work), `TRAVEL` (Travel), `PREPARATION` (Preparation), `OTHER` (Other time) |
 | Capacity reason (D52) | `LEAVE` (Leave), `PART_TIME` (Part time), `TRAINING` (Training), `WEEKEND` (Weekend work), `OTHER` (Other) |
+| SLA response stop (D86) | `START` (First start), `ASSIGNMENT` (First assignment) |
+| SLA hours mode (D86) | `CALENDAR` (Calendar hours), `BUSINESS` (Business hours) |
 
-- Terminal (read-only) work order statuses: `CLOSED`, `CANCELLED`. **Unfinished** (backlog, overdue, my work): `OPEN`, `IN_PROGRESS`, `ON_HOLD`. **Done** (finished work, counted on `completed_on`, D86): `COMPLETED`, `CLOSED`. Pausing hold reasons (Phase 36): `WAITING_ACCESS`, `WAITING_APPROVAL`.
+- Terminal (read-only) work order statuses: `CLOSED`, `CANCELLED`. **Unfinished** (backlog, overdue, my work): `OPEN`, `IN_PROGRESS`, `ON_HOLD`. **Done** (finished work, counted on `completed_on`, D86): `COMPLETED`, `CLOSED`. Pausing hold reasons (BR-SLA3): `WAITING_ACCESS`, `WAITING_APPROVAL`.
 - `FIRE_SAFETY` is the fire detection and alarm system; `NETWORK_CABLING` covers voice, data and video cabling.
 - The values are defined once per side: `backend/src/rules/enums.js` and `frontend/assets/js/enums.js` (labels in `frontend/assets/js/labels.js`). Both must match this table.
 - In the database, every enumerated column has a `CHECK (col IN (...))` constraint (D6).
@@ -145,6 +147,9 @@ Indexes: `code` (unique), `site`, `location_id`, `category`, `status`, `updated_
 | first_assigned_at | TEXT | yes | | datetime of the first assignment, set once (BR-W18) **(added, D86, `016`)** |
 | first_started_at | TEXT | yes | | datetime of the first change to a started status, set once (BR-W5, BR-W18) **(added, D86, `016`)** |
 | completed_at | TEXT | yes | | datetime of the technical end, never corrected; cleared on reopening (BR-W15, BR-W18) **(added, D86, `016`)** |
+| response_due_at / resolution_due_at | TEXT | yes | | the SLA deadlines, set by the server (BR-SLA4); null outside BR-SLA1 or without a target; index on `resolution_due_at` **(added, D86, `017`)** |
+| response_risk_at / resolution_risk_at | TEXT | yes | | the moments 75 % of each target is used ("at risk", BR-SLA4) **(added, D88, `017`)** |
+| sla_paused_at | TEXT | yes | | when the current pausing hold began (BR-SLA3), null when not paused or finished **(added, D90, `017`)** |
 | created_by | INTEGER | no | FK → users.id | author **(added, D25)** |
 | review_status | TEXT | yes | CHECK Review status; `PENDING` only while `OPEN` and unassigned; `REJECTED` and `WITHDRAWN` only when `CANCELLED` | NULL except for staff requests **(added, D47; `WITHDRAWN` added by 013, D79)** |
 | reviewed_by | INTEGER | yes | FK → users.id | supervisor or admin who reviewed **(added, D47)** |
@@ -187,7 +192,7 @@ Indexes: unique partial index on (`entity_type`, `entity_id`) `WHERE status = 'O
 | Column | Type | Null | Constraints / default | Notes |
 |---|---|---|---|---|
 | id | INTEGER | no | PK | |
-| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`, `maintenance_plans`, `plan_occurrences`, `allocations`, `planning_settings`) | planning records since `008` (D48); blocks of the week scheduler since Phase 19 |
+| entity_type | TEXT | no | CHECK IN (`assets`, `work_orders`, `users`, `maintenance_plans`, `plan_occurrences`, `allocations`, `planning_settings`, `sla_settings`) | planning records since `008` (D48); blocks of the week scheduler since Phase 19; the service levels since `017` (their targets and holidays are logged on `sla_settings`, D90) |
 | entity_id | INTEGER | no | | id of the record (kept after deletion) |
 | action | TEXT | no | CHECK IN (`CREATE`, `UPDATE`, `DELETE`, `CONFLICT`, `RESOLVE`) | |
 | changes | TEXT | no | JSON, default `{}` | `{ field: { from, to } }` in API values |
@@ -387,6 +392,17 @@ Dashboard widgets switched on or off for supervisors by the administrators: `key
 
 Rules: BR-K1 a dashboard is only seen and changed by its owner (404 for others); BR-K2 1 to 20 dashboards per user, names unique ignoring case, the last one cannot be deleted; BR-K3 widget keys known and each at most once; BR-K4 the Work orders (CSV) of a widget lists exactly the records its figures count (one WHERE clause per widget in `services/dashboard-widgets.js`).
 
+### Service levels (added, D86, D88, D90, `017`)
+
+#### sla_targets
+One row per priority: `priority` (PK, CHECK Work order priority), `response_hours` and `resolution_hours` (REAL, null = no target, otherwise > 0 and ≤ 10 000, resolution ≥ response), `updated_by` (FK → users.id), `updated_at`. No `version`: the targets are saved with the settings, under the version of `sla_settings` (D88). Seeded by `017`: Urgent 1 h / 4 h, High 4 h / 24 h, Normal 24 h / 72 h, Low 72 h / 240 h.
+
+#### sla_settings
+One row (`id = 1`), edited by the admins: `response_stop` (CHECK SLA response stop, default `START`), `hours_mode` (CHECK SLA hours mode, default `CALENDAR`), `business_days` (ISO weekdays as text, default `1,2,3,4,5`), `business_start` and `business_end` (`HH:MM` in `APP_TIMEZONE`, default `08:00` and `18:00`, start < end; start included, end excluded), `measured_from` (datetime `017` ran, not editable, BR-SLA1), `version` (covers the targets too), `updated_by`, `updated_at`.
+
+#### sla_holidays
+Days without business hours, for every site: `id`, `day` (date, UNIQUE), `name` (1–100 characters), `created_by` (FK → users.id), `created_at`. Used in business hours only. Adding or removing one is logged on `sla_settings` (`changes.holiday`, the name in `note`).
+
 ## Business rules
 
 ### Users and authentication
@@ -523,6 +539,13 @@ stateDiagram-v2
 - BR-S10: Sites of a day = distinct sites of the person's `WORK` blocks; two or more is a warning (`SEVERAL_SITES`) with an "Add travel time" link.
 - Capacity of a day = the override's hours, else `daily_hours` Monday to Friday and 0 on weekends; a closed weekend day without an override counts 0.
 
+### Service levels (D86, D88, D90; pure rules in `rules/sla.js`)
+- BR-SLA1: SLA targets apply to `CORRECTIVE` work orders, staff requests included, with a target for their current priority and `reported_at ≥ sla_settings.measured_from`: work reported before `017` is not measured. Preventive and regulatory work keep their compliance by deadline week (D59); improvement work has no SLA.
+- BR-SLA2: Response is met when the response moment (`first_started_at`, or `first_assigned_at` when `response_stop = ASSIGNMENT`) is at or before `response_due_at`; resolution is met when `completed_at` is at or before `resolution_due_at`. A cancelled work order counts in neither. In `ASSIGNMENT` mode a work order created already assigned (BR-W12) meets its response at creation.
+- BR-SLA3: SLA time runs from `reported_at`, in calendar hours (real elapsed time), or in business hours (the days of `business_days`, from `business_start` to `business_end`, minus `sla_holidays`, in `APP_TIMEZONE`; work reported outside them starts its clock at the next opening), minus the **paused spells**: time `ON_HOLD` with `WAITING_ACCESS` or `WAITING_APPROVAL`. The spells are read from the status and hold reason changes of the audit log, in the server's order (`id`), each at `coalesce(edited_at, at)`, edits refused by a conflict left out; a spell whose end comes before its start counts as zero, the current one runs to now. A pause after a clock stopped does not count for that clock.
+- BR-SLA4: A deadline is computed from scratch, never shifted: `reported_at` + the target in SLA hours + the paused spells so far, giving `*_due_at` (target used up) and `*_risk_at` (75 % used), in UTC. The server recomputes them at every write of a work order (creation, update, conflict resolution, review, the first block of the week scheduler), and recomputes every unfinished work order in the same transaction when the targets, the settings or the holidays change; a clock already stopped keeps its deadline. While paused (`sla_paused_at` set) the deadlines stay as they were and the work order is neither late nor at risk, unless a deadline passed before `sla_paused_at`. **Late** (`sla=late`): a clock stopped after its deadline, or still running on an unfinished work order past it (`coalesce(sla_paused_at, now)`). **At risk** (`sla=at_risk`): unfinished, not paused, not late, and a running clock past its `*_risk_at`.
+- BR-SLA5: The priority in force when the clock stops decides the target: raising it tightens a running deadline at once; lowering it loosens it (supervisors and admins only, audited).
+
 ### KPI definitions (dashboard)
 "Today" and "this month" use `APP_TIMEZONE` (D13).
 - Open work orders: `status = 'OPEN'`. In progress: `status = 'IN_PROGRESS'`.
@@ -553,6 +576,7 @@ stateDiagram-v2
   - Critical assets out of service: High and Critical assets; days with a breakdown = calendar days in the period on which the asset was `BROKEN_DOWN` at some time (spells from the asset status changes in the audit log, in `APP_TIMEZONE`; one still going on counts until today; an asset without history counts from the period start when broken down now); per site, with the assets affected and those down today.
   - Workload: unfinished work orders per active technician and supervisor (and unassigned) by priority, hours left (as the backlog in weeks), and the current week's booked hours (every block) and capacity (overrides, else `daily_hours` Monday to Friday).
   - Estimates vs actual hours: work orders done (`completed_on`) in the period with both hours above 0, per trade: total actual ÷ total estimated.
+  - Service levels met (key `sla_compliance`, D86): work orders with deadlines (BR-SLA1), not cancelled; each clock on its own, per priority and overall: counted when it stopped on a day of the period (met or missed, BR-SLA2), or when it still runs and is late (missed, BR-SLA4); share met = met ÷ counted. Segments `response` or `resolution`, optionally `:<PRIORITY>`; the export adds the outcome of each clock, missed ones first.
 - Personal dashboard widgets (D59): the same definitions; the dashboard's sites and trades filter each widget that uses them (`site`, `category` of the work order, or of the asset for "Assets broken down"; conflicts are not filtered), and the period replaces the 30 days of the two charts. The catalogue (`backend/src/rules/dashboards.js`) lists the filters each widget uses.
 - My work today: unfinished work orders with `assignee_id` = current user and (`due_on` ≤ today or empty), sorted by priority (`URGENT` first) then `due_on`.
 - My work, next 7 days: the same with `due_on` ≤ today + 6 days (`week_end`), so today's and late work are included (D43).
@@ -574,4 +598,5 @@ Generated by `backend/src/db/seed/` with a fixed random seed (the output is the 
   - The 6 finished weeks before the current one in the week scheduler: the internal visits of those weeks got `WORK` blocks (at most 3 h 30 each) for their worker, booked the Thursday before or, for about 20 %, once the week had started (break-ins).
   - 10 past breakdowns of high or critical assets in service, repaired after 0 to 6 days (status changes in the audit log).
   - Then every work order is numbered again in creation order, and its audit labels and creation entry follow.
+- **Service levels** (D86): the default targets in calendar hours, measured from 21 days before today (`measured_from`), so the recent corrective work orders and requests have deadlines and the older ones none (BR-SLA1); two bank holidays, 12 days ago and in 40 days. The deadlines are computed from the generated history.
 - **0 conflicts** by default. A dev-only option (`npm run db:seed -- --with-conflicts`) creates 3 open conflicts to demonstrate the arbitration console.

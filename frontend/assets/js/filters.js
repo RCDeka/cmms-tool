@@ -41,6 +41,15 @@ export const FILTERS = {
     to_review: { kind: 'flag', label: t('Requests to review'), supervisors: true },
     // Staff requests whose requester wrote last (D80).
     awaiting_reply: { kind: 'flag', label: t('Waiting for a reply') },
+    // Service levels (D86): late on a deadline, or at risk of being.
+    sla: {
+      kind: 'choice',
+      label: t('Service level'),
+      options: [
+        ['late', t('Late')],
+        ['at_risk', t('At risk')],
+      ],
+    },
     // The records behind a dashboard widget segment (D59, K9), and its period in days.
     drill: { kind: 'drill' },
     period: { kind: 'period' },
@@ -77,6 +86,8 @@ function parseValue(def, raw) {
     }
     case 'user':
       return parseList(raw, ',', (v) => (/^[1-9]\d{0,9}$/.test(v) ? v : undefined))?.join(',');
+    case 'choice':
+      return def.options.some(([value]) => value === raw) ? raw : undefined;
     case 'flag':
       // `false` only matters to turn off a default filter (technicians' "Assigned to me").
       return raw === 'true' ? true : raw === 'false' ? false : undefined;
@@ -396,6 +407,15 @@ export function renderFilterBar({
         `${u.first_name} ${u.last_name}`,
       ]);
       parts.push(select(name, def.label, people));
+    } else if (def.kind === 'choice') {
+      const el = h(
+        'select',
+        { id: `filter-${name}`, name, onChange: changed },
+        h('option', { value: '' }, t('All')),
+        def.options.map(([value, text]) => h('option', { value }, text)),
+      );
+      controls.set(name, el);
+      parts.push(h('div', { class: 'filter-field' }, h('label', { for: el.id }, def.label), el));
     } else if (def.kind === 'flag' && (!def.supervisors || canFilterAssignee)) {
       const el = h('input', { id: `filter-${name}`, name, type: 'checkbox', onChange: changed });
       controls.set(name, el);

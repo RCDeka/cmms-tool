@@ -6,7 +6,7 @@ This file holds only open work and the backlog. Done phases move, with their tas
 
 ## Done
 
-Phases 0–6 (MVP), 8–24 (post-MVP, preventive maintenance, custom dashboards), 26 (finding the work order), 27–30 (production), 32 (location tree), 34 (French interface) and 35 (work order process); details in `docs/roadmap-done.md`. Phase 7 is done except the steps that need the VPS (below).
+Phases 0–6 (MVP), 8–24 (post-MVP, preventive maintenance, custom dashboards), 26 (finding the work order), 27–30 (production), 32 (location tree), 34 (French interface), 35 (work order process) and 36 (SLA); details in `docs/roadmap-done.md`. Phase 7 is done except the steps that need the VPS (below).
 
 ## Phase 7: Hardening and deployment
 
@@ -33,12 +33,6 @@ Specified in `docs/spec-locations.md` (confirmed; section 11 holds the full acce
 Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full acceptance criteria). Phase 26 is done first (D67); Phase 25 waits for the provider and data-handling decision (open point 1).
 
 - **Phase 25: report formatting.** The chosen provider, `POST /api/assistant/format-report`, the assistant area in the work order panel, logging without texts, the evaluation set. Acceptance: see the spec, section 11.
-
-## Work order process and SLA (D86)
-
-Specified in `docs/spec-work-order-process.md` (confirmed on 2026-10-19; section 11 holds the full acceptance criteria). Was backlog item 18. Phase 35 is done (D89).
-
-- **Phase 36: SLA.** Response and resolution targets per priority, the admin settings (response stop, calendar or business hours, holidays), pauses for holds outside the team's control, the deadlines on each work order, the list filter and the SLA compliance widget. Acceptance: see the spec, section 11.
 
 ## Production (D73)
 

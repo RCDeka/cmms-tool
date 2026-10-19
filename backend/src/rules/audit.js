@@ -35,5 +35,6 @@ export function auditLabel(entityType, record) {
   if (entityType === 'work_orders') return `${record.number} — ${record.title}`;
   if (entityType === 'maintenance_plans') return `${record.code} — ${record.title}`;
   if (entityType === 'planning_settings') return 'Planning settings';
+  if (entityType === 'sla_settings') return 'Service levels';
   return `${record.first_name} ${record.last_name} (${record.username})`;
 }

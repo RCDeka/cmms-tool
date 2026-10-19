@@ -224,6 +224,14 @@ export const WIDGETS = [
     rows: 'work_orders',
   },
   {
+    key: 'sla_compliance',
+    label: t('Service levels met'),
+    group: t('Responsiveness'),
+    size: 'M',
+    filters: ['period', 'sites', 'categories'],
+    rows: 'work_orders',
+  },
+  {
     key: 'bad_actors',
     label: t('Assets with the most breakdowns'),
     group: t('Assets'),

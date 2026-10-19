@@ -60,6 +60,7 @@ const SHELL_FILES = [
   '/assets/js/planning-rules.js',
   '/assets/js/planning.js',
   '/assets/js/planning-settings.js',
+  '/assets/js/sla.js',
   '/assets/js/preload.js',
   '/assets/js/queue.js',
   '/assets/js/refs.js',

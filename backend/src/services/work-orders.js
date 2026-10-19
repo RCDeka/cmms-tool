@@ -20,6 +20,8 @@ import {
   WORK_ORDER_TYPES,
 } from '../rules/enums.js';
 import { toBool, userRef, userRefColumns } from './mappers.js';
+import { refreshSla } from './sla.js';
+import { slaOf } from '../rules/sla.js';
 import { auditLabel, creationChanges, diffChanges } from '../rules/audit.js';
 import { addInFilter, addPlaceFilter } from '../lib/list-filter.js';
 import { recordAudit } from './audit.js';
@@ -114,7 +116,9 @@ const FIELDS = [
 const SELECT = `SELECT ${FIELDS.map((f) => `w.${f}`).join(', ')},
     a.id AS a__id, a.code AS a__code, a.name AS a__name, a.site AS a__site, a.status AS a__status,
     ${userRefColumns('asg')}, ${userRefColumns('sup')}, ${userRefColumns('cb')}, ${userRefColumns('ub')},
-    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title
+    ${userRefColumns('rv')}, pl.code AS pl__code, pl.title AS pl__title,
+    w.response_due_at, w.response_risk_at, w.resolution_due_at, w.resolution_risk_at,
+    w.sla_paused_at, (SELECT response_stop FROM sla_settings WHERE id = 1) AS sla__stop
   FROM work_orders w
   LEFT JOIN assets a ON a.id = w.asset_id
   LEFT JOIN users asg ON asg.id = w.assignee_id
@@ -173,8 +177,35 @@ export function toWorkOrder(row) {
   wo.reviewed_by = userRef(row, 'rv');
   wo.plan =
     row.plan_id === null ? null : { id: row.plan_id, code: row.pl__code, title: row.pl__title };
+  // BR-SLA2 (D86): the two deadlines, null outside BR-SLA1.
+  wo.sla = slaOf(row, row.sla__stop);
   return wo;
 }
+
+/** The moment the response clock stopped, by the setting (BR-SLA2), on the alias `w`. */
+const RESPONSE_AT = `(CASE (SELECT response_stop FROM sla_settings WHERE id = 1)
+  WHEN 'ASSIGNMENT' THEN w.first_assigned_at ELSE w.first_started_at END)`;
+const SLA_UNFINISHED = "w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')";
+
+/**
+ * Late on its SLA (BR-SLA4, `sla=late`): a clock stopped after its deadline, or running past
+ * it; while paused, only when the deadline passed before the pause. Compares stored moments
+ * with `@sla_now`.
+ */
+export const SLA_LATE = `(w.status <> 'CANCELLED' AND (
+  (w.response_due_at IS NOT NULL AND (
+    (${RESPONSE_AT} IS NOT NULL AND ${RESPONSE_AT} > w.response_due_at)
+    OR (${RESPONSE_AT} IS NULL AND ${SLA_UNFINISHED}
+      AND w.response_due_at < coalesce(w.sla_paused_at, @sla_now))))
+  OR (w.resolution_due_at IS NOT NULL AND (
+    (w.completed_at IS NOT NULL AND w.completed_at > w.resolution_due_at)
+    OR (w.completed_at IS NULL AND ${SLA_UNFINISHED}
+      AND w.resolution_due_at < coalesce(w.sla_paused_at, @sla_now))))))`;
+
+/** At risk (`sla=at_risk`): unfinished, not paused, past 75 % of a running target, not late. */
+export const SLA_AT_RISK = `(${SLA_UNFINISHED} AND w.sla_paused_at IS NULL AND NOT ${SLA_LATE}
+  AND ((${RESPONSE_AT} IS NULL AND w.response_risk_at <= @sla_now)
+    OR (w.completed_at IS NULL AND w.resolution_risk_at <= @sla_now)))`;
 
 /**
  * WHERE clause of the work order filters (docs/api-design.md → GET /api/work-orders).
@@ -196,8 +227,9 @@ export function workOrderFilters(
     overdue,
     to_review: toReview,
     awaiting_reply: awaitingReply,
+    sla,
   },
-  { userId, today, extra },
+  { userId, today, now, extra },
 ) {
   const where = [];
   const params = {};
@@ -233,6 +265,10 @@ export function workOrderFilters(
   else if (toReview === false) where.push("w.review_status IS NOT 'PENDING'");
   if (awaitingReply) where.push(AWAITING_REPLY);
   else if (awaitingReply === false) where.push(`NOT ${AWAITING_REPLY}`);
+  if (sla) {
+    where.push(sla === 'late' ? SLA_LATE : SLA_AT_RISK);
+    params.sla_now = now ?? new Date().toISOString();
+  }
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
@@ -415,8 +451,11 @@ export function createWorkOrderService(db, { locations }) {
   }
 
   /** BR-P5, BR-P7: a plan's visit follows its work order (same transaction). */
-  const afterWrite = (user, now, timeZone) => (current, changes) =>
+  const afterWrite = (user, now, timeZone) => (current, changes) => {
     followWorkOrder(db, current, changes, { userId: user.id, stamp: now.toISOString(), timeZone });
+    // BR-SLA4: the deadlines follow every write.
+    refreshSla(db, current.id, { now: now.toISOString(), timeZone, before: current });
+  };
 
   const byCategory = groupBy(`coalesce(category, 'UNSPECIFIED')`);
   const byStatus = groupBy('status');
@@ -569,7 +608,9 @@ export function createWorkOrderService(db, { locations }) {
             });
           }
 
-          return { id: insert(row, { userId: user.id, stamp: now.toISOString() }), created: true };
+          const newId = insert(row, { userId: user.id, stamp: now.toISOString() });
+          refreshSla(db, newId, { now: now.toISOString(), timeZone });
+          return { id: newId, created: true };
         })
         .immediate();
       return { created: id.created, item: getById(id.id) };
@@ -580,7 +621,7 @@ export function createWorkOrderService(db, { locations }) {
      * a staff request and allocates it, or rejects it (cancelled, with the reason).
      * @returns {object} the work order after the review
      */
-    review(id, body, user, { now }) {
+    review(id, body, user, { now, timeZone }) {
       const parsed = reviewSchema.safeParse(body ?? {});
       if (!parsed.success) throw new HttpError(400, 'Invalid body', fieldErrors(parsed.error));
       const { decision, version, reason, ...fields } = parsed.data;
@@ -626,6 +667,7 @@ export function createWorkOrderService(db, { locations }) {
           version: current.version + 1,
           at: stamp,
         });
+        refreshSla(db, id, { now: stamp, timeZone, before: current });
       }).immediate();
       return getById(id);
     },

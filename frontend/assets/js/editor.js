@@ -45,6 +45,7 @@ import {
   saveDraft,
 } from './save-modes.js';
 import { t } from './i18n.js';
+import { slaArea } from './sla.js';
 
 const detailContainer = document.getElementById('detail-container');
 
@@ -241,6 +242,11 @@ export async function showRecord({ route, record, onClose, backLabel }) {
             t('This staff request is waiting for a supervisor’s review: it will then be assigned.'),
           ),
     );
+  }
+  // D86: the response and resolution deadlines (technicians, supervisors, admins).
+  if (entity === 'work_orders') {
+    const area = slaArea(record);
+    if (area) notices.push(area);
   }
   if (entity === 'work_orders' && record.report_waived) {
     notices.push(

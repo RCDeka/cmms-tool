@@ -72,7 +72,12 @@ export function dashboardRouter({ dashboard, widgets, widgetSettings, timeZone, 
       today,
       generated_at: instant.toISOString(),
       widgets: shown.length
-        ? widgets.figures(shown, filtersOf(query), { today, userId: req.user.id, timeZone })
+        ? widgets.figures(shown, filtersOf(query), {
+            today,
+            now: instant.toISOString(),
+            userId: req.user.id,
+            timeZone,
+          })
         : {},
     });
   });
@@ -84,9 +89,11 @@ export function dashboardRouter({ dashboard, widgets, widgetSettings, timeZone, 
     (req, res) => {
       const { segment, ...query } = req.valid.query;
       widgetSettings.assertAvailable(req.valid.params.key, req.user);
+      const instant = now();
       res.json(
         widgets.rows(req.valid.params.key, segment, filtersOf(query), {
-          today: dateInZone(timeZone, now()),
+          today: dateInZone(timeZone, instant),
+          now: instant.toISOString(),
           userId: req.user.id,
           timeZone,
         }),

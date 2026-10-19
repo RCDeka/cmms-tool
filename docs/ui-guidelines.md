@@ -79,6 +79,13 @@ Badges always show text. Badge class names come from the field and the code in k
 - **Admins**: **Change status** focuses the status field, which offers every status; a change outside the usual steps asks for a confirmation saying it is logged as an administrator override, and the history titles that entry "Status changed by an administrator (override)". A closed or cancelled work order is editable by admins for its status only.
 - **To close**: the home tile and the dashboard widget "To close" (attention style above zero) open the list `status=COMPLETED`, oldest technical end first; "Done this month" counts the technical end.
 
+## Service levels (D86, Phase 36)
+
+- **Work order panel**: a "Service level" box under the header (technicians, supervisors and admins; not for a cancelled work order or one outside the SLA) with two lines, *Response* and *Resolution*, each a badge and its moments: `badge-sla-met` "Met" (green) or `badge-sla-missed` "Missed" (red) with when the clock stopped and its deadline; while it runs, `badge-sla-late` "Late" (red), `badge-sla-at-risk` "At risk" (orange, past 75 % of the target), `badge-sla-paused` "Paused" (blue) or `badge-sla-running` "Running" (gray) with the deadline; "No target for this priority." without one. During a hold waiting for access or approval a note says the clocks stop.
+- **Lists**: after the status, "SLA missed" (`badge-sla-late`, red) or "SLA at risk" (`badge-sla-at-risk`, orange), as the `sla` filter counts them; nothing otherwise. The filter bar has a *Service level* select: All, Late, At risk.
+- **Page "Service levels"** (`/admin/sla`, sidebar for supervisors and admins; supervisors see it read-only): the targets table (priority × response and resolution, in hours; empty means no target), *Response stops at*, *SLA hours*, the business days as checkboxes and the opening and closing times, a line saying since when work is measured, Save; below, the holidays with a Remove button each and a form to add one. Online only.
+- **Widget "Service levels met"** (Responsiveness): a summary sentence and a table per priority, response and resolution met as "82 % (41 of 50)", each cell opening the work orders counted; the export adds the outcome of each clock.
+
 ## Accessibility (brief, mandatory)
 
 - Semantic HTML: `<nav>`, `<main>`, `<table>` with `<caption>` and `<th scope="col">`, `<dl>` for detail fields, `<button>` for actions (never a clickable `<div>`).

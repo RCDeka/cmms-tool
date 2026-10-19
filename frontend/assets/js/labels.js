@@ -77,6 +77,9 @@ export const VALUE_LABELS = {
     WEEKEND: 'Weekend work',
     OTHER: 'Other',
   },
+  // Service levels (D86).
+  sla_response_stop: { START: 'First start', ASSIGNMENT: 'First assignment' },
+  sla_hours_mode: { CALENDAR: 'Calendar hours', BUSINESS: 'Business hours' },
 };
 
 /**

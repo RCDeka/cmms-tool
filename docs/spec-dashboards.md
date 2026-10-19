@@ -115,6 +115,8 @@ Sizes on a 4-column grid: **S** = 1 column (tile), **M** = 2 columns, **L** = 4 
 
 **`request_service` — Staff requests (M).** Requests created in the period: median time to review (`created_at` → `reviewed_at`), median time to done, share rejected, count. Three figures with a weekly sparkline. Drill: rejected requests with their reason.
 
+**`sla_compliance` — Service levels met (M, D86, Phase 36).** Per priority, response and resolution met ÷ counted, each clock on its own: those that stopped in the period, plus those still running and already late; work reported from `sla_settings.measured_from` on (BR-SLA1). A summary sentence and the table (no chart: eight figures). Drill: `response` or `resolution`, optionally `:<PRIORITY>`; the export adds the outcome of each clock, missed first. Not in a template: added from the sidebar.
+
 **`bad_actors` — Assets with the most breakdowns (M).** Corrective work orders (not cancelled) linked to an asset, created in the period, grouped by asset: the 10 assets with the most, as bars, with the cumulative share of all corrective work. Option `critical_only` (High and Critical assets). Drill: an asset → its panel and history.
 
 **`repeat_failures` — Repeat failures (S).** Corrective work orders created in the period on an asset whose previous corrective work order was closed less than 30 days before. Count and share of the period's corrective work orders on assets. Stand-in for the first-time fix rate, which the data cannot measure. Drill: the pairs (rows give both numbers).

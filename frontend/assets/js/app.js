@@ -102,6 +102,7 @@ import {
   showSchedule,
 } from './schedule-page.js';
 import { renderLogin } from './login.js';
+import { renderSlaSettings, slaFieldErrors } from './sla.js';
 import { initNetwork, isOnline, onNetworkChange } from './network.js';
 import { prefetchAround } from './preload.js';
 import {
@@ -297,6 +298,14 @@ async function render(route) {
       return hasRole('ADMIN')
         ? showPlanningSettings(isCurrent)
         : showPlaceholder(null, t('Access denied'), t('Only administrators can open this page.'));
+    case 'slaSettings':
+      return hasRole('SUPERVISOR', 'ADMIN')
+        ? showSlaSettings(isCurrent)
+        : showPlaceholder(
+            null,
+            t('Access denied'),
+            t('Only supervisors and administrators can open this page.'),
+          );
     case 'widgetSettings':
       return hasRole('ADMIN')
         ? showWidgetSettings(isCurrent)
@@ -1049,6 +1058,77 @@ async function showFeedbackLog(route, isCurrent) {
     paginationTop: renderPagination(data, onPage, 'top'),
   });
   restoreFocus(() => tableContainer.querySelector('.table-title')?.focus());
+}
+
+// --- Service levels (D86: supervisors read, administrators edit) ----------------------------
+
+async function showSlaSettings(isCurrent, focus = null) {
+  leaveRecordViews('sla_settings', t('Service levels'));
+  if (!tableContainer.querySelector('.sla-targets')) {
+    renderPage(
+      h('p', { class: 'loading-state', role: 'status' }, t('Loading the service levels…')),
+    );
+  }
+  let sla;
+  try {
+    sla = await apiFetch('/sla');
+  } catch (err) {
+    if (!isCurrent()) return;
+    showConsoleError(err, () => render(currentRoute()));
+    if (err.status === 0) {
+      tableContainer.querySelector('.error-state p').textContent = t(
+        'The service levels need a connection to the server.',
+      );
+    }
+    return;
+  }
+  if (!isCurrent()) return;
+  const offline = (err, text) => (err.status === 0 ? text : err.message);
+  const reload = (next) => showSlaSettings(isCurrent, next);
+  renderSlaSettings(tableContainer, {
+    sla,
+    canEdit: hasRole('ADMIN'),
+    onSave: async (body, form) => {
+      if (!body) return showErrors(form, {}, t('Nothing to save: no value was changed.'));
+      try {
+        await apiFetch('/sla', { method: 'PUT', body });
+        announce(t('Service levels saved.'));
+        reload();
+      } catch (err) {
+        showErrors(
+          form,
+          slaFieldErrors(apiFieldErrors(err), body.targets),
+          offline(err, t('You are offline: the service levels were not saved.')),
+        );
+      }
+    },
+    onAddHoliday: async (body, form) => {
+      try {
+        await apiFetch('/sla/holidays', { method: 'POST', body });
+        announce(t('Holiday added.'));
+        reload('#sla-holiday-day');
+      } catch (err) {
+        showErrors(
+          form,
+          apiFieldErrors(err),
+          offline(err, t('You are offline: the holiday was not added.')),
+        );
+      }
+    },
+    onRemoveHoliday: async (holiday) => {
+      try {
+        await apiFetch(`/sla/holidays/${holiday.id}`, { method: 'DELETE' });
+        announce(t('Holiday removed.'));
+        reload('#sla-holidays-title');
+      } catch (err) {
+        announce(offline(err, t('You are offline: the holiday was not removed.')));
+      }
+    },
+  });
+  (
+    (focus && tableContainer.querySelector(focus)) ??
+    tableContainer.querySelector('.placeholder-title')
+  )?.focus();
 }
 
 // --- Conflict console (supervisors and admins) ---------------------------------------------

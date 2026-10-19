@@ -140,6 +140,7 @@ Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance cri
 ## Work order process and SLA (D86)
 
 - **Phase 35: work order process** — done (D89). Technically done (`COMPLETED`) apart from the administrative closing (`CLOSED`, supervisors and admins), the report waiver and the admin status override (D87), hold reasons and notes, holding before the start, reopening, the SLA moments on the work order (`reported_at`, `first_assigned_at`, `first_started_at`, `completed_at`) and the client's time in the audit log (`edited_at`), the figures counted on the technical end, the "To close" queue and tile, the request steps "Done" then "Closed", seed data with every status and hold reason. Acceptance: see the spec, section 11.
+- **Phase 36: SLA** — done (D90). Migration `017` (targets, settings, holidays, deadlines and the pause moment on each work order), `rules/sla.js` (calendar and business hours, holidays, paused spells, deadlines from scratch, late and at risk) unit-tested on hand-computed cases, the deadlines kept at every write and recomputed on a settings change, `GET/PUT /api/sla` and the holidays, the `sla=late|at_risk` filter, the SLA area of the work order panel and the list badge, the page "Service levels" (`/admin/sla`), the widget "Service levels met" and its export, French texts, seed data measured from 21 days back. Acceptance: see the spec, section 11.
 
 ## Production (D73)
 

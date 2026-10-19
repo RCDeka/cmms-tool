@@ -48,6 +48,8 @@ export const WIDGETS = [
   // Responsiveness, assets and people (Phase 24).
   { key: 'response_times', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
   { key: 'request_service', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
+  // Service levels (Phase 36, D86).
+  { key: 'sla_compliance', filters: ['period', 'sites', 'categories'], rows: 'work_orders' },
   {
     key: 'bad_actors',
     filters: ['period', 'sites', 'categories'],

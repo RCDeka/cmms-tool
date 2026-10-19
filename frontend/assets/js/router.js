@@ -20,7 +20,7 @@ const TMP_ID = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @typedef {object} Route
  * @property {'root'|'login'|'dashboard'|'list'|'detail'|'create'|'conflicts'|'conflict'|'audit'
  *   |'users'|'user'|'userCreate'|'places'|'place'|'placeCreate'|'levelTypes'|'account'|'feedback'|'requests'|'request'|'requestCreate'
- *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'schedule'|'myWeek'
+ *   |'planning'|'plan'|'planCreate'|'blockedWeeks'|'planningSettings'|'slaSettings'|'schedule'|'myWeek'
  *   |'notFound'} name
  * @property {string | null} [week] week scheduler and My week: the week shown (current when null)
  * @property {object | null} [panel] week scheduler: the side panel open (schedule.js)
@@ -76,6 +76,9 @@ export function parseRoute(pathname, search = '') {
   }
   if (first === 'admin' && second === 'planning' && !rest.length) {
     return { name: 'planningSettings', page };
+  }
+  if (first === 'admin' && second === 'sla' && !rest.length) {
+    return { name: 'slaSettings', page };
   }
   if (first === 'admin' && second === 'widgets' && !rest.length) {
     return { name: 'widgetSettings', page };

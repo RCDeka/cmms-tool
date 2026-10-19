@@ -446,6 +446,56 @@ describe('estimate_accuracy', () => {
   });
 });
 
+describe('sla_compliance', () => {
+  // Deadlines set by hand (BR-SLA4): C2 (9) done an hour late, C8 (15) done on its deadline,
+  // C3 (10) not started and past its response deadline; not counted: C5 (12) running in time,
+  // C7 (14) cancelled, C4 (11) done before the period, C6 (13) paused before its deadline.
+  beforeAll(() => {
+    const ISO = "'%Y-%m-%dT%H:%M:%fZ'";
+    const set = (id, columns) =>
+      ctx.db
+        .prepare(
+          `UPDATE work_orders SET ${Object.keys(columns)
+            .map((c) => `${c} = ${columns[c]}`)
+            .join(', ')} WHERE id = ?`,
+        )
+        .run(id);
+    set(9, { resolution_due_at: `strftime(${ISO}, completed_at, '-1 hour')` });
+    set(15, { resolution_due_at: 'completed_at' });
+    set(10, { response_due_at: "'2026-10-02T09:00:00.000Z'" });
+    set(12, { response_due_at: "'2026-10-20T09:00:00.000Z'" });
+    set(14, { response_due_at: "'2026-09-17T09:00:00.000Z'" });
+    set(11, { resolution_due_at: "'2026-08-11T09:00:00.000Z'" });
+    set(13, {
+      response_due_at: "'2026-10-03T12:00:00.000Z'",
+      sla_paused_at: "'2026-10-03T00:00:00.000Z'",
+    });
+  });
+
+  it('gives per priority the response and resolution met out of those counted', async () => {
+    const data = await widget('sla_compliance');
+    const of = (priority) => data.rows.find((r) => r.priority === priority);
+    expect(of('URGENT').response).toEqual({ counted: 1, met: 0, share: 0 });
+    expect(of('NORMAL').resolution).toEqual({ counted: 2, met: 1, share: 0.5 });
+    expect(of('NORMAL').response).toEqual({ counted: 0, met: 0, share: null });
+    expect(of('HIGH').response).toEqual({ counted: 0, met: 0, share: null });
+    expect(data.response).toEqual({ counted: 1, met: 0, share: 0 });
+    expect(data.resolution).toEqual({ counted: 2, met: 1, share: 0.5 });
+    expect(data.measured_from).toEqual(expect.any(String));
+  });
+
+  it('lists the work orders counted, the missed ones first in the export', async () => {
+    expect(await drill('sla_compliance')).toEqual([9, 10, 15]);
+    expect(await drill('sla_compliance:response:URGENT')).toEqual([10]);
+    await get('/api/work-orders?drill=sla_compliance:late').expect(400);
+    const exported = await rows('sla_compliance', 'segment=resolution');
+    expect(exported.items.map((w) => [w.id, w.dashboard])).toEqual([
+      [9, { response: null, resolution: 'missed' }],
+      [15, { response: null, resolution: 'met' }],
+    ]);
+  });
+});
+
 describe('templates', () => {
   it('builds the "Assets and people" dashboard, whose figures all load together', async () => {
     const created = await request(app)

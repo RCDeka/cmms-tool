@@ -30,7 +30,8 @@ backend/src/
   services/            SQL (prepared statements) + transactions + calling rules
   rules/               pure functions: enums, permissions, work-order-status, versioning, conflict diff, kpi,
                        planning (occurrence series, warnings, capacity, weekly figures and tiles),
-                       schedule (days, daily capacity, hours left, warnings, appointments, tray, tiles)
+                       schedule (days, daily capacity, hours left, warnings, appointments, tray, tiles),
+                       sla (deadlines in calendar or business hours, paused spells, late and at risk)
   lib/                 small helpers (dates in APP_TIMEZONE, ISO weeks, pagination)
   assistant/           AI assistant (D66): the provider chosen by AI_PROVIDER (none so far) and the
                        fixed prompts; guardrail rules in rules/assistant-input.js and assistant-output.js
@@ -88,8 +89,8 @@ frontend/
     widgets-compliance.js     compliance widgets (Phase 23): preventive compliance, schedule kept, the sortable
                               contractor scorecard, Visits CSV columns
     widgets-people.js         responsiveness, asset and people widgets (Phase 24): response times, staff
-                              requests with sparklines, bad actors, critical downtime, workload, estimates;
-                              the extra export columns
+                              requests with sparklines, service levels met (D86), bad actors, critical
+                              downtime, workload, estimates; the extra export columns
     widget-charts.js          Chart.js drawings of those widgets (paired columns, line, week bars with the
                               rule-of-thumb band, 100 % stacked columns, rate bars, columns with a line, value bars
                               with a reference line, median to 90th percentile ranges, priority stacks), clicks open the records
@@ -107,6 +108,8 @@ frontend/
     planning-rules.js         copies of the planning rules for the live impact (allowed weeks, figures) and
                               the figures of a balancing proposal
     planning-settings.js      planning settings page (administrators) with the capacity preview
+    sla.js                    service levels (D86): state of each clock, the list badge, the SLA area of the
+                              work order panel, the history labels and the page /admin/sla
     widget-settings.js        dashboard widgets page (administrators): widgets switched on or off (D65)
     asset-picker.js           "Browse assets…" dialog of the plan and work order forms (D50)
     find-work-order.js        "Find a work order" dialog of the top bar (AI assistant, D66, D67)
@@ -166,6 +169,7 @@ export const ENTITIES = {
 | `/planning/blocked-weeks` | planner + blocked weeks panel (every maintenance role reads; SUPERVISOR, ADMIN edit) |
 | `/planning/suggestions` | planner + balancing proposal (SUPERVISOR, ADMIN, online only, D53) |
 | `/admin/planning` | planning settings (ADMIN, online only) |
+| `/admin/sla` | service levels: targets per priority, response stop, hours mode, business days and hours, holidays (SUPERVISOR reads, ADMIN edits; online only, D86) |
 | `/admin/widgets` | dashboard widgets switched on or off for supervisors (ADMIN, online only, D65) |
 | `/schedule?week=…` | week scheduler (maintenance roles, online only; technicians read only, D52) |
 | `/schedule/work-orders/:id?week=…[&person=N&day=D]` | scheduler + panel scheduling a work order of the tray (from a drop on a person's day) |

@@ -99,4 +99,12 @@ export const AUDIT_ENTITY_TYPES = [
   'plan_occurrences',
   'allocations',
   'planning_settings',
+  // Service levels (D86, Phase 36): the targets and holidays are logged with the settings (D90).
+  'sla_settings',
 ];
+
+/** When the response clock stops (BR-SLA2): the first start, or the first assignment. */
+export const SLA_RESPONSE_STOPS = ['START', 'ASSIGNMENT'];
+
+/** SLA time: calendar hours (24/7) or business hours (BR-SLA3). */
+export const SLA_HOURS_MODES = ['CALENDAR', 'BUSINESS'];

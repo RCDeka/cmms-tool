@@ -63,6 +63,10 @@ export const OCCURRENCE_STATUSES = ['PLANNED', 'RELEASED', 'SKIPPED'];
 export const ALLOCATION_KINDS = ['WORK', 'TRAVEL', 'PREPARATION', 'OTHER'];
 export const CAPACITY_REASONS = ['LEAVE', 'PART_TIME', 'TRAINING', 'WEEKEND', 'OTHER'];
 
+/** Service levels (D86): when the response clock stops, and how SLA time is counted. */
+export const SLA_RESPONSE_STOPS = ['START', 'ASSIGNMENT'];
+export const SLA_HOURS_MODES = ['CALENDAR', 'BUSINESS'];
+
 /** Enum lists by name, as referenced by field definitions in entities.js. */
 export const ENUMS = {
   role: ROLES,
@@ -79,4 +83,6 @@ export const ENUMS = {
   occurrence_status: OCCURRENCE_STATUSES,
   allocation_kind: ALLOCATION_KINDS,
   capacity_reason: CAPACITY_REASONS,
+  sla_response_stop: SLA_RESPONSE_STOPS,
+  sla_hours_mode: SLA_HOURS_MODES,
 };

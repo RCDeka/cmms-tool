@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Responsiveness, asset and people widgets of the dashboards (docs/spec-dashboards.md §6.4,
-// Phase 24): response times, staff request service, bad actors, repeat failures, critical
-// downtime, workload, estimate accuracy. Same shape as the other widget modules: `where`
+// Phase 24): response times, staff request service, SLA compliance (D86), bad actors, repeat
+// failures, critical downtime, workload, estimate accuracy. Same shape as the other widget modules: `where`
 // (work orders) or `assetWhere` (assets), `figures`, and `extra`: columns added to the
 // exported rows, `_sort` ordering them (the slowest, the biggest overrun first).
 import { addDays, dateInZone } from '../lib/dates.js';
@@ -18,11 +18,13 @@ import {
   median,
   repeatFailures,
 } from '../rules/kpi-people.js';
-import { UNFINISHED, badSegment, combine, idsIn, scopeClause } from './widget-sql.js';
+import { clockOutcome, slaOf } from '../rules/sla.js';
+import { UNFINISHED, badSegment, combine, idsIn, scopeClause, splitSegment } from './widget-sql.js';
 
 const PRIORITIES_DOWN = [...WORK_ORDER_PRIORITIES].reverse();
 const CRITICAL = ['HIGH', 'CRITICAL'];
 const BAD_ACTORS_SHOWN = 10;
+const SLA_CLOCKS = ['response', 'resolution'];
 
 /** "<first>" or "<first>:<rest>". */
 function split(segment) {
@@ -117,6 +119,62 @@ export function peopleWidgets(db) {
       review_median: median(list.filter((r) => r.review_hours !== null).map((r) => r.review_hours)),
       done_median: median(list.filter((r) => r.done_hours !== null).map((r) => r.done_hours)),
     };
+  };
+
+  /**
+   * SLA compliance (D86 section 7): each work order with deadlines (BR-SLA1), with how its
+   * response and its resolution count in the period (`clockOutcome`).
+   */
+  function slaOutcomes(ctx) {
+    const where = combine(
+      {
+        sql: "(w.response_due_at IS NOT NULL OR w.resolution_due_at IS NOT NULL) AND w.status <> 'CANCELLED'",
+      },
+      scopeClause('w', ctx),
+    );
+    const responseStop = db
+      .prepare('SELECT response_stop FROM sla_settings WHERE id = 1')
+      .pluck()
+      .get();
+    const period = {
+      from: periodStart(ctx.today, ctx.period),
+      to: ctx.today,
+      now: ctx.now,
+      timeZone: ctx.timeZone,
+    };
+    return db
+      .prepare(
+        `SELECT w.id, w.priority, w.status, w.first_started_at, w.first_assigned_at,
+           w.completed_at, w.response_due_at, w.response_risk_at, w.resolution_due_at,
+           w.resolution_risk_at, w.sla_paused_at
+         FROM work_orders w ${where.clause}`,
+      )
+      .all(where.params)
+      .map((w) => {
+        const sla = slaOf(w, responseStop);
+        return {
+          id: w.id,
+          priority: w.priority,
+          response: clockOutcome(sla.response, w, period),
+          resolution: clockOutcome(sla.resolution, w, period),
+        };
+      })
+      .filter((w) => w.response || w.resolution);
+  }
+  /** Segment "response" or "resolution", optionally ":<PRIORITY>": the work orders counted. */
+  function slaOutcomesOf(ctx, segment) {
+    const [clock, priority] = segment
+      ? splitSegment(segment, SLA_CLOCKS, WORK_ORDER_PRIORITIES)
+      : [null, null];
+    return slaOutcomes(ctx).filter(
+      (w) =>
+        (clock === null || w[clock] !== null) && (priority === null || w.priority === priority),
+    );
+  }
+  const slaSummary = (list, clock) => {
+    const counted = list.filter((w) => w[clock] !== null);
+    const met = counted.filter((w) => w[clock] === 'met').length;
+    return { counted: counted.length, met, share: counted.length ? met / counted.length : null };
   };
 
   /** Corrective work (not cancelled) on assets, any date, with the asset's criticality. */
@@ -294,6 +352,42 @@ export function peopleWidgets(db) {
             ...b,
             ...requestSummary(list.filter((r) => r.created_on >= b.from && r.created_on <= b.to)),
           })),
+        };
+      },
+    },
+
+    // Segments: "response" or "resolution", optionally ":<PRIORITY>". Missed ones first.
+    sla_compliance: {
+      where: (ctx, segment) => idsIn(slaOutcomesOf(ctx, segment).map((w) => w.id)),
+      extra: (ctx, segment) =>
+        new Map(
+          slaOutcomesOf(ctx, segment).map((w) => [
+            w.id,
+            {
+              response: w.response,
+              resolution: w.resolution,
+              _sort: (w.response === 'missed') + (w.resolution === 'missed'),
+            },
+          ]),
+        ),
+      figures: (ctx) => {
+        const list = slaOutcomes(ctx);
+        return {
+          period: ctx.period,
+          measured_from: db
+            .prepare('SELECT measured_from FROM sla_settings WHERE id = 1')
+            .pluck()
+            .get(),
+          rows: PRIORITIES_DOWN.map((priority) => {
+            const mine = list.filter((w) => w.priority === priority);
+            return {
+              priority,
+              response: slaSummary(mine, 'response'),
+              resolution: slaSummary(mine, 'resolution'),
+            };
+          }),
+          response: slaSummary(list, 'response'),
+          resolution: slaSummary(list, 'resolution'),
         };
       },
     },

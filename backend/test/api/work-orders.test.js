@@ -35,6 +35,7 @@ const WORK_ORDER_KEYS = [
   'asset_id',
   'asset',
   'site',
+  'sla',
   'location_id',
   'place',
   'location',

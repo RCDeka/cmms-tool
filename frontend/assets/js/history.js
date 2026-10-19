@@ -10,6 +10,7 @@ import { ENTITIES, fieldForApi } from './entities.js';
 import { formatDate, formatDateTime, formatHoursValue, personName } from './format.js';
 import { valueLabel } from './labels.js';
 import { PLANNING_FIELD_LABELS, planningFieldValue } from './planning.js';
+import { SLA_FIELD_LABELS, slaFieldValue } from './sla.js';
 import { t, tn } from './i18n.js';
 
 const ACTION_LABELS = {
@@ -105,6 +106,8 @@ const OTHER_RECORDS = {
     url: () => '/admin/planning',
   },
   allocations: { labels: ALLOCATION_FIELD_LABELS, value: allocationFieldValue, url: null },
+  // Service levels (D86): the targets and holidays are logged with the settings.
+  sla_settings: { labels: SLA_FIELD_LABELS, value: slaFieldValue, url: () => '/admin/sla' },
 };
 
 /** Record types of the audit log filter, in display order. */
@@ -114,6 +117,7 @@ export const AUDIT_TYPES = [
   { value: 'maintenance_plans', label: t('Maintenance plans') },
   { value: 'plan_occurrences', label: t('Plan visits') },
   { value: 'planning_settings', label: t('Planning settings') },
+  { value: 'sla_settings', label: t('Service levels') },
   { value: 'allocations', label: t('Scheduled blocks') },
   { value: 'users', label: t('User accounts'), adminOnly: true },
 ];

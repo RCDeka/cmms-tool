@@ -263,3 +263,37 @@
   box-shadow: none;
   background: none;
 }
+
+/* Service levels of a work order (D86): the two deadlines, under the header. */
+.sla-area {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.sla-area-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.sla-clocks {
+  display: grid;
+  grid-template-columns: minmax(7rem, 35%) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.sla-clocks dt {
+  font-weight: 600;
+}
+
+.sla-clocks dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sla-area > p {
+  margin: var(--space-2) 0 0;
+}

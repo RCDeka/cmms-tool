@@ -29,6 +29,7 @@ import {
   weekday,
 } from '../rules/schedule.js';
 import { recordAudit } from './audit.js';
+import { refreshSla } from './sla.js';
 import { userRef, userRefColumns } from './mappers.js';
 
 const halfHours = (min, max) =>
@@ -157,7 +158,7 @@ const loggedValues = (row) => Object.fromEntries(LOGGED.map((k) => [k, row[k] ??
  * @param {{ workOrders: ReturnType<import('./work-orders.js').createWorkOrderService>,
  *   planning: ReturnType<import('./planning.js').createPlanningService> }} deps
  */
-export function createScheduleService(db, { workOrders, planning }) {
+export function createScheduleService(db, { workOrders, planning, timeZone }) {
   const blockById = db.prepare(`${BLOCK_SELECT} WHERE al.id = ?`);
   const blocksBetween = db.prepare(
     `${BLOCK_SELECT} WHERE al.day BETWEEN ? AND ? ORDER BY al.day, al.technician_id, al.id`,
@@ -334,6 +335,8 @@ export function createScheduleService(db, { workOrders, planning }) {
     // A work order with an open conflict waits for its arbitration (D4): no assignment.
     if (current.assignee_id === null && !current.has_conflict) {
       changes.assignee_id = block.technician_id;
+      // BR-W18: the first assignment (the response stop in ASSIGNMENT mode, BR-SLA2).
+      if (!current.first_assigned_at) changes.first_assigned_at = stamp;
     }
     if (!Object.keys(changes).length) return;
     db.prepare(
@@ -353,6 +356,7 @@ export function createScheduleService(db, { workOrders, planning }) {
       version: current.version + 1,
       at: stamp,
     });
+    refreshSla(db, workOrderId, { now: stamp, timeZone, before: current });
   }
 
   /**

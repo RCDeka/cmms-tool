@@ -5,6 +5,7 @@
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
 import { isEmpty, renderValue, workOrderStatus } from './format.js';
+import { slaBadge } from './sla.js';
 import { t, tn } from './i18n.js';
 
 /** Row ids are numbers, or `tmp-<uuid>` strings for creations not yet on the server. */
@@ -186,7 +187,7 @@ function renderRow(cfg, record, selected) {
       isEmpty(record[field])
         ? ''
         : cfg.key === 'work_orders' && field === 'status'
-          ? workOrderStatus(record)
+          ? [workOrderStatus(record), slaBadge(record)]
           : renderValue(field, cfg.fields[field], record[field]),
     ),
   );
