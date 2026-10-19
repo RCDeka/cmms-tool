@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Work Order Process and SLA: Specification
 
-Status: **specified and confirmed** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, confirmed by the product owner the same day; the review of Phase 35 the same day added decisions 6 and 7 of section 3 and the completions of D87. Implementation postponed (2026-10-19). Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **specified and confirmed** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, confirmed by the product owner the same day; the review of Phase 35 the same day added decisions 6 and 7 of section 3 and the completions of D87; the review of Phase 36 the completions of D88. Implementation postponed (2026-10-19). Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 
@@ -61,8 +61,11 @@ Terminal statuses stay `CLOSED` and `CANCELLED`. **Unfinished** (backlog, overdu
 | first_started_at | TEXT | yes | datetime of the first change to `IN_PROGRESS` (the edit's `edited_at`); set once |
 | completed_on | TEXT | yes | date of the technical end; editable like `started_on` |
 | completed_at | TEXT | yes | datetime of the technical end (the edit's `edited_at`), for the SLA; cleared on reopening |
-| response_due_at | TEXT | yes | SLA deadline, kept by the server (BR-SLA4); null without a target or while paused |
+| response_due_at | TEXT | yes | SLA deadline (UTC), kept by the server (BR-SLA4); null outside BR-SLA1; kept while paused |
 | resolution_due_at | TEXT | yes | idem |
+| response_risk_at | TEXT | yes | moment 75 % of the response target is used ("at risk", section 12), kept with the deadline |
+| resolution_risk_at | TEXT | yes | idem for resolution |
+| sla_paused | INTEGER | no | 0/1, default 0; 1 while on hold with a pausing reason (BR-SLA3) |
 | closed_on | TEXT | yes | date of the administrative end (as today) |
 
 New CHECK constraints: `COMPLETED` and `CLOSED` need `completed_on`, `completed_at`, and a non-empty work report or `report_waived = 1`; `report_waived = 1` only in `COMPLETED` or `CLOSED`; `CLOSED` needs `closed_on`; `completed_on ≥ started_on`, `closed_on ≥ completed_on`. Index on `status` stays; add one on `resolution_due_at` (the "late on SLA" filter).
@@ -75,11 +78,11 @@ New column `edited_at` (TEXT, null): the client's `edited_at` of the write (now 
 
 ### sla_targets (new, Phase 36)
 
-One row per priority: `priority` (PK, CHECK Work order priority), `response_hours` and `resolution_hours` (REAL, null = no target, > 0, resolution ≥ response), `version`, `updated_by`, `updated_at`. Seeded defaults (section 12): Urgent 1 h / 4 h, High 4 h / 24 h, Normal 24 h / 72 h, Low 72 h / 240 h.
+One row per priority: `priority` (PK, CHECK Work order priority), `response_hours` and `resolution_hours` (REAL, null = no target, > 0, resolution ≥ response), `updated_by`, `updated_at` (no `version`: the targets are saved with the settings, under the version of `sla_settings`). Seeded defaults (section 12): Urgent 1 h / 4 h, High 4 h / 24 h, Normal 24 h / 72 h, Low 72 h / 240 h.
 
 ### sla_settings (new, Phase 36)
 
-One row (`id = 1`), edited by the admins: `response_stop` (`START`), `hours_mode` (`CALENDAR`), `business_days` (`1,2,3,4,5`, ISO weekdays), `business_start` (`08:00`), `business_end` (`18:00`), `version`, `updated_by`, `updated_at`. Business hours are in `APP_TIMEZONE`.
+One row (`id = 1`), edited by the admins: `response_stop` (`START`), `hours_mode` (`CALENDAR`), `business_days` (`1,2,3,4,5`, ISO weekdays), `business_start` (`08:00`), `business_end` (`18:00`), `measured_from` (datetime migration `017` ran, not editable: BR-SLA1), `version` (covers the targets too), `updated_by`, `updated_at`. Business hours are in `APP_TIMEZONE`, from `business_start` included to `business_end` excluded.
 
 ### sla_holidays (new, Phase 36)
 
@@ -134,11 +137,11 @@ stateDiagram-v2
 
 ### SLA (Phase 36)
 
-- BR-SLA1: SLA targets apply to `CORRECTIVE` work orders, staff requests included, with a target for their current priority. Preventive and regulatory work keep their compliance by deadline week (D59).
-- BR-SLA2: Response is met when the response moment (`first_started_at`, or `first_assigned_at` when `response_stop = ASSIGNMENT`) is at or before `response_due_at`; resolution is met when `completed_at` is at or before `resolution_due_at`. A cancelled work order counts in neither.
-- BR-SLA3: The elapsed time runs from `reported_at`, in calendar hours, or in business hours (the working days of `business_days`, between `business_start` and `business_end`, minus `sla_holidays`, in `APP_TIMEZONE`), minus the **paused spells**: time spent `ON_HOLD` with `WAITING_ACCESS` or `WAITING_APPROVAL` (from the status and reason changes of the audit log, at their `coalesce(edited_at, at)`). A pure rule (`rules/sla.js`) computes it.
-- BR-SLA4: The server keeps `response_due_at` and `resolution_due_at` at every write that changes the status, the hold reason or the priority, and recomputes the unfinished work orders when the targets or settings change (one transaction). While paused, the running deadlines are null; when the pause ends, they are moved by the paused time. Finished work orders keep their deadlines.
-- BR-SLA5: The priority in force when the clock stops decides the target (a priority raised during the work tightens the deadline at once).
+- BR-SLA1: SLA targets apply to `CORRECTIVE` work orders, staff requests included, with a target for their current priority and `reported_at ≥ sla_settings.measured_from`: work reported before Phase 36 is not measured against targets nobody had then. Preventive and regulatory work keep their compliance by deadline week (D59).
+- BR-SLA2: Response is met when the response moment (`first_started_at`, or `first_assigned_at` when `response_stop = ASSIGNMENT`) is at or before `response_due_at`; resolution is met when `completed_at` is at or before `resolution_due_at`. A cancelled work order counts in neither. In `ASSIGNMENT` mode a work order created already assigned (a technician's own, BR-W12) meets its response at creation; accepted (product owner, 2026-10-19).
+- BR-SLA3: The elapsed time runs from `reported_at`, in calendar hours (real elapsed time: a daylight saving change does not alter it), or in business hours (the working days of `business_days`, from `business_start` to `business_end`, minus `sla_holidays`, in `APP_TIMEZONE`; work reported outside them starts its clock at the next opening), minus the **paused spells**: time spent `ON_HOLD` with `WAITING_ACCESS` or `WAITING_APPROVAL`. The spells are read from the status and reason changes of the audit log, in the order the server applied them (`id`), each at its `coalesce(edited_at, at)`; a spell whose end comes before its start (offline edits synced out of order) counts as zero. A pure rule (`rules/sla.js`) computes it, walking whole days rather than minutes.
+- BR-SLA4: A deadline is always **computed from scratch**, never shifted: `reported_at` + the target in SLA hours (BR-SLA3) + the paused spells so far, giving the moment the target is used up (`*_due_at`) and the moment 75 % of it is (`*_risk_at`), in UTC. The server recomputes them at every write that changes the status, the hold reason, the priority or the type, and recomputes every unfinished work order when the targets, the settings or the holidays change (one transaction). While paused (`sla_paused = 1`), the last deadlines stay shown and the work order is neither late nor at risk, unless a deadline was already passed before the pause; when the pause ends, the recomputation moves them. Finished work orders keep their deadlines.
+- BR-SLA5: The priority in force when the clock stops decides the target (a priority raised during the work tightens the deadline at once; lowered, it loosens it, which only supervisors and admins can do and the audit log shows).
 
 ## 6. API
 
@@ -152,9 +155,9 @@ Phase 35:
 - Dashboard: see section 10.
 
 Phase 36:
-- `WorkOrder` gains `sla: { response: { due_at, at, met }, resolution: { due_at, at, met }, paused }` (null outside BR-SLA1).
-- `GET /api/work-orders`: flag `sla=late` (unfinished past a deadline, or finished late) and `sla=at_risk` (unfinished, under 25 % of the time left, section 12).
-- `GET /api/sla` (maintenance roles: read) and `PUT /api/sla` (admin: targets and settings, with `version`), `POST` / `DELETE /api/sla/holidays` (admin).
+- `WorkOrder` gains `sla: { response: { due_at, risk_at, at, met }, resolution: { due_at, risk_at, at, met }, paused }` (null outside BR-SLA1).
+- `GET /api/work-orders`: flag `sla=late` (unfinished past a deadline, or finished late; a paused one only if the deadline passed before the pause) and `sla=at_risk` (unfinished, not paused, past `*_risk_at` but not yet late: under 25 % of the time left, section 12); both are comparisons of stored moments with now (BR-SLA4).
+- `GET /api/sla` (maintenance roles: read) and `PUT /api/sla` (admin: targets and settings in one body, with the `version` of `sla_settings`; 409 when stale), `POST` / `DELETE /api/sla/holidays` (admin).
 - Dashboard widget `sla_compliance` and its export.
 
 ## 7. Interface
@@ -172,7 +175,7 @@ Phase 36:
 - SLA area in the work order panel: the two deadlines, met or late, "paused" while on a pausing hold.
 - SLA badge and the `sla` filter in the work order list.
 - Admin page "Service levels": targets per priority, response stop, hours mode, business days and hours, holidays.
-- Dashboard widget "SLA compliance": per priority, response and resolution met ÷ counted, in the period (work orders whose clock stopped in the period, plus those unfinished and already late); export of the rows.
+- Dashboard widget "SLA compliance": per priority, response and resolution met ÷ counted, in the period, each measure on its own (work orders whose response, or resolution, clock stopped in the period, plus those unfinished and already late on it; reported from `measured_from` on, BR-SLA1); export of the rows.
 
 ## 8. Permissions
 
@@ -192,7 +195,7 @@ Phase 36:
 - `CLOSED` work orders: `completed_on = closed_on`; `completed_at` = the time of the last change to `CLOSED` in the audit log, else `closed_on` at noon in `APP_TIMEZONE`. They stay `CLOSED`. One without a work report (BR-W6 was checked in code only) gets `report_waived = 1`, so the new CHECK cannot stop the migration.
 - `ON_HOLD` work orders: `hold_reason = OTHER`.
 - `reported_at = created_at`; `first_started_at` from the first change to `IN_PROGRESS` in the audit log (else null; these old entries only have the server time `at`); `first_assigned_at` from the first assignment in the audit log, or `created_at` when the creation already had an assignee.
-- No SLA deadlines before Phase 36; its migration (`017`) creates the SLA tables with the defaults and computes the deadlines of every corrective work order.
+- No SLA deadlines before Phase 36; its migration (`017`) creates the SLA tables with the defaults and sets `measured_from` to the time it runs; work orders reported before it get no deadlines (BR-SLA1), so nothing is computed for the existing data.
 
 ## 10. Effects on the figures
 
@@ -229,8 +232,12 @@ The figure exports (BR-K4) follow the same definitions.
 
 **Phase 36: SLA.** Migration `017`, `rules/sla.js` (calendar and business hours, pauses, holidays) unit-tested, the deadlines on the work order, the list filter, the admin page, the dashboard widget and its export. Acceptance:
 - Deadlines match hand-computed cases in both hours modes, over a weekend, a holiday and a pausing hold; a hold for parts does not pause.
-- Changing the response stop, the hours mode or a target recomputes the unfinished work orders only.
+- A pause from Friday evening to Monday morning in business hours moves the deadline by the business time lost, not by the calendar time; a work order paused after missing its deadline stays late.
+- "At risk" and "late" filters match hand-computed cases in business hours mode.
+- Changing the response stop, the hours mode, a target or a holiday recomputes the unfinished work orders only; changing the type of a work order brings it into or out of the SLA.
 - Raising the priority tightens the deadline at once.
+- A work order reported before migration `017` has no SLA and is left out of the widget.
+- `PUT /api/sla` from an older `version` → 409.
 - A technician sees the SLA but cannot edit the settings (403); a supervisor reads them.
 
 ## 12. Further choices (confirmed by the product owner, 2026-10-19)
