@@ -18,7 +18,7 @@ The docs are large (`decisions.md` 85 KB, `api-design.md` 61 KB, `data-model.md`
 | Why something differs from the brief; French → English glossary | `decisions.md` → grep the `D` number or the term |
 | Which document prevails when two disagree | `decisions.md` → Reference hierarchy |
 | Current phase, open work, backlog | `roadmap.md` (short); done phases in `roadmap-done.md` |
-| Feature specs | `spec-preventive-maintenance.md`, `spec-dashboards.md`, `spec-ai-assistant.md`, `spec-locations.md` |
+| Feature specs | `spec-preventive-maintenance.md`, `spec-dashboards.md`, `spec-ai-assistant.md`, `spec-locations.md`, `spec-work-order-process.md` |
 
 Do not read unless the task is about them: `SPEC_MVP_CMMS.md` (historical brief), `roadmap-done.md`, `test-protocol.md` (manual test protocol), `showcase.md`, `desktop-review.md`, `mobile-review.md`.
 

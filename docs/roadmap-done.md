@@ -159,3 +159,4 @@ Numbers are those of the backlog in `docs/roadmap.md`, kept so that references e
 - **11.** ~~Before the first deployment to users: make the "Source code" link of the status bar reachable by every user (AGPL section 13, D57; DT2)~~ → done: the repository is public (2026-10-14).
 - **12.** ~~Off-server backup storage, restore drill and failure test, before the first deployment to users~~ → Phase 31.
 - **15.** ~~Flexible locations and asset numbering (product owner request, 2026-10-14)~~ → Phases 32–33 (D82, `docs/spec-locations.md`).
+- **18.** ~~Technical completion separate from administrative closing (product owner request, 2026-10-19)~~ → Phases 35–36 (D86, `docs/spec-work-order-process.md`).
