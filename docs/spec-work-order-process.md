@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Work Order Process and SLA: Specification
 
-Status: **draft, to confirm by the product owner** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, to confirm. Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **specified and confirmed** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, confirmed by the product owner the same day. Implementation postponed (2026-10-19). Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 
@@ -214,7 +214,7 @@ The figure exports (BR-K4) follow the same definitions.
 - Raising the priority tightens the deadline at once.
 - A technician sees the SLA but cannot edit the settings (403); a supervisor reads them.
 
-## 12. Further choices (to confirm)
+## 12. Further choices (confirmed by the product owner, 2026-10-19)
 
 1. Default targets: Urgent 1 h / 4 h, High 4 h / 24 h, Normal 24 h / 72 h, Low 72 h / 240 h (response / resolution).
 2. "At risk": unfinished and under 25 % of the target time left.
