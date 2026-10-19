@@ -38,7 +38,7 @@ Specified in `docs/spec-ai-assistant.md` (draft; section 11 holds the full accep
 
 Specified in `docs/spec-work-order-process.md` (confirmed on 2026-10-19; section 11 holds the full acceptance criteria). Was backlog item 18. **Postponed** (product owner, 2026-10-19): Phase 35 starts when the product owner asks for it.
 
-- **Phase 35: work order process.** Technically done (`COMPLETED`) apart from the administrative closing (`CLOSED`, supervisors and admins), hold reasons, holding before the start, reopening, the figures counted on the technical end, the "To close" queue. Acceptance: see the spec, section 11.
+- **Phase 35: work order process.** Technically done (`COMPLETED`) apart from the administrative closing (`CLOSED`, supervisors and admins), the report waiver and the admin status override (D87), hold reasons, holding before the start, reopening, the figures counted on the technical end, the "To close" queue. Acceptance: see the spec, section 11.
 - **Phase 36: SLA.** Response and resolution targets per priority, the admin settings (response stop, calendar or business hours, holidays), pauses for holds outside the team's control, the deadlines on each work order, the list filter and the SLA compliance widget. Acceptance: see the spec, section 11.
 
 ## Production (D73)

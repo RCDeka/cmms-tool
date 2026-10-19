@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Work Order Process and SLA: Specification
 
-Status: **specified and confirmed** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, confirmed by the product owner the same day. Implementation postponed (2026-10-19). Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
+Status: **specified and confirmed** (product owner request of 2026-10-19, backlog item 18; decision D86). Section 3 holds the product owner's choices; section 12 lists the smaller choices made while writing, confirmed by the product owner the same day; the review of Phase 35 the same day added decisions 6 and 7 of section 3 and the completions of D87. Implementation postponed (2026-10-19). Phases 35 and 36 in `docs/roadmap.md`. As each phase is implemented, its tables, endpoints and screens move into `docs/data-model.md`, `docs/api-design.md`, `docs/architecture.md` and `docs/ui-guidelines.md`, which then prevail over this file.
 
 ## 1. Goals
 
@@ -32,6 +32,8 @@ Status: **specified and confirmed** (product owner request of 2026-10-19, backlo
 3. The response clock stops at the **first start or the first assignment: an admin setting**.
 4. Time on hold **pauses the SLA only for some reasons**: waiting for access, waiting for approval. Waiting for parts or a contractor is the team's own delay and keeps counting.
 5. SLA times are counted in **calendar or business hours: an admin setting**.
+6. A supervisor or an admin may **waive the work report**: they mark a work order technically done (or close it) without a report, and the waiver is kept on the work order (`report_waived`) and in the audit log.
+7. An admin may **change the status to any other status** (admin override), terminal statuses included, outside the transitions of BR-W4; each override is marked in the audit log.
 
 ## 4. Data model
 
@@ -52,7 +54,8 @@ Terminal statuses stay `CLOSED` and `CANCELLED`. **Unfinished** (backlog, overdu
 |---|---|---|---|
 | status | TEXT | no | CHECK on the new list |
 | hold_reason | TEXT | yes | CHECK Hold reason; set if and only if `status = 'ON_HOLD'` |
-| hold_note | TEXT | yes | 1–500, optional, only while on hold |
+| hold_note | TEXT | yes | 1–500, optional; CHECK null unless `status = 'ON_HOLD'` |
+| report_waived | INTEGER | no | 0/1, default 0; 1 = technically done without a work report by decision of a supervisor or an admin (BR-W6) |
 | reported_at | TEXT | no | datetime the work was reported: the client's `edited_at` at creation (the moment `created_on` already comes from, BR-W9); start of the SLA clocks |
 | first_assigned_at | TEXT | yes | datetime of the first assignment (the edit's `edited_at`); set once |
 | first_started_at | TEXT | yes | datetime of the first change to `IN_PROGRESS` (the edit's `edited_at`); set once |
@@ -62,9 +65,13 @@ Terminal statuses stay `CLOSED` and `CANCELLED`. **Unfinished** (backlog, overdu
 | resolution_due_at | TEXT | yes | idem |
 | closed_on | TEXT | yes | date of the administrative end (as today) |
 
-New CHECK constraints: `COMPLETED` and `CLOSED` need `completed_on`, `completed_at` and a work report; `CLOSED` needs `closed_on`; `completed_on ≥ started_on`, `closed_on ≥ completed_on`. Index on `status` stays; add one on `resolution_due_at` (the "late on SLA" filter).
+New CHECK constraints: `COMPLETED` and `CLOSED` need `completed_on`, `completed_at`, and a non-empty work report or `report_waived = 1`; `report_waived = 1` only in `COMPLETED` or `CLOSED`; `CLOSED` needs `closed_on`; `completed_on ≥ started_on`, `closed_on ≥ completed_on`. Index on `status` stays; add one on `resolution_due_at` (the "late on SLA" filter).
 
 Using the client's `edited_at` for the SLA moments keeps an offline start or completion at its real time, not at the sync.
+
+### audit_log (changed, migration `016`)
+
+New column `edited_at` (TEXT, null): the client's `edited_at` of the write (now for writes without one), so the history keeps when a change was really made, not only when the server received it (`at`). Rows written before `016` have it null; readers use `coalesce(edited_at, at)`. The pause spells of BR-SLA3 and the times taken from the history (section 9) read it.
 
 ### sla_targets (new, Phase 36)
 
@@ -114,29 +121,32 @@ stateDiagram-v2
 ```
 
 - BR-W5 (completed): entering `IN_PROGRESS` for the first time sets `started_on` (today, if empty) and `first_started_at`. `ON_HOLD → OPEN` is allowed only if the work order never started (`first_started_at` empty).
-- BR-W6 (moved): entering `COMPLETED` requires a non-empty `work_report` and sets `completed_on` (today if empty) and `completed_at`. Entering `CLOSED` sets `closed_on` (today if empty); it does not ask for anything more.
+- BR-W6 (moved): entering `COMPLETED` requires a non-empty `work_report`, or `report_waived = true` sent by a supervisor or an admin (403 for a technician), and sets `completed_on` (today if empty) and `completed_at`. Entering `CLOSED` sets `closed_on` (today if empty); it does not ask for anything more (a work order without a report is closed by waiving it). Writing a report later keeps the waiver (the history shows both).
 - BR-W14 (new): entering `ON_HOLD` requires `hold_reason`; leaving it clears `hold_reason` and `hold_note` (the audit log keeps them). The reason and note may change while on hold.
-- BR-W15 (new): reopening (`COMPLETED → IN_PROGRESS`) clears `completed_on` and `completed_at`; the SLA clocks run on as if the work had never been done.
+- BR-W15 (new): reopening (`COMPLETED → IN_PROGRESS`) clears `completed_on`, `completed_at` and `report_waived`; the SLA clocks run on as if the work had never been done. It needs an active assignee (422 `BR-W15` otherwise: a user with only finished work may have been deactivated, BR-U5); reassign in the same request.
 - BR-W16 (new): only supervisors and admins set `CLOSED` (403 for a technician). Technicians set every other allowed status on the work orders assigned to them.
-- BR-W7 (unchanged): `CLOSED` and `CANCELLED` are read-only. A `COMPLETED` work order stays editable: the technician corrects the report, the hours or `completed_on`; supervisors and admins every field.
+- BR-W17 (new, admin override): an admin may set any status from any status, outside the table of BR-W4 and on a terminal work order too. The target status is entered as usual: the server sets the moments it needs that are missing (`started_on` and `first_started_at` for a started status, `completed_on` and `completed_at` for `COMPLETED` and `CLOSED`, `closed_on` for `CLOSED`) and clears those it must not have (leaving `COMPLETED` or `CLOSED` for an unfinished status clears the completion as BR-W15 does; `CLOSED → COMPLETED` clears `closed_on`); BR-W6 (report or waiver) and BR-W14 (hold reason) still apply. The audit entry carries `note: { status_override: true }`. Limits: BR-R7 (a pending request is reviewed, not moved) and a request withdrawn by its requester (BR-R10) cannot be brought back (422); plan visits are not changed back (a skipped visit stays skipped).
+- BR-W7 (completed): `CLOSED` and `CANCELLED` are read-only, except for conflict resolution and the admin override (BR-W17), which then changes the status and the fields that status needs only. A `COMPLETED` work order stays editable: the technician corrects the report, the hours or `completed_on`; supervisors and admins every field.
 - BR-W8 (completed): `due_on ≥ created_on`; `started_on ≤ completed_on ≤ closed_on`; `completed_on` not in the future.
+- BR-W18 (new, moments): `first_assigned_at`, `first_started_at` and `completed_at` take the write's `edited_at`. When a status change is applied by a conflict resolution (BR-V5) with the client's value (choice B, or a merge that keeps it), they take the conflict's `client_edited_at`; otherwise the resolution time. `completed_on` may be corrected afterwards (BR-W7) but `completed_at` never is: the figures by date follow the correction, the SLA and "time to done" keep the recorded moment.
 - BR-R10 (unchanged meaning): a requester cancels their request only while `OPEN`; a request put on hold before it started is no longer cancellable by the requester (the team has acted on it).
-- BR-P5 (moved): a `FLOATING` plan restarts from the **technical end** of its visit (the week of `completed_on`); a reopening does not move the series back.
+- BR-P5 (moved): a `FLOATING` plan restarts from the **technical end** of its visit (the week of `completed_on`), at the first completion only: a reopening does not move the series back, and a later completion or the closing does not move it again.
 
 ### SLA (Phase 36)
 
 - BR-SLA1: SLA targets apply to `CORRECTIVE` work orders, staff requests included, with a target for their current priority. Preventive and regulatory work keep their compliance by deadline week (D59).
 - BR-SLA2: Response is met when the response moment (`first_started_at`, or `first_assigned_at` when `response_stop = ASSIGNMENT`) is at or before `response_due_at`; resolution is met when `completed_at` is at or before `resolution_due_at`. A cancelled work order counts in neither.
-- BR-SLA3: The elapsed time runs from `reported_at`, in calendar hours, or in business hours (the working days of `business_days`, between `business_start` and `business_end`, minus `sla_holidays`, in `APP_TIMEZONE`), minus the **paused spells**: time spent `ON_HOLD` with `WAITING_ACCESS` or `WAITING_APPROVAL` (from the status and reason changes of the audit log, at their `edited_at`). A pure rule (`rules/sla.js`) computes it.
+- BR-SLA3: The elapsed time runs from `reported_at`, in calendar hours, or in business hours (the working days of `business_days`, between `business_start` and `business_end`, minus `sla_holidays`, in `APP_TIMEZONE`), minus the **paused spells**: time spent `ON_HOLD` with `WAITING_ACCESS` or `WAITING_APPROVAL` (from the status and reason changes of the audit log, at their `coalesce(edited_at, at)`). A pure rule (`rules/sla.js`) computes it.
 - BR-SLA4: The server keeps `response_due_at` and `resolution_due_at` at every write that changes the status, the hold reason or the priority, and recomputes the unfinished work orders when the targets or settings change (one transaction). While paused, the running deadlines are null; when the pause ends, they are moved by the paused time. Finished work orders keep their deadlines.
 - BR-SLA5: The priority in force when the clock stops decides the target (a priority raised during the work tightens the deadline at once).
 
 ## 6. API
 
 Phase 35:
-- `WorkOrder` gains `hold_reason`, `hold_note`, `reported_at`, `first_assigned_at`, `first_started_at`, `completed_on`, `completed_at`.
-- `PUT /api/work-orders/:id`: `hold_reason`, `hold_note` and `completed_on` editable (technicians too, on their work orders); the new times are server-set (403 if sent). Errors: 422 `BR-W4`, `BR-W6`, `BR-W8`, `BR-W14`; 403 `BR-W16`.
-- `GET /api/work-orders`: `status` takes `COMPLETED`; new flag `to_close=true` (= `status=COMPLETED`, for the supervisors' queue); sort by `completed_on`.
+- `WorkOrder` gains `hold_reason`, `hold_note`, `report_waived`, `reported_at`, `first_assigned_at`, `first_started_at`, `completed_on`, `completed_at`.
+- `PUT /api/work-orders/:id`: `hold_reason`, `hold_note` and `completed_on` editable (technicians too, on their work orders); `report_waived` by supervisors and admins (403 `BR-W6` for a technician); the new times are server-set (403 if sent). An admin's status change outside BR-W4 is an override (BR-W17), with no extra field. Errors: 422 `BR-W4`, `BR-W6`, `BR-W8`, `BR-W14`, `BR-W15`, `BR-W17`; 403 `BR-W6`, `BR-W16`.
+- History (`GET …/history`): an entry with `note.status_override` is shown as an admin override.
+- `GET /api/work-orders`: `status` takes `COMPLETED` (the supervisors' "To close" queue is `status=COMPLETED`, no extra flag); sort by `completed_on`.
 - `GET /api/reference-data`: `hold_reasons`.
 - Request (staff) shapes: `status_history` shows `COMPLETED` (labelled "Done") and `CLOSED`.
 - Dashboard: see section 10.
@@ -151,8 +161,9 @@ Phase 36:
 
 Phase 35:
 - New badges `badge-status-completed` and the hold reason under `On hold`; "Open · assigned" in lists when an open work order has an assignee.
-- Work order panel: status actions follow BR-W4 and the role ("Mark technically done", "Close", "Reopen", "Put on hold" with the reason and note).
-- "To close" queue for supervisors and admins: the work order list with `to_close=true`, by `completed_on`, oldest first; a tile on the home dashboard.
+- Work order panel: status actions follow BR-W4 and the role ("Mark technically done", "Close", "Reopen", "Put on hold" with the reason and note). Without a report, supervisors and admins get "Mark done without a report" (and "Close without a report"), with a confirmation; the panel then shows "Report waived".
+- Admins: "Change status" in the panel, offering every other status, with a confirmation saying the change is logged as an override; the history marks it.
+- "To close" queue for supervisors and admins: the work order list with `status=COMPLETED`, by `completed_on`, oldest first; a tile on the home dashboard.
 - Staff request page: the step "Done" at `COMPLETED`, "Closed" afterwards.
 - Every new text in `i18n-fr.js` (FR: *Terminé techniquement*, *Clôturé*, *En attente de pièces*, *En attente d'un prestataire*, *En attente d'accès*, *En attente de validation*, *Autre*).
 - Offline: the new transitions and fields queue like any edit; the edit's `edited_at` gives the times.
@@ -169,15 +180,18 @@ Phase 36:
 |---|---|---|---|---|
 | Put on hold, resume, mark technically done, reopen | no | own work orders | yes | yes |
 | Close | no | no (403) | yes | yes |
+| Waive the work report | no | no (403) | yes | yes |
+| Set any status (override, BR-W17) | no | no | no | yes |
 | See the SLA of a work order | no (staff see the status steps only) | yes | yes | yes |
 | Edit SLA targets, settings and holidays | no | no | no (read) | yes |
 
 ## 9. Migration of the existing data (`016`)
 
 - `work_orders` is rebuilt (the CHECK on `status` changes; migrations `013` and `015` show the pattern). Every column is copied.
-- `CLOSED` work orders: `completed_on = closed_on`; `completed_at` = the time of the last change to `CLOSED` in the audit log, else `closed_on` at noon in `APP_TIMEZONE`. They stay `CLOSED`.
+- `audit_log` gains `edited_at` (null for the existing rows).
+- `CLOSED` work orders: `completed_on = closed_on`; `completed_at` = the time of the last change to `CLOSED` in the audit log, else `closed_on` at noon in `APP_TIMEZONE`. They stay `CLOSED`. One without a work report (BR-W6 was checked in code only) gets `report_waived = 1`, so the new CHECK cannot stop the migration.
 - `ON_HOLD` work orders: `hold_reason = OTHER`.
-- `reported_at = created_at`; `first_started_at` from the first change to `IN_PROGRESS` in the audit log (else null); `first_assigned_at` from the first assignment in the audit log, or `created_at` when the creation already had an assignee.
+- `reported_at = created_at`; `first_started_at` from the first change to `IN_PROGRESS` in the audit log (else null; these old entries only have the server time `at`); `first_assigned_at` from the first assignment in the audit log, or `created_at` when the creation already had an assignee.
 - No SLA deadlines before Phase 36; its migration (`017`) creates the SLA tables with the defaults and computes the deadlines of every corrective work order.
 
 ## 10. Effects on the figures
@@ -200,13 +214,18 @@ The figure exports (BR-K4) follow the same definitions.
 
 ## 11. Phases and acceptance
 
-**Phase 35: work order process.** Migration `016`, rules BR-W4 to BR-W16 and BR-P5, the API changes, the figures of section 10, the interface of section 7 (Phase 35 part), French texts, seed data (every status, every hold reason, completed but not closed work orders) and its history. Acceptance:
+**Phase 35: work order process.** Migration `016`, rules BR-W4 to BR-W18 and BR-P5, the API changes, the figures of section 10, the interface of section 7 (Phase 35 part), French texts, seed data (every status, every hold reason, completed but not closed work orders) and its history. Acceptance:
 - Every transition of BR-W4 is accepted, every other refused with 422; a technician closing gets 403.
 - Marking technically done without a report → 422; it sets `completed_on` and `completed_at`; reopening clears them; closing sets `closed_on` and makes the work order read-only.
 - An offline completion synced later keeps the time it was done.
 - Putting on hold without a reason → 422; leaving the hold clears the reason.
+- A supervisor marks done without a report by waiving it (logged); a technician sending the waiver gets 403.
+- An admin moves a work order between any two statuses, a closed or cancelled one included; the history shows the override, and a technician or supervisor trying the same transition gets 422. A withdrawn request cannot be brought back.
+- Reopening a work order whose assignee is inactive → 422 unless it is reassigned in the same request.
+- A completion applied by a conflict resolution keeps the client's time; the audit log stores each write's `edited_at`.
+- A `FLOATING` plan moves at the first completion of its visit only.
 - The figures of section 10 count `completed_on`; a work order done in September and closed in October counts as done in September.
-- The migration keeps every work order and gives each closed one its completion date; the full tests and lint pass.
+- The migration keeps every work order and gives each closed one its completion date, a closed one without a report included (tested on such a row); the full tests and lint pass.
 
 **Phase 36: SLA.** Migration `017`, `rules/sla.js` (calendar and business hours, pauses, holidays) unit-tested, the deadlines on the work order, the list filter, the admin page, the dashboard widget and its export. Acceptance:
 - Deadlines match hand-computed cases in both hours modes, over a weekend, a holiday and a pausing hold; a hold for parts does not pause.
