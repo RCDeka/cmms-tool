@@ -8,7 +8,15 @@
 import { dateInZone } from '../lib/dates.js';
 import { HttpError } from '../lib/http-error.js';
 import { addInFilter } from '../lib/list-filter.js';
-import { UNFINISHED, badSegment, combine, idsIn, scopeClause, splitSegment } from './widget-sql.js';
+import {
+  DONE,
+  UNFINISHED,
+  badSegment,
+  combine,
+  idsIn,
+  scopeClause,
+  splitSegment,
+} from './widget-sql.js';
 import { ROWS_LIMIT, filtersFor, widgetDef, withFilterDefaults } from '../rules/dashboards.js';
 import { CATEGORIES, WORK_ORDER_PRIORITIES, WORK_ORDER_STATUSES } from '../rules/enums.js';
 import { compareMyWork, monthRange, weekEnd } from '../rules/kpi.js';
@@ -77,7 +85,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
     return dates;
   }
 
-  /** Opened vs closed: the work orders of the scope and their buckets. */
+  /** Opened vs done: the work orders of the scope and their buckets. */
   function flow(ctx) {
     const scope = combine(
       { sql: 'w.created_on <= @today', params: { today: ctx.today } },
@@ -85,7 +93,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
     );
     const rows = db
       .prepare(
-        `SELECT w.id, w.created_on, w.status, w.closed_on, w.updated_at FROM work_orders w
+        `SELECT w.id, w.created_on, w.status, w.completed_on, w.updated_at FROM work_orders w
          ${scope.clause}`,
       )
       .all(scope.params);
@@ -110,15 +118,18 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
   const WIDGETS = {
     open_work_orders: { where: () => ({ sql: "w.status = 'OPEN'" }) },
     in_progress_work_orders: { where: () => ({ sql: "w.status = 'IN_PROGRESS'" }) },
+    // Done this month: the technical end, closed or not (D86).
     closed_this_month: {
       where: ({ today }) => {
         const { from, to } = monthRange(today);
         return {
-          sql: "w.status = 'CLOSED' AND w.closed_on BETWEEN @month_from AND @month_to",
+          sql: `${DONE} AND w.completed_on BETWEEN @month_from AND @month_to`,
           params: { month_from: from, month_to: to },
         };
       },
     },
+    // Technically done, waiting for the administrative closing (D86), oldest first.
+    to_close: { where: () => ({ sql: "w.status = 'COMPLETED'" }), order: 'w.completed_on, w.id' },
     overdue_work_orders: {
       where: ({ today }) => ({ sql: `${UNFINISHED} AND w.due_on < @today`, params: { today } }),
     },
@@ -187,6 +198,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
 
     // --- Flow and backlog (§6.2, Phase 22) ---------------------------------------------------
 
+    // Opened vs done (D86): "closed" counts the technical end, closed or not.
     // Segments: "opened:<bucket>", "closed:<bucket>", "cancelled:<bucket>" (a week or a month).
     opened_vs_closed: {
       where: (ctx, segment) => {
@@ -203,7 +215,9 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
           .filter(
             (wo) =>
               ((!kind || kind === 'opened') && inRange(wo.created_on)) ||
-              ((!kind || kind === 'closed') && wo.status === 'CLOSED' && inRange(wo.closed_on)) ||
+              ((!kind || kind === 'closed') &&
+                ['COMPLETED', 'CLOSED'].includes(wo.status) &&
+                inRange(wo.completed_on)) ||
               ((!kind || kind === 'cancelled') &&
                 wo.status === 'CANCELLED' &&
                 inRange(data.cancelled.get(wo.id) ?? null)),
@@ -383,7 +397,7 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
         const chosen = key ? buckets.find((b) => b.key === key) : null;
         return combine(
           {
-            sql: "w.status = 'CLOSED' AND w.closed_on BETWEEN @closed_from AND @closed_to",
+            sql: `${DONE} AND w.completed_on BETWEEN @closed_from AND @closed_to`,
             params: {
               closed_from: chosen?.from ?? periodStart(ctx.today, ctx.period),
               closed_to: chosen?.to ?? ctx.today,
@@ -397,14 +411,14 @@ export function createDashboardWidgetService(db, { workOrders, assets }) {
         const { unit, buckets } = periodBuckets(ctx.today, ctx.period);
         const closed = db
           .prepare(
-            `SELECT w.type, w.review_status, w.closed_on, w.actual_hours FROM work_orders w
+            `SELECT w.type, w.review_status, w.completed_on, w.actual_hours FROM work_orders w
              ${where.clause}`,
           )
           .all(where.params);
         const empty = () => Object.fromEntries(WORK_GROUPS.map((g) => [g, { count: 0, hours: 0 }]));
         const series = buckets.map((b) => ({ ...b, values: empty() }));
         for (const wo of closed) {
-          const key = bucketOf(buckets, wo.closed_on);
+          const key = bucketOf(buckets, wo.completed_on);
           const cell = series.find((b) => b.key === key).values[workGroup(wo)];
           cell.count++;
           cell.hours += wo.actual_hours ?? 0;

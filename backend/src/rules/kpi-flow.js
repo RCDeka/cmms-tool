@@ -52,16 +52,18 @@ export function bucketOf(buckets, date) {
 }
 
 /**
- * Opened vs closed (§6.2): per bucket, work orders created, closed and cancelled, and those
- * still unfinished at the end of the bucket.
- * @param {{ id: number, created_on: string, status: string, closed_on: string | null }[]} workOrders
+ * Opened vs done (§6.2, D86): per bucket, work orders created, technically done (`closed`,
+ * by `completed_on`, closed or not) and cancelled, and those still unfinished at the end of
+ * the bucket.
+ * @param {{ id: number, created_on: string, status: string, completed_on: string | null }[]} workOrders
  * @param {Map<number, string>} cancelledOn date each cancelled work order was cancelled
  * @param {ReturnType<typeof periodBuckets>['buckets']} buckets
  */
 export function flowSeries(workOrders, cancelledOn, buckets) {
+  const isDone = (wo) => wo.status === 'COMPLETED' || wo.status === 'CLOSED';
   const finishedOn = (wo) =>
-    wo.status === 'CLOSED'
-      ? wo.closed_on
+    isDone(wo)
+      ? wo.completed_on
       : wo.status === 'CANCELLED'
         ? (cancelledOn.get(wo.id) ?? null)
         : null;
@@ -73,7 +75,7 @@ export function flowSeries(workOrders, cancelledOn, buckets) {
     let unfinished = 0;
     for (const wo of workOrders) {
       if (within(wo.created_on)) opened++;
-      if (wo.status === 'CLOSED' && within(wo.closed_on)) closed++;
+      if (isDone(wo) && within(wo.completed_on)) closed++;
       if (wo.status === 'CANCELLED' && within(cancelledOn.get(wo.id) ?? null)) cancelled++;
       const finished = finishedOn(wo);
       if (wo.created_on <= b.to && (finished === null || finished > b.to)) unfinished++;

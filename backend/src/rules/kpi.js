@@ -5,7 +5,7 @@
 // computed by the caller in APP_TIMEZONE (D13).
 import { addDays } from '../lib/dates.js';
 import { WORK_ORDER_PRIORITIES } from './enums.js';
-import { isTerminal } from './work-order-status.js';
+import { isUnfinished } from './work-order-status.js';
 
 /** First and last day of the calendar month of `today` ('YYYY-MM-DD'). */
 export function monthRange(today) {
@@ -15,16 +15,16 @@ export function monthRange(today) {
   return { from: first, to: addDays(nextFirst, -1) };
 }
 
-/** Overdue: not closed or cancelled, and the due date is before today (due today is not late). */
+/** Overdue: unfinished, and the due date is before today (due today is not late). */
 export function isOverdue(workOrder, today) {
-  return !isTerminal(workOrder.status) && Boolean(workOrder.due_on) && workOrder.due_on < today;
+  return isUnfinished(workOrder.status) && Boolean(workOrder.due_on) && workOrder.due_on < today;
 }
 
-/** "My work": assigned to the user, not terminal, due on `lastDay` or earlier, or no due date. */
+/** "My work": assigned to the user, unfinished, due on `lastDay` or earlier, or no due date. */
 export function isMyWorkDueBy(workOrder, userId, lastDay) {
   return (
     workOrder.assignee_id === userId &&
-    !isTerminal(workOrder.status) &&
+    isUnfinished(workOrder.status) &&
     (!workOrder.due_on || workOrder.due_on <= lastDay)
   );
 }

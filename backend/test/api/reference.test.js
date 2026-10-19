@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CATEGORIES, WORK_ORDER_STATUSES } from '../../src/rules/enums.js';
+import { CATEGORIES, HOLD_REASONS, WORK_ORDER_STATUSES } from '../../src/rules/enums.js';
 import { createSeededApp, expectNoSecrets } from '../helpers/app.js';
 
 let ctx;
@@ -23,11 +23,13 @@ describe('GET /api/reference-data', () => {
     ]);
     expect(res.body.categories).toEqual(CATEGORIES);
     expect(res.body.work_order_statuses).toEqual(WORK_ORDER_STATUSES);
+    expect(res.body.hold_reasons).toEqual(HOLD_REASONS);
     expect(Object.keys(res.body).sort()).toEqual([
       'asset_statuses',
       'assistant',
       'categories',
       'criticalities',
+      'hold_reasons',
       'sites',
       'work_order_priorities',
       'work_order_statuses',

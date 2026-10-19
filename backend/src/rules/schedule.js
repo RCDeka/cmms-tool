@@ -5,7 +5,7 @@
 // a week, daily capacity, hours left on a work order, warnings, appointments and the tray.
 import { addDays } from '../lib/dates.js';
 import { mondayOf } from '../lib/iso-week.js';
-import { TERMINAL_WORK_ORDER_STATUSES } from './enums.js';
+import { UNFINISHED_WORK_ORDER_STATUSES } from './enums.js';
 
 /** Last minute of a day: an appointment ends at 24:00 at the latest. */
 const DAY_MINUTES = 24 * 60;
@@ -121,7 +121,7 @@ export function appointmentsOverlap(a, b) {
  * @returns {{ rule: string, message: string } | null}
  */
 export function allocationBlocker(wo) {
-  if (TERMINAL_WORK_ORDER_STATUSES.includes(wo.status)) {
+  if (!UNFINISHED_WORK_ORDER_STATUSES.includes(wo.status)) {
     return { rule: 'BR-S4', message: 'This work order is finished: it cannot get more time.' };
   }
   if (wo.review_status === 'PENDING') {
@@ -145,7 +145,7 @@ export function allocationBlocker(wo) {
  * @returns {{ rule: string, message: string } | null}
  */
 export function blockChangeBlocker(block, workOrder, change) {
-  if (workOrder && TERMINAL_WORK_ORDER_STATUSES.includes(workOrder.status)) {
+  if (workOrder && !UNFINISHED_WORK_ORDER_STATUSES.includes(workOrder.status)) {
     return {
       rule: 'BR-S4',
       message: 'This work order is finished: its blocks are kept as history.',

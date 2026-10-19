@@ -43,7 +43,7 @@ describe('repeatFailures', () => {
     asset_id: asset,
     created_on: created,
     status,
-    closed_on: closed,
+    completed_on: closed,
   });
   const inSeptember = (w) => w.created_on >= '2026-09-01';
 

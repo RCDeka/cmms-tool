@@ -176,7 +176,9 @@ function followPlannedWeek(db, workOrder, week, { userId, stamp }) {
 /**
  * Keeps a plan's visit in step with its work order, after a change of status:
  * - cancelled: the occurrence is skipped (BR-P7);
- * - closed, in a FLOATING plan: the series restarts from the closing week (BR-P5).
+ * - technically done for the first time, in a FLOATING plan: the series restarts from the week
+ *   of the technical end (BR-P5). A reopening does not move it back, and a later completion
+ *   or the closing does not move it again. A visit is never changed back (BR-W17).
  * @param {import('better-sqlite3').Database} db
  * @param {object} workOrder stored row before the change
  * @param {object} changes applied changes (API values)
@@ -187,7 +189,8 @@ export function followWorkOrder(db, workOrder, changes, { userId, stamp, timeZon
   if ('planned_week' in changes && changes.planned_week !== workOrder.planned_week) {
     followPlannedWeek(db, workOrder, changes.planned_week, { userId, stamp });
   }
-  if (!['CANCELLED', 'CLOSED'].includes(changes.status)) return;
+  const firstCompletion = Boolean(changes.completed_at) && !workOrder.completed_at;
+  if (changes.status !== 'CANCELLED' && !firstCompletion) return;
   const occurrence = db
     .prepare('SELECT * FROM plan_occurrences WHERE work_order_id = ?')
     .get(workOrder.id);
@@ -212,9 +215,18 @@ export function followWorkOrder(db, workOrder, changes, { userId, stamp, timeZon
     return;
   }
 
-  const closedOn =
-    changes.closed_on ?? workOrder.closed_on ?? dateInZone(timeZone, new Date(stamp));
-  const anchor = floatingAnchor(plan, weekOfDate(closedOn));
+  // Completed before (then reopened): the series already restarted from that visit.
+  const completions = db
+    .prepare(
+      `SELECT count(*) FROM audit_log WHERE entity_type = 'work_orders' AND entity_id = ?
+         AND action <> 'CONFLICT' AND json_extract(changes, '$.completed_at.to') IS NOT NULL`,
+    )
+    .pluck()
+    .get(workOrder.id);
+  if (completions > 1) return;
+  const completedOn =
+    changes.completed_on ?? workOrder.completed_on ?? dateInZone(timeZone, new Date(stamp));
+  const anchor = floatingAnchor(plan, weekOfDate(completedOn));
   if (!anchor || !plan.is_active || anchor === plan.anchor_week) return;
   db.prepare(
     `UPDATE maintenance_plans SET anchor_week = ?, version = version + 1, updated_by = ?,
@@ -234,7 +246,7 @@ export function followWorkOrder(db, workOrder, changes, { userId, stamp, timeZon
   recomputeOccurrences(
     db,
     { ...plan, anchor_week: anchor },
-    // A restart, not a shift: the closed visit holds no slot, the next one comes a period later.
+    // A restart, not a shift: the done visit holds no slot, the next one comes a period later.
     { currentWeek: weekOfDate(dateInZone(timeZone, new Date(stamp))), stamp },
   );
 }

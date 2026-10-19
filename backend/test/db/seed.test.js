@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ASSET_STATUSES,
   CATEGORIES,
+  HOLD_REASONS,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
@@ -194,24 +195,33 @@ describe('seedDatabase', () => {
   });
 
   it('follows the workflow rules BR-W4 to BR-W8', () => {
-    // Started work orders have started_on; OPEN ones have neither date.
+    // Started work orders have started_on; OPEN ones have neither date. Some holds came first.
     expect(
       count(
-        "SELECT count(*) FROM work_orders WHERE status IN ('IN_PROGRESS','ON_HOLD','CLOSED') AND started_on IS NULL",
+        "SELECT count(*) FROM work_orders WHERE status IN ('IN_PROGRESS','COMPLETED','CLOSED') AND started_on IS NULL",
       ),
     ).toBe(0);
+    expect(
+      count("SELECT count(*) FROM work_orders WHERE status = 'ON_HOLD' AND started_on IS NULL"),
+    ).toBeGreaterThan(0);
     expect(
       count(
         "SELECT count(*) FROM work_orders WHERE status = 'OPEN' AND (started_on IS NOT NULL OR closed_on IS NOT NULL)",
       ),
     ).toBe(0);
-    // Only CLOSED work orders have closed_on, and all of them have a report (BR-W6).
+    // Only CLOSED work orders have closed_on; done ones have their end and a report (BR-W6).
     expect(
       count("SELECT count(*) FROM work_orders WHERE status <> 'CLOSED' AND closed_on IS NOT NULL"),
     ).toBe(0);
     expect(
       count(
-        "SELECT count(*) FROM work_orders WHERE status = 'CLOSED' AND (closed_on IS NULL OR work_report IS NULL)",
+        `SELECT count(*) FROM work_orders WHERE status IN ('COMPLETED', 'CLOSED')
+           AND (completed_on IS NULL OR completed_at IS NULL OR work_report IS NULL)`,
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        "SELECT count(*) FROM work_orders WHERE status NOT IN ('COMPLETED', 'CLOSED') AND completed_on IS NOT NULL",
       ),
     ).toBe(0);
     // No date in the future; dates in order (BR-W8; also enforced by CHECK constraints).
@@ -221,6 +231,29 @@ describe('seedDatabase', () => {
       ),
     ).toBe(0);
     expect(count('SELECT count(*) FROM work_orders WHERE started_on < created_on')).toBe(0);
+  });
+
+  it('has every status and every hold reason, and work waiting for its closing (D86)', () => {
+    expect(
+      all('SELECT DISTINCT status FROM work_orders ORDER BY status').map((r) => r.status),
+    ).toEqual(['CANCELLED', 'CLOSED', 'COMPLETED', 'IN_PROGRESS', 'ON_HOLD', 'OPEN']);
+    expect(
+      all('SELECT DISTINCT hold_reason AS r FROM work_orders WHERE hold_reason IS NOT NULL')
+        .map((r) => r.r)
+        .sort(),
+    ).toEqual([...HOLD_REASONS].sort());
+    // Moments of the history: started, done, assigned (BR-W18).
+    expect(
+      count(
+        "SELECT count(*) FROM work_orders WHERE status IN ('IN_PROGRESS', 'COMPLETED', 'CLOSED') AND first_started_at IS NULL",
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        'SELECT count(*) FROM work_orders WHERE assignee_id IS NOT NULL AND first_assigned_at IS NULL',
+      ),
+    ).toBe(0);
+    expect(count('SELECT count(*) FROM work_orders WHERE completed_at < first_started_at')).toBe(0);
   });
 
   it('includes overdue work orders', () => {

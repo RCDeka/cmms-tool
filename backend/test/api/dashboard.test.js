@@ -52,10 +52,13 @@ beforeAll(async () => {
 
   const wo = db.prepare(`INSERT INTO work_orders
     (id, number, type, status, priority, title, site, location_id, assignee_id, created_on, due_on,
-     started_on, closed_on, work_report, created_by, created_at, updated_at)
+     started_on, closed_on, work_report, created_by, created_at, updated_at,
+     completed_on, completed_at, hold_reason)
     VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, 'Site', ${SITE_ID("'Site'")},
      @assignee, @created_on,
-     @due_on, @started_on, @closed_on, @report, 2, @at, @at)`);
+     @due_on, @started_on, @closed_on, @report, 2, @at, @at,
+     @closed_on, CASE WHEN @closed_on IS NOT NULL THEN @closed_on || 'T12:00:00.000Z' END,
+     CASE WHEN @status = 'ON_HOLD' THEN 'OTHER' END)`);
   const rows = [
     [1, 'OPEN', 'NORMAL', 4, '2026-09-20', '2026-10-03', null, null],
     [2, 'OPEN', 'URGENT', 4, '2026-09-20', '2026-10-04', null, null],
@@ -118,6 +121,7 @@ describe('GET /api/dashboard on a hand-made dataset', () => {
       open_work_orders: 2,
       in_progress_work_orders: 2,
       closed_this_month: 1,
+      to_close: 0,
       assets_broken_down: 2,
       overdue_work_orders: 2,
       pending_conflicts: 1,

@@ -40,7 +40,7 @@ export const toVisit = (v) => ({
   work_order_id: v.work_order_id,
   work_order_number: v.wo_number,
   work_order_status: v.wo_status,
-  closed_on: v.closed_on,
+  completed_on: v.completed_on,
 });
 
 /** "<outcome>" or "<outcome>:<group>" or ":<group>" → { outcome, group } (either may be null). */
@@ -82,7 +82,7 @@ export function complianceWidgets(db) {
         `SELECT o.id, o.due_week, o.week, o.status, o.skip_reason, o.work_order_id,
            p.code AS plan_code, p.title AS plan_title, p.type, p.category, p.site,
            p.tolerance_weeks, p.performed_by, p.supplier,
-           w.number AS wo_number, w.status AS wo_status, w.closed_on
+           w.number AS wo_number, w.status AS wo_status, w.completed_on
          FROM plan_occurrences o
          JOIN maintenance_plans p ON p.id = o.plan_id
          LEFT JOIN work_orders w ON w.id = o.work_order_id
@@ -132,7 +132,7 @@ export function complianceWidgets(db) {
       scope,
     );
     return db
-      .prepare(`SELECT w.id, w.status, w.closed_on FROM work_orders w ${where.clause}`)
+      .prepare(`SELECT w.id, w.status, w.completed_on FROM work_orders w ${where.clause}`)
       .all(where.params);
   }
 
@@ -171,7 +171,9 @@ export function complianceWidgets(db) {
     };
   }
 
-  const keptBy = (wo, week) => wo.status === 'CLOSED' && wo.closed_on <= weekSunday(week);
+  /** Done (D86) by the Sunday of its week. */
+  const keptBy = (wo, week) =>
+    ['COMPLETED', 'CLOSED'].includes(wo.status) && wo.completed_on <= weekSunday(week);
 
   return {
     // Segments: "<outcome>" or "<outcome>:<TRADE>" (outcome: on_time, late, skipped).

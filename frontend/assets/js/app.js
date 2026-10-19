@@ -481,7 +481,7 @@ async function showRequest(route, isCurrent) {
   }
   if (!isCurrent()) return;
   // The top bar names the sidebar section (docs/ui-guidelines.md → Page title, DT6).
-  const finished = ['CLOSED', 'CANCELLED'].includes(request.status);
+  const finished = ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(request.status);
   setActiveNav(finished ? 'requests_all' : 'requests');
   setTitle(finished ? t('All my requests') : t('My open requests'));
   renderPage();

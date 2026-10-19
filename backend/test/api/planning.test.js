@@ -329,12 +329,12 @@ describe('release of work orders (BR-P6)', () => {
     wo = ctx.db.prepare('SELECT id, version FROM work_orders WHERE id = ?').get(wo.id);
     await as('supervisor1')
       .put(`/api/work-orders/${wo.id}`, {
-        status: 'CLOSED',
+        status: 'COMPLETED',
         work_report: 'Done.',
         version: wo.version,
       })
       .expect(200);
-    // Closed on 2026-10-04 (2026-W40): next visit 13 weeks later (2026 has 53 weeks).
+    // Done on 2026-10-04 (2026-W40): next visit 13 weeks later (2026 has 53 weeks).
     const plan = (await as('supervisor1').get(`/api/plans/${item.id}`)).body;
     expect(plan).toMatchObject({ anchor_week: '2026-W53', version: 2, next_week: '2026-W41' });
     expect(plan.occurrences.map((o) => o.week).slice(0, 3)).toEqual([
@@ -346,6 +346,24 @@ describe('release of work orders (BR-P6)', () => {
     expect(log.items[0]).toMatchObject({
       entity_id: item.id,
       changes: { anchor_week: { from: '2026-W41', to: '2026-W53' } },
+    });
+
+    // Reopened and done again, then closed: the series does not move again (BR-P5).
+    for (const change of [
+      // Reopening needs an assignee (BR-W15).
+      { status: 'IN_PROGRESS', started_on: '2026-09-21', assignee_id: 4 },
+      // In another week (2026-W39): it would restart the series elsewhere.
+      { status: 'COMPLETED', completed_on: '2026-09-22' },
+      { status: 'CLOSED' },
+    ]) {
+      wo = ctx.db.prepare('SELECT id, version FROM work_orders WHERE id = ?').get(wo.id);
+      await as('supervisor1')
+        .put(`/api/work-orders/${wo.id}`, { ...change, version: wo.version })
+        .expect(200);
+    }
+    expect((await as('supervisor1').get(`/api/plans/${item.id}`)).body).toMatchObject({
+      anchor_week: '2026-W53',
+      version: 2,
     });
   });
 });

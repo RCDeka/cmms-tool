@@ -112,14 +112,14 @@ export function insertPastWork(db, { today, now }) {
   const insertWorkOrder = db.prepare(`INSERT INTO work_orders
     (number, type, status, priority, title, description, asset_id, site, location_id, place,
      location, category,
-     assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
-     actual_hours, work_report, plan_id, planned_week, created_by, updated_by, created_at,
-     updated_at)
+     assignee_id, supervisor_id, created_on, due_on, started_on, completed_on, closed_on,
+     estimated_hours, actual_hours, work_report, plan_id, planned_week, reported_at,
+     completed_at, created_by, updated_by, created_at, updated_at)
     VALUES (@number, @type, @status, 'NORMAL', @title, @description, @asset_id, @site,
      @location_id, @place, NULL,
      @category, @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on,
-     @estimated_hours, @actual_hours, @work_report, @plan_id, @planned_week, @created_by,
-     @updated_by, @created_at, @updated_at)`);
+     @closed_on, @estimated_hours, @actual_hours, @work_report, @plan_id, @planned_week,
+     @created_at, @completed_at, @created_by, @updated_by, @created_at, @updated_at)`);
   const insertVisit = db.prepare(`INSERT INTO plan_occurrences
     (plan_id, due_week, week, status, work_order_id, skip_reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -226,6 +226,8 @@ export function insertPastWork(db, { today, now }) {
       };
       wo.updated_at = open ? at(startedOn ?? released, 16) : at(closedOn, rng.int(14, 18));
       if (wo.updated_at < wo.created_at) wo.updated_at = wo.created_at;
+      // Technically done, then closed by the supervisor the same day (D86).
+      wo.completed_at = open ? null : wo.updated_at;
       const woId = Number(insertWorkOrder.run(wo).lastInsertRowid);
       workOrders += 1;
       const visitId = Number(
@@ -291,12 +293,21 @@ export function insertPastWork(db, { today, now }) {
       if (!open) {
         entry(
           {
-            status: { from: 'IN_PROGRESS', to: 'CLOSED' },
-            closed_on: { from: null, to: closedOn },
+            status: { from: 'IN_PROGRESS', to: 'COMPLETED' },
+            completed_on: { from: null, to: closedOn },
+            completed_at: { from: null, to: wo.completed_at },
             actual_hours: { from: null, to: wo.actual_hours },
             work_report: { from: null, to: wo.work_report },
           },
           worker?.id ?? supervisor,
+          wo.completed_at,
+        );
+        entry(
+          {
+            status: { from: 'COMPLETED', to: 'CLOSED' },
+            closed_on: { from: null, to: closedOn },
+          },
+          supervisor,
           wo.updated_at,
         );
       }

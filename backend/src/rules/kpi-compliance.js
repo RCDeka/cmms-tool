@@ -25,16 +25,15 @@ export function deadlineWeek(plan, visit) {
 }
 
 /**
- * Outcome of a visit whose deadline week is over: skipped, on time (its work order closed by
- * the Sunday of the deadline week), or late (closed later, or not closed).
- * @param {{ status: string, wo_status: string | null, closed_on: string | null }} visit
+ * Outcome of a visit whose deadline week is over: skipped, on time (its work order technically
+ * done by the Sunday of the deadline week, D86), or late (done later, or not done).
+ * @param {{ status: string, wo_status: string | null, completed_on: string | null }} visit
  * @param {string} deadline Sunday of the deadline week
  */
 export function visitOutcome(visit, deadline) {
   if (visit.status === 'SKIPPED') return 'skipped';
-  return visit.wo_status === 'CLOSED' && visit.closed_on && visit.closed_on <= deadline
-    ? 'on_time'
-    : 'late';
+  const done = visit.wo_status === 'COMPLETED' || visit.wo_status === 'CLOSED';
+  return done && visit.completed_on && visit.completed_on <= deadline ? 'on_time' : 'late';
 }
 
 /** On time ÷ (on time + late), or null when no visit counts. Skipped visits stay apart. */

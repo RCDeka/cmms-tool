@@ -48,7 +48,7 @@ describe('drill-down of the asset widgets', () => {
 
   it('names the segments of the other widgets', () => {
     expect(drillLabel('response_times:close:URGENT', 30)).toBe(
-      'Time to start and to close: closed, Urgent (last 30 days)',
+      'Time to start and to close: done, Urgent (last 30 days)',
     );
     expect(drillLabel('request_service:rejected')).toBe('Staff requests: rejected (last 30 days)');
     expect(drillLabel('workload:person:4:HIGH')).toBe('Workload per person: person 4, High');
@@ -160,7 +160,7 @@ describe('exports', () => {
       dashboard: { previous: 'WO-2026-00008', days_since_previous: 29 },
     };
     const table = recordsTable('work_orders', [wo], 'repeat_failures');
-    expect(table.columns.slice(-2)).toEqual(['Previous work order', 'Days since it closed']);
+    expect(table.columns.slice(-2)).toEqual(['Previous work order', 'Days since it was done']);
     expect(table.rows[0].slice(-2)).toEqual(['WO-2026-00008', 29]);
     const assets = recordsTable(
       'assets',

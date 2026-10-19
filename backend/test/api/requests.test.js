@@ -50,6 +50,7 @@ const REQUEST_KEYS = [
   'due_on',
   'started_on',
   'closed_on',
+  'completed_on',
   'work_report',
   'review_status',
   'review_note',

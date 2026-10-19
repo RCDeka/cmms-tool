@@ -114,6 +114,9 @@ export const ENTITIES = {
       title: { label: t('Title') },
       type: { label: t('Type'), type: 'enum', enum: 'work_order_type' },
       status: { label: t('Status'), type: 'enum', enum: 'work_order_status' },
+      // BR-W14 (D86): shown and asked for while on hold.
+      hold_reason: { label: t('Hold reason'), type: 'enum', enum: 'hold_reason' },
+      hold_note: { label: t('Hold note') },
       priority: { label: t('Priority'), type: 'enum', enum: 'work_order_priority' },
       description: { label: t('Description') },
       // The place (D82) and the words about it ("desk 12-21").
@@ -126,6 +129,7 @@ export const ENTITIES = {
       created_on: { label: t('Created'), type: 'date' },
       due_on: { label: t('Due'), type: 'date' },
       started_on: { label: t('Started'), type: 'date' },
+      completed_on: { label: t('Technically done'), type: 'date' },
       closed_on: { label: t('Closed'), type: 'date' },
       estimated_hours: { label: t('Estimated time'), type: 'hours' },
       actual_hours: { label: t('Actual time'), type: 'hours' },
@@ -144,11 +148,23 @@ export const ENTITIES = {
     splitColumns: ['number', 'title', 'status'],
     // Newest first by default: not a column, so no header shows the default order.
     defaultSort: { sort: 'created_on', order: 'desc' },
-    sortColumns: ['number', 'title', 'site', 'priority', 'status', 'assignee', 'due_on'],
+    // completed_on: the "To close" queue, oldest first (D86); not a column.
+    sortColumns: [
+      'number',
+      'title',
+      'site',
+      'priority',
+      'status',
+      'assignee',
+      'due_on',
+      'completed_on',
+    ],
     detailFields: [
       'number',
       'title',
       'status',
+      'hold_reason',
+      'hold_note',
       'review_status',
       'priority',
       'type',
@@ -165,6 +181,7 @@ export const ENTITIES = {
       'created_on',
       'due_on',
       'started_on',
+      'completed_on',
       'closed_on',
       'estimated_hours',
       'actual_hours',
@@ -180,6 +197,8 @@ export const ENTITIES = {
     // time), the record's bookkeeping after.
     fieldWorkFields: [
       'status',
+      'hold_reason',
+      'hold_note',
       'review_status',
       'priority',
       'description',
@@ -192,6 +211,7 @@ export const ENTITIES = {
       'actual_hours',
       'estimated_hours',
       'started_on',
+      'completed_on',
       'closed_on',
       'title',
       'number',

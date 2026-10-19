@@ -267,6 +267,10 @@ describe('migrations', () => {
       // the columns the old schema has.
       db.prepare('DELETE FROM locations').run();
       await seedDatabase(db, { password: TEST_PASSWORD, today: '2026-10-14' });
+      // Before 016 there was no technical end (D86): those work orders were closed.
+      db.prepare(
+        "UPDATE work_orders SET status = 'CLOSED', closed_on = completed_on WHERE status = 'COMPLETED'",
+      ).run();
       copyDemoData(legacy, db.name);
       const state = () => ({
         rows: legacy.prepare('SELECT * FROM work_orders ORDER BY id').all(),
@@ -456,6 +460,105 @@ describe('migrations', () => {
     }
   });
 
+  it('gives closed work orders their technical end and holds a reason in 016 (D86, D87)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-015-'));
+    try {
+      for (const name of listMigrations().filter((n) => n < '016')) {
+        fs.copyFileSync(path.join(MIGRATIONS, name), path.join(dir, name));
+      }
+      const legacy = openDb(path.join(dir, 'legacy.sqlite'));
+      runMigrations(legacy, dir);
+      const ins = (table, row) => insertInto(legacy, table, row);
+      ins('locations', place({ id: 1, site_id: 1, level_type_id: 1, name: 'Test site' }));
+      const u = ins('users', user());
+      const at = (day, time = '08:00') => `2026-09-${day}T${time}:00.000Z`;
+      const w = [
+        // Closed with its history: the time of the change to CLOSED.
+        workOrder(u, {
+          status: 'CLOSED',
+          started_on: '2026-09-02',
+          closed_on: '2026-09-03',
+          work_report: 'Fixed',
+          assignee_id: u,
+          created_at: at('01'),
+        }),
+        // Closed without history and without a report (BR-W6 was checked in code only).
+        workOrder(u, {
+          status: 'CLOSED',
+          closed_on: '2026-09-05',
+          work_report: 'x',
+          created_at: at('01'),
+        }),
+        workOrder(u, { status: 'ON_HOLD', started_on: '2026-09-02', created_at: at('01') }),
+        workOrder(u, { status: 'OPEN', created_at: at('01', '09:30') }),
+      ].map((row) => ins('work_orders', { ...row, updated_at: row.created_at }));
+      // An older database may hold one: BR-W6 was first checked in code only.
+      legacy.pragma('ignore_check_constraints = ON');
+      legacy.prepare('UPDATE work_orders SET work_report = NULL WHERE id = ?').run(w[1]);
+      legacy.pragma('ignore_check_constraints = OFF');
+      const log = (id, changes, when) =>
+        ins('audit_log', {
+          entity_type: 'work_orders',
+          entity_id: id,
+          action: 'UPDATE',
+          changes: JSON.stringify(changes),
+          label: 'x',
+          at: when,
+        });
+      log(w[0], { assignee_id: { from: null, to: u } }, at('01', '10:00'));
+      log(w[0], { status: { from: 'OPEN', to: 'IN_PROGRESS' } }, at('02', '09:00'));
+      log(w[0], { status: { from: 'IN_PROGRESS', to: 'CLOSED' } }, at('03', '16:00'));
+      log(w[2], { status: { from: 'OPEN', to: 'IN_PROGRESS' } }, at('02', '11:00'));
+
+      fs.copyFileSync(
+        path.join(MIGRATIONS, '016_work_order_process.sql'),
+        path.join(dir, '016_work_order_process.sql'),
+      );
+      expect(runMigrations(legacy, dir)).toEqual(['016_work_order_process.sql']);
+      const rows = legacy.prepare('SELECT * FROM work_orders ORDER BY id').all();
+      expect(rows).toHaveLength(4);
+      expect(rows[0]).toMatchObject({
+        status: 'CLOSED',
+        completed_on: '2026-09-03',
+        closed_on: '2026-09-03',
+        completed_at: at('03', '16:00'),
+        first_started_at: at('02', '09:00'),
+        first_assigned_at: at('01', '10:00'),
+        reported_at: at('01'),
+        report_waived: 0,
+      });
+      expect(rows[1]).toMatchObject({
+        status: 'CLOSED',
+        completed_on: '2026-09-05',
+        completed_at: '2026-09-05T12:00:00.000Z',
+        report_waived: 1,
+        first_started_at: null,
+        first_assigned_at: null,
+      });
+      expect(rows[2]).toMatchObject({
+        status: 'ON_HOLD',
+        hold_reason: 'OTHER',
+        first_started_at: at('02', '11:00'),
+      });
+      expect(rows[3]).toMatchObject({ status: 'OPEN', hold_reason: null, completed_on: null });
+      expect(legacy.pragma('table_info(audit_log)').map((c) => c.name)).toContain('edited_at');
+      expect(
+        legacy.prepare('SELECT count(*) FROM audit_log WHERE edited_at IS NOT NULL').pluck().get(),
+      ).toBe(0);
+      // The search follows the new table.
+      legacy.prepare("UPDATE work_orders SET title = 'Zeppelin hangar' WHERE id = ?").run(w[3]);
+      expect(
+        legacy
+          .prepare("SELECT rowid FROM work_orders_fts WHERE work_orders_fts MATCH 'zeppelin'")
+          .pluck()
+          .all(),
+      ).toEqual([w[3]]);
+      legacy.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rolls back a migration that breaks a foreign key', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tacto-migration-'));
     try {
@@ -497,8 +600,23 @@ describe('CHECK constraints match src/rules/enums.js', () => {
           'work_orders',
           workOrder(insert('users', user()), {
             status: v,
-            ...(v === 'CLOSED' && { closed_on: '2026-10-02', work_report: 'Done' }),
+            ...(['COMPLETED', 'CLOSED'].includes(v) && {
+              completed_on: '2026-10-02',
+              completed_at: '2026-10-02T15:00:00.000Z',
+              work_report: 'Done',
+            }),
+            ...(v === 'CLOSED' && { closed_on: '2026-10-02' }),
+            ...(v === 'ON_HOLD' && { hold_reason: 'OTHER' }),
           }),
+        ),
+    ],
+    [
+      'work_orders.hold_reason',
+      enums.HOLD_REASONS,
+      (v) =>
+        insert(
+          'work_orders',
+          workOrder(insert('users', user()), { status: 'ON_HOLD', hold_reason: v }),
         ),
     ],
     [
@@ -703,16 +821,42 @@ describe('integrity rules', () => {
     expect(() => insert('work_orders', workOrder(u, { due_on: '2026-10-01' }))).not.toThrow();
   });
 
-  it('requires closed_on and a work report on CLOSED work orders (BR-W6)', () => {
+  it('requires the technical end and a report or its waiver on done work (BR-W6)', () => {
     const u = insert('users', user());
-    const closed = { status: 'CLOSED', started_on: '2026-10-01', closed_on: '2026-10-02' };
-    expect(() => insert('work_orders', workOrder(u, closed))).toThrow(/CHECK/);
-    expect(() => insert('work_orders', workOrder(u, { ...closed, work_report: '  ' }))).toThrow(
+    const done = {
+      status: 'COMPLETED',
+      started_on: '2026-10-01',
+      completed_on: '2026-10-02',
+      completed_at: '2026-10-02T15:00:00.000Z',
+    };
+    const add = (o) => () => insert('work_orders', workOrder(u, { ...done, ...o }));
+    expect(add({})).toThrow(/CHECK/);
+    expect(add({ work_report: '  ' })).toThrow(/CHECK/);
+    expect(add({ work_report: 'Fixed', completed_at: null })).toThrow(/CHECK/);
+    expect(add({ work_report: 'Fixed', completed_on: null })).toThrow(/CHECK/);
+    expect(add({ work_report: 'Fixed' })).not.toThrow();
+    expect(add({ report_waived: 1 })).not.toThrow();
+    // Closed: a closing date, not before the technical end.
+    expect(add({ status: 'CLOSED', work_report: 'Fixed' })).toThrow(/CHECK/);
+    expect(add({ status: 'CLOSED', work_report: 'Fixed', closed_on: '2026-10-01' })).toThrow(
       /CHECK/,
     );
-    expect(() =>
-      insert('work_orders', workOrder(u, { ...closed, work_report: 'Fixed' })),
-    ).not.toThrow();
+    expect(add({ status: 'CLOSED', work_report: 'Fixed', closed_on: '2026-10-03' })).not.toThrow();
+    // The waiver only on done work; completion not before the start.
+    expect(
+      add({ status: 'IN_PROGRESS', completed_on: null, completed_at: null, report_waived: 1 }),
+    ).toThrow(/CHECK/);
+    expect(add({ work_report: 'Fixed', completed_on: '2026-09-30' })).toThrow(/CHECK/);
+  });
+
+  it('keeps a hold reason and note on held work only (BR-W14)', () => {
+    const u = insert('users', user());
+    const add = (o) => () => insert('work_orders', workOrder(u, o));
+    expect(add({ status: 'ON_HOLD' })).toThrow(/CHECK/);
+    expect(add({ status: 'OPEN', hold_reason: 'OTHER' })).toThrow(/CHECK/);
+    expect(add({ status: 'OPEN', hold_note: 'x' })).toThrow(/CHECK/);
+    expect(add({ status: 'ON_HOLD', hold_reason: 'OTHER', hold_note: ' ' })).toThrow(/CHECK/);
+    expect(add({ status: 'ON_HOLD', hold_reason: 'OTHER', hold_note: 'Key lost' })).not.toThrow();
   });
 
   it('allows one open conflict per record, and any number of resolved ones (D4)', () => {

@@ -69,7 +69,7 @@ describe('t, tn, tx', () => {
     useLanguageForTests('fr');
     expect(t('Work orders')).toBe('Bons de travaux');
     expect(t('Closed')).toBe('Clôture');
-    expect(t('count|Closed')).toBe('Clôturés');
+    expect(t('count|Done')).toBe('Terminés');
     expect(t('Text without an entry')).toBe('Text without an entry');
   });
 

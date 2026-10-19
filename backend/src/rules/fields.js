@@ -8,6 +8,7 @@ import {
   ASSET_STATUSES,
   CATEGORIES,
   CRITICALITIES,
+  HOLD_REASONS,
   PERFORMERS,
   PLAN_TYPES,
   SCHEDULE_MODES,
@@ -80,10 +81,16 @@ export const WORK_ORDER_FIELDS = {
   supervisor_id: optionalId,
   due_on: optionalDate,
   started_on: optionalDate,
+  completed_on: optionalDate,
   closed_on: optionalDate,
   estimated_hours: hours,
   actual_hours: hours,
   work_report: optionalText(4000),
+  // BR-W6: technically done without a report, by a supervisor or an admin.
+  report_waived: z.boolean(),
+  // BR-W14: required when entering ON_HOLD, cleared when leaving it.
+  hold_reason: z.enum(HOLD_REASONS).nullable(),
+  hold_note: optionalText(500),
   // The week the work is planned in: set by the release or the first block of the week
   // scheduler, and rescheduled by supervisors and admins (D55).
   planned_week: z.preprocess(blankToNull, isoWeek.nullable()),
@@ -155,6 +162,11 @@ export const READ_ONLY_FIELDS = {
     // Set by the release of a plan's visit (D48); planned_week is editable since D55.
     'plan_id',
     'plan',
+    // Moments of the SLA, set by the server from the write's edited_at (BR-W18).
+    'reported_at',
+    'first_assigned_at',
+    'first_started_at',
+    'completed_at',
   ],
 };
 
@@ -165,4 +177,7 @@ export const WRITE_META = {
 };
 
 /** Fields that are booleans in the API and 0/1 in SQLite. */
-export const BOOLEAN_FIELDS = { assets: ['maintenance_contract'], work_orders: [] };
+export const BOOLEAN_FIELDS = {
+  assets: ['maintenance_contract'],
+  work_orders: ['report_waived'],
+};

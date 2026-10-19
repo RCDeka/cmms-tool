@@ -72,11 +72,14 @@ beforeAll(async () => {
   const wo = db.prepare(`INSERT INTO work_orders
     (id, number, type, status, priority, title, asset_id, site, location_id, category, assignee_id,
      created_on, closed_on, estimated_hours, actual_hours, work_report, review_status,
-     reviewed_at, created_by, created_at, updated_at)
+     reviewed_at, created_by, created_at, updated_at,
+     completed_on, completed_at, hold_reason)
     VALUES (@id, @number, @type, @status, @priority, 'Job', @asset, @site, ${SITE_ID('@site')},
      @category, @assignee,
      @created_on, @closed, @est, @act, @report, @review, @reviewed_at, @created_by, @created_at,
-     @created_at)`);
+     @created_at,
+     @closed, CASE WHEN @closed IS NOT NULL THEN @closed || 'T12:00:00.000Z' END,
+     CASE WHEN @status = 'ON_HOLD' THEN 'OTHER' END)`);
   const sites = { 1: 'Paris', 2: 'Paris', 3: 'Lyon', 4: 'Lyon', 5: 'Paris' };
   const trades = { 1: 'HVAC', 2: 'HVAC', 3: 'ELECTRICAL', 4: 'PLUMBING', 5: 'HVAC' };
   const rows = [
@@ -202,6 +205,13 @@ beforeAll(async () => {
   status('assets', 1, 'BROKEN_DOWN', '2026-09-28T22:30:00.000Z');
   status('assets', 1, 'IN_SERVICE', '2026-10-01T10:00:00.000Z');
   status('assets', 3, 'BROKEN_DOWN', '2026-08-01T08:00:00.000Z', 'CREATE');
+  // The moments kept on each work order (D86), read from that history as migration 016 does.
+  const moment = (to, pick) =>
+    `(SELECT ${pick}(l.at) FROM audit_log l WHERE l.entity_type = 'work_orders'
+       AND l.entity_id = work_orders.id AND json_extract(l.changes, '$.status.to') = '${to}')`;
+  db.exec(`UPDATE work_orders SET reported_at = created_at,
+    first_started_at = ${moment('IN_PROGRESS', 'min')},
+    completed_at = coalesce(${moment('CLOSED', 'max')}, completed_at)`);
 
   db.prepare(
     `INSERT INTO allocations (kind, work_order_id, technician_id, day, hours, created_by, created_at, updated_at)
@@ -239,7 +249,7 @@ describe('response_times', () => {
     expect(urgent.close).toEqual({ count: 2, median: 36, p90: 48 });
     const normal = data.rows.find((r) => r.priority === 'NORMAL');
     expect(normal.start).toEqual({ count: 0, median: null, p90: null });
-    expect(normal.close).toEqual({ count: 2, median: 624, p90: 1200 });
+    expect(normal.close).toEqual({ count: 4, median: 50, p90: 1200 });
     expect(data.rows.map((r) => r.priority)).toEqual(['URGENT', 'HIGH', 'NORMAL', 'LOW']);
     expect(data.start).toEqual({ count: 3, median: 2, p90: 4 });
   });
@@ -249,8 +259,11 @@ describe('response_times', () => {
     const exported = await rows('response_times', 'segment=close');
     expect(exported.items.map((w) => [w.id, w.dashboard.hours])).toEqual([
       [4, 1200],
+      // Done work orders without a status history keep their completion moment (D86).
+      [9, 52],
       [2, 48],
       [5, 48],
+      [15, 28],
       [1, 24],
     ]);
   });

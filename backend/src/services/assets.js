@@ -213,7 +213,7 @@ export function createAssetService(db, { locations }) {
         editedAt,
         user,
         now: now.toISOString(),
-        prepare: (current) => placeChanges(current, changes),
+        prepare: (current) => ({ changes: placeChanges(current, changes) }),
         afterWrite: follow(now.toISOString()),
       });
       return { ...result, item: getById(id), changes, version };
@@ -310,7 +310,7 @@ export function createAssetService(db, { locations }) {
         body,
         user,
         now: now.toISOString(),
-        prepare: placeChanges,
+        prepare: (current, changes) => ({ changes: placeChanges(current, changes) }),
         afterWrite: follow(now.toISOString()),
       });
       return getById(id);

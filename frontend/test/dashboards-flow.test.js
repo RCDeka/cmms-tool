@@ -60,7 +60,7 @@ describe('drill-down links (K9)', () => {
     );
     expect(drillLabel('backlog_age::8-30')).toBe('Backlog by age and priority: 8–30 days old');
     expect(drillLabel('opened_vs_closed:cancelled:2026-W40', 90)).toBe(
-      'Opened vs closed: cancelled in week 40, 2026 (last 90 days)',
+      'Opened vs done: cancelled in week 40, 2026 (last 90 days)',
     );
     expect(drillLabel('planned_vs_reactive:REQUESTS:2026-09', 365)).toBe(
       'Planned vs reactive work: Staff requests, September 2026 (last 365 days)',

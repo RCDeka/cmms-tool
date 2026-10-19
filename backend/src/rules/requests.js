@@ -80,13 +80,14 @@ export function reviewBlocker(current, version) {
 }
 
 /**
- * Why the requester cannot cancel their request, or null (BR-R10, D79): only until work
- * starts, and not while a conflict waits for a supervisor (BR-V4). Pure.
+ * Why the requester cannot cancel their request, or null (BR-R10, D79): only while it is open
+ * (not once work started or it was put on hold), and not while a conflict waits for a
+ * supervisor (BR-V4). Pure.
  * @param {{ status: string, has_conflict: number }} current
  * @returns {{ status: number, rule: string, message: string } | null}
  */
 export function withdrawalBlocker(current) {
-  if (current.status === 'CANCELLED' || current.status === 'CLOSED') {
+  if (['CANCELLED', 'COMPLETED', 'CLOSED'].includes(current.status)) {
     return { status: 422, rule: 'BR-R10', message: 'This request is already finished.' };
   }
   if (current.status !== 'OPEN') {

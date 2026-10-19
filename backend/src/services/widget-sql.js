@@ -9,6 +9,9 @@ import { addInFilter } from '../lib/list-filter.js';
 /** Unfinished work orders (alias `w`). */
 export const UNFINISHED = "w.status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD')";
 
+/** Technically done work orders, closed or not (alias `w`): counted on `completed_on` (D86). */
+export const DONE = "w.status IN ('COMPLETED', 'CLOSED')";
+
 export const badSegment = () =>
   new HttpError(400, 'Invalid query', { fields: { segment: 'Unknown segment' } });
 

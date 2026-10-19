@@ -80,7 +80,7 @@ describe('buildEditForm', () => {
     expect([...$('#f-status').options].map((o) => o.value)).toEqual([
       'IN_PROGRESS',
       'ON_HOLD',
-      'CLOSED',
+      'COMPLETED',
       'CANCELLED',
     ]);
     expect($('#f-started_on').type).toBe('date');
@@ -101,18 +101,76 @@ describe('buildEditForm', () => {
     });
     host.append(form.form);
     expect(form.getChanges()).toEqual({ changes: {}, invalid: [] });
-    type($('#f-status'), 'CLOSED');
+    type($('#f-status'), 'COMPLETED');
     type($('#f-work_report'), 'Replaced the valve');
     type($('#f-actual_hours'), '1.5');
     type($('#f-assignee_id'), '2');
     expect(form.getChanges().changes).toEqual({
-      status: 'CLOSED',
+      status: 'COMPLETED',
       work_report: 'Replaced the valve',
       actual_hours: 1.5,
       assignee_id: 2,
     });
     type($('#f-work_report'), '   ');
     expect(form.getChanges().changes).not.toHaveProperty('work_report');
+  });
+
+  it('asks for the hold reason and note while the status is On hold (BR-W14)', () => {
+    const form = buildEditForm({
+      entity: 'work_orders',
+      record: workOrder,
+      editable: ['status', 'hold_reason', 'hold_note'],
+      ctx: ctx({ user: { id: 2, role: 'SUPERVISOR' } }),
+      onSave() {},
+      onDiscard() {},
+    });
+    host.append(form.form);
+    const row = (field) => $(`#f-${field}`).closest('.form-row');
+    expect(row('hold_reason').hidden).toBe(true);
+    expect(row('hold_note').hidden).toBe(true);
+    type($('#f-status'), 'ON_HOLD');
+    expect(row('hold_reason').hidden).toBe(false);
+    expect([...$('#f-hold_reason').options].map((o) => o.value)).toEqual([
+      '',
+      'WAITING_PARTS',
+      'WAITING_CONTRACTOR',
+      'WAITING_ACCESS',
+      'WAITING_APPROVAL',
+      'OTHER',
+    ]);
+    type($('#f-hold_reason'), 'WAITING_ACCESS');
+    type($('#f-hold_note'), 'Room locked');
+    expect(form.getChanges().changes).toEqual({
+      status: 'ON_HOLD',
+      hold_reason: 'WAITING_ACCESS',
+      hold_note: 'Room locked',
+    });
+  });
+
+  it('offers closing to supervisors, and every status to admins (BR-W16, BR-W17)', () => {
+    const options = (user, record = { ...workOrder, status: 'COMPLETED' }) => {
+      host.replaceChildren(
+        buildEditForm({
+          entity: 'work_orders',
+          record,
+          editable: ['status'],
+          ctx: ctx({ user }),
+          onSave() {},
+          onDiscard() {},
+        }).form,
+      );
+      return [...$('#f-status').options].map((o) => o.value);
+    };
+    expect(options({ id: 4, role: 'TECHNICIAN' })).toEqual(['COMPLETED', 'IN_PROGRESS']);
+    expect(options({ id: 2, role: 'SUPERVISOR' })).toEqual(['COMPLETED', 'CLOSED', 'IN_PROGRESS']);
+    expect(options({ id: 1, role: 'ADMIN' }, { ...workOrder, status: 'CLOSED' })).toEqual([
+      'CLOSED',
+      'OPEN',
+      'IN_PROGRESS',
+      'ON_HOLD',
+      'COMPLETED',
+      'CANCELLED',
+    ]);
   });
 
   it('enables Save and Discard only when something changed', () => {

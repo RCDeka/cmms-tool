@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Flow and backlog widgets of the dashboards (docs/spec-dashboards.md §6.2, Phase 22):
-// opened vs closed, backlog by age and priority, backlog in weeks of work, planned vs
+// opened vs done, backlog by age and priority, backlog in weeks of work, planned vs
 // reactive work. Each has a body, a table view (with a link per counted cell to the records
 // behind it, K9) and the labels of its segments for the drill-down list.
 import { numberFormat, percentFormat } from './dashboard.js';
@@ -177,11 +177,11 @@ const tableDetails = (table, caption) =>
     tableElement(table, caption),
   );
 
-// --- Opened vs closed -----------------------------------------------------------------------
+// --- Opened vs done (D86) -------------------------------------------------------------------
 
 const FLOW_KINDS = [
   ['opened', t('Opened')],
-  ['closed', t('count|Closed')],
+  ['closed', t('count|Done')],
   ['cancelled', t('count|Cancelled')],
 ];
 
@@ -190,7 +190,7 @@ function flowTable(data, { drill }) {
     columns: [
       { label: data.unit === 'week' ? t('Week') : t('Month') },
       { label: t('Opened'), numeric: true },
-      { label: t('count|Closed'), numeric: true },
+      { label: t('count|Done'), numeric: true },
       { label: t('count|Cancelled'), numeric: true },
       { label: t('Unfinished at the end'), numeric: true },
     ],
@@ -222,12 +222,12 @@ function flowBody(data, context) {
   const bars = canvasFor(
     t(
       data.unit === 'week'
-        ? 'Column chart, opened and closed per week. {map}.'
-        : 'Column chart, opened and closed per month. {map}.',
+        ? 'Column chart, opened and done per week. {map}.'
+        : 'Column chart, opened and done per month. {map}.',
       {
         map: data.buckets
           .map((b, i) =>
-            t('{title}: {opened} opened, {closed} closed', {
+            t('{title}: {opened} opened, {closed} done', {
               title: titles[i],
               opened: b.opened,
               closed: b.closed,
@@ -258,7 +258,7 @@ function flowBody(data, context) {
       h(
         'p',
         { class: 'widget-summary' },
-        t('{opened} opened, {closed} closed, {cancelled} cancelled. ', {
+        t('{opened} opened, {closed} done, {cancelled} cancelled. ', {
           opened: numberFormat.format(opened),
           closed: numberFormat.format(closed),
           cancelled: numberFormat.format(cancelled),
@@ -279,7 +279,7 @@ function flowBody(data, context) {
       ),
       legend([
         [t('Opened'), 1],
-        [t('count|Closed'), 2],
+        [t('count|Done'), 2],
       ]),
       chartFrame(bars, 220),
       h(
@@ -291,12 +291,12 @@ function flowBody(data, context) {
       chartFrame(line, 140),
       tableDetails(
         flowTable(data, context),
-        data.unit === 'week' ? t('Opened and closed per week') : t('Opened and closed per month'),
+        data.unit === 'week' ? t('Opened and done per week') : t('Opened and done per month'),
       ),
     ],
     legend: [
       [t('Opened'), 1],
-      [t('count|Closed'), 2],
+      [t('count|Done'), 2],
     ],
     charts: [
       {
@@ -307,7 +307,7 @@ function flowBody(data, context) {
             titles,
             series: [
               { label: t('Opened'), values: data.buckets.map((b) => b.opened), slot: 1 },
-              { label: t('count|Closed'), values: data.buckets.map((b) => b.closed), slot: 2 },
+              { label: t('count|Done'), values: data.buckets.map((b) => b.closed), slot: 2 },
             ],
             onPick: context.open
               ? (series, i) =>
@@ -628,10 +628,10 @@ function workBody(data, context) {
     `${
       data.unit === 'week'
         ? t(
-            'Stacked column chart, share of planned, reactive, staff request and improvement work closed per week',
+            'Stacked column chart, share of planned, reactive, staff request and improvement work done per week',
           )
         : t(
-            'Stacked column chart, share of planned, reactive, staff request and improvement work closed per month',
+            'Stacked column chart, share of planned, reactive, staff request and improvement work done per month',
           )
     }${
       share === null
@@ -668,11 +668,11 @@ function workBody(data, context) {
         'p',
         { class: 'widget-summary' },
         share === null
-          ? t('No work order was closed in this period.')
+          ? t('No work order was done in this period.')
           : tx(
               basis === 'hours'
-                ? 'Planned work: {share} of the hours worked on the work orders closed in the period.'
-                : 'Planned work: {share} of the work orders closed in the period.',
+                ? 'Planned work: {share} of the hours worked on the work orders done in the period.'
+                : 'Planned work: {share} of the work orders done in the period.',
               { share: h('strong', {}, percentFormat.format(share)) },
             ),
       ),
@@ -684,8 +684,8 @@ function workBody(data, context) {
             { class: 'widget-note' },
             tn(
               data.without_actual_hours,
-              '{n} closed work order has no actual hours (counted as 0 h).',
-              '{n} closed work orders have no actual hours (counted as 0 h).',
+              '{n} done work order has no actual hours (counted as 0 h).',
+              '{n} done work orders have no actual hours (counted as 0 h).',
             ),
           )
         : null,

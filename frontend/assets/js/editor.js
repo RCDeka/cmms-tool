@@ -10,6 +10,7 @@ import { notice, renderDetail } from './detail.js';
 import { h, isPhone } from './dom.js';
 import { detailFieldsOf } from './entities.js';
 import { formatDateTime } from './format.js';
+import { valueLabel } from './labels.js';
 import { buildCreateForm, buildEditForm } from './form.js';
 import { commentsSection } from './comments.js';
 import { historySection } from './history.js';
@@ -32,6 +33,8 @@ import {
   checkBeforeSave,
   CREATION_FIELDS,
   editableFields,
+  isOverride,
+  statusActions,
 } from './rules.js';
 import {
   DRAFT_DELAY_MS,
@@ -95,6 +98,7 @@ async function formCtx() {
   const refs = await refsPromise;
   return {
     refs,
+    user: currentUser(),
     async findAssetByCode(code) {
       const asset = await findAssetByCode(code);
       if (asset) assetRefs.set(asset.id, asset);
@@ -238,6 +242,11 @@ export async function showRecord({ route, record, onClose, backLabel }) {
           ),
     );
   }
+  if (entity === 'work_orders' && record.report_waived) {
+    notices.push(
+      notice('info', t('Report waived: marked technically done without a work report.')),
+    );
+  }
   if (record._pending) {
     notices.push(
       notice(
@@ -284,6 +293,8 @@ export async function showRecord({ route, record, onClose, backLabel }) {
       );
     }
   }
+
+  if (entity === 'work_orders') actions.push(...statusButtons(record, user));
 
   const consoleLink = ['SUPERVISOR', 'ADMIN'].includes(user.role);
   if (!editable.length) {
@@ -355,6 +366,66 @@ export async function showRecord({ route, record, onClose, backLabel }) {
   }
 }
 
+/** Labels of the status actions (rules.js → statusActions). */
+const STATUS_ACTION_LABELS = {
+  hold: t('action|Put on hold'),
+  complete: t('Mark technically done'),
+  waive: t('Mark done without a report'),
+  close: t('action|Close'),
+  reopen: t('Reopen'),
+  override: t('Change status'),
+};
+
+/** Buttons of the work order's status actions (D86); they fill the form, then save. */
+function statusButtons(record, user) {
+  return statusActions(record, user).map((action) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: `button ${action.key === 'complete' || action.key === 'close' ? 'button-primary' : 'button-secondary'}`,
+        onClick: () => runStatusAction(action),
+      },
+      STATUS_ACTION_LABELS[action.key],
+    ),
+  );
+}
+
+/**
+ * Applies a status action to the open form: the hold and the admin's change of status wait
+ * for the user to fill the form; the others are saved at once. The waiver asks first.
+ */
+async function runStatusAction(action) {
+  const ed = editor;
+  if (!ed || ed.kind !== 'edit') return;
+  if (action.key === 'override') {
+    detailContainer.querySelector('#f-status')?.focus();
+    return;
+  }
+  if (action.waive) {
+    const choice = await confirmDialog({
+      title: t('Mark done without a report?'),
+      message: t(
+        '{number} will be marked technically done without a work report. The waiver is kept on the work order and in its history.',
+        { number: ed.record.number },
+      ),
+      actions: [
+        { value: 'waive', label: t('Mark done without a report'), primary: true },
+        { value: 'cancel', label: t('Cancel') },
+      ],
+    });
+    if (choice !== 'waive' || editor !== ed) return;
+  }
+  await ed.handle.setValues({ status: action.status });
+  ed.extra = action.waive ? { report_waived: true } : {};
+  onInput();
+  if (action.status === 'ON_HOLD') {
+    detailContainer.querySelector('#f-hold_reason')?.focus();
+    return;
+  }
+  await saveRecord();
+}
+
 /**
  * Sections below a record: the conversation with the requester (work orders, D46) and the
  * history. A work order not yet created on the server has neither.
@@ -392,7 +463,9 @@ function mapErrorFields(fields) {
 export async function saveRecord() {
   const ed = editor;
   if (!ed || ed.kind !== 'edit') return true;
-  const { changes, invalid } = ed.handle.getChanges();
+  const { changes: formChanges, invalid } = ed.handle.getChanges();
+  // Changes no field of the form holds: the report waiver (BR-W6).
+  const changes = { ...formChanges, ...ed.extra };
   if (invalid.length) {
     ed.handle.setErrors(
       Object.fromEntries(invalid.map((f) => [f, t('Unknown asset code')])),
@@ -404,10 +477,29 @@ export async function saveRecord() {
   if (!Object.keys(changes).length) return true;
   const errors = checkBeforeSave(ed.entity, ed.record, changes);
   if (Object.keys(errors).length) {
+    ed.extra = {};
     ed.handle.setErrors(errors, t('Check the highlighted fields.'));
     ed.handle.focusFirstError();
     return false;
   }
+  if (ed.entity === 'work_orders' && isOverride(ed.record, changes.status, currentUser())) {
+    const choice = await confirmDialog({
+      title: t('Change the status outside the usual steps?'),
+      message: t(
+        'The change from {from} to {to} is logged in the history as an administrator override.',
+        {
+          from: valueLabel('work_order_status', ed.record.status),
+          to: valueLabel('work_order_status', changes.status),
+        },
+      ),
+      actions: [
+        { value: 'change', label: t('Change status'), primary: true },
+        { value: 'cancel', label: t('Cancel') },
+      ],
+    });
+    if (choice !== 'change' || editor !== ed) return false;
+  }
+  ed.extra = {};
   ed.draftLater.cancel();
   ed.dirty = false;
   await enqueue({

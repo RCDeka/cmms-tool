@@ -93,8 +93,9 @@ describe('statusRows', () => {
       ['Open', 30, 0.3, 1],
       ['In progress', 20, 0.2, 2],
       ['On hold', 0, 0, 3],
-      ['Closed', 50, 0.5, 4],
-      ['Cancelled', 0, 0, 5],
+      ['Technically done', 0, 0, 4],
+      ['Closed', 50, 0.5, 5],
+      ['Cancelled', 0, 0, 6],
     ]);
     expect(statusRows({ by_status: [] }).every((r) => r.share === 0)).toBe(true);
   });
@@ -143,7 +144,7 @@ describe('renderDashboard', () => {
     render();
     const tiles = [...host.querySelectorAll('.kpi-tile')];
     expect(tiles).toHaveLength(5);
-    expect(tiles[2].textContent).toContain('Closed this month');
+    expect(tiles[2].textContent).toContain('Done this month');
     expect(tiles[2].querySelector('.kpi-value').textContent).toBe('1,284');
     const overdue = tiles[3];
     expect(overdue.getAttribute('href')).toBe('/work-orders?overdue=true');
@@ -168,15 +169,16 @@ describe('renderDashboard', () => {
     const charts = render();
     expect(charts).toHaveLength(2);
     expect(charts[1].canvas.getAttribute('aria-label')).toBe(
-      'Pie chart. Open: 30, In progress: 20, On hold: 0, Closed: 50, Cancelled: 0.',
+      'Pie chart. Open: 30, In progress: 20, On hold: 0, Technically done: 0, Closed: 50, Cancelled: 0.',
     );
     expect(host.querySelector('#status-chart-heading').textContent).toBe(
       'Work orders by status — last 30 days',
     );
     const legend = [...host.querySelectorAll('.pie-legend li')].map((li) => li.textContent);
     expect(legend[0]).toBe('Open3030%');
-    expect(legend[3]).toBe('Closed5050%');
-    expect(host.querySelector('.pie-legend .chart-series-4')).not.toBeNull();
+    expect(legend[3]).toBe('Technically done00%');
+    expect(legend[4]).toBe('Closed5050%');
+    expect(host.querySelector('.pie-legend .chart-series-6')).not.toBeNull();
   });
 
   it('shows no pie, and nothing to draw, when no work order was created', () => {

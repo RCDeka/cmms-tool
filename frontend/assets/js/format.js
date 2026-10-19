@@ -59,6 +59,24 @@ export function badge(field, enumName, code) {
 }
 
 /**
+ * Status of a work order in lists (D86): "Open · assigned" when an open one has an assignee
+ * (there is no "Assigned" status), and the reason under "On hold".
+ * @param {{ status: string, assignee_id?: number | null, hold_reason?: string | null }} wo
+ */
+export function workOrderStatus(wo) {
+  const extra =
+    wo.status === 'OPEN' && wo.assignee_id
+      ? t('· assigned')
+      : wo.status === 'ON_HOLD' && wo.hold_reason
+        ? valueLabel('hold_reason', wo.hold_reason)
+        : null;
+  return [
+    badge('status', 'work_order_status', wo.status),
+    extra ? h('span', { class: 'status-detail' }, ' ', extra) : null,
+  ];
+}
+
+/**
  * Display node or text for a field value, according to its definition (entities.js).
  * @param {string} field
  * @param {{ type?: string, enum?: string }} def

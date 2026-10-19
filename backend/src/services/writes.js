@@ -14,8 +14,8 @@ import { CONFLICT_RESOLUTIONS } from '../rules/enums.js';
 import { canEditRecord, forbiddenFields } from '../rules/permissions.js';
 import { decideWrite } from '../rules/versioning.js';
 
-const forbidden = (fields, message = 'Your role does not allow changing these fields') =>
-  new HttpError(403, message, { fields });
+const forbidden = (fields, message = 'Your role does not allow changing these fields', rule) =>
+  new HttpError(403, message, { fields, ...(rule && { rule }) });
 
 /**
  * Checks a PUT body in this order: unknown fields (400), read-only or role-forbidden fields
@@ -46,6 +46,10 @@ export function parseUpdate(entity, body, user) {
   const notWritable = fields.filter((k) => readOnly.includes(k));
   if (notWritable.length) throw forbidden(notWritable, 'These fields cannot be changed');
   const notAllowed = forbiddenFields(entity, user.role, fields);
+  if (notAllowed.includes('report_waived')) {
+    // BR-W6: only supervisors and admins waive the work report.
+    throw forbidden(notAllowed, 'Only supervisors and admins waive the work report', 'BR-W6');
+  }
   if (notAllowed.length) throw forbidden(notAllowed);
 
   const meta = z.object(WRITE_META).safeParse({ version: body.version, edited_at: body.edited_at });
@@ -79,8 +83,9 @@ export function toColumns(entity, changes) {
  * @param {string | undefined} options.editedAt when the user made the edit
  * @param {{ id: number, role: string }} options.user
  * @param {string} options.now ISO datetime
- * @param {(current: object) => object} [options.prepare] checks business rules on the current
- *   row and returns the final changes (throw HttpError to refuse); runs only when applying
+ * @param {(current: object, write: WriteMoments) => { changes: object, note?: object }}
+ *   [options.prepare] checks business rules on the current row and returns the final changes,
+ *   and a note for the audit entry (throw HttpError to refuse); runs only when applying
  * @param {(current: object, changes: object) => void} [options.afterWrite] follow-up writes in
  *   the same transaction, once the changes are applied (e.g. a plan's visit, BR-P5)
  * @returns {{ status: 'applied' } | { status: 'conflict' | 'locked', conflictId: number }}
@@ -154,11 +159,13 @@ export function versionedUpdate(
           userId: user.id,
           version: current.version,
           at: now,
+          editedAt: editedAt ?? now,
         });
         return { status: 'conflict', conflictId };
       }
 
-      const apiChanges = prepare ? prepare(current) : changes;
+      const moments = { editedAt: editedAt ?? now, fromClient: () => true };
+      const { changes: apiChanges, note } = prepare ? prepare(current, moments) : { changes };
       const finalChanges = toColumns(entity, apiChanges);
       // Column names come from the editable-field whitelist, never from the request as is.
       const sets = Object.keys(finalChanges).map((k) => `${k} = @${k}`);
@@ -175,10 +182,12 @@ export function versionedUpdate(
           entityId: id,
           action: 'UPDATE',
           changes: logged,
+          note,
           label: auditLabel(entity, { ...before, ...apiChanges }),
           userId: user.id,
           version: current.version + 1,
           at: now,
+          editedAt: editedAt ?? now,
         });
       }
       afterWrite?.(current, apiChanges);
@@ -186,6 +195,12 @@ export function versionedUpdate(
     })
     .immediate();
 }
+
+/**
+ * When the changes of a write were made: `editedAt` the client's time, and `fromClient(field)`
+ * whether the value written for a field is the client's (else it is the resolver's, made now).
+ * @typedef {{ editedAt: string, fromClient: (field: string) => boolean }} WriteMoments
+ */
 
 const resolutionBody = z.strictObject({
   conflict_id: z.number().int().positive(),
@@ -206,7 +221,9 @@ const resolutionBody = z.strictObject({
  * @param {unknown} options.body request body
  * @param {{ id: number }} options.user
  * @param {string} options.now ISO datetime
- * @param {(current: object, changes: object) => object} [options.prepare] business rules
+ * @param {(current: object, changes: object, write: WriteMoments) =>
+ *   { changes: object, note?: object }} [options.prepare] business rules; the client's values
+ *   (choice B, or a merge that keeps them) keep the conflict's client_edited_at (BR-W18)
  * @param {(current: object, changes: object) => void} [options.afterWrite] follow-up writes
  */
 export function resolveConflict(db, { entity, id, body, user, now, prepare, afterWrite }) {
@@ -250,7 +267,10 @@ export function resolveConflict(db, { entity, id, body, user, now, prepare, afte
       const changes = Object.fromEntries(
         Object.entries(wanted).filter(([f, v]) => !sameValue(currentApi[f], v)),
       );
-      const applied = Object.keys(changes).length && prepare ? prepare(current, changes) : changes;
+      const fromClient = (field) => field in changes && sameValue(changes[field], versionB[field]);
+      const moments = { editedAt: conflict.client_edited_at, fromClient };
+      const { changes: applied, note } =
+        Object.keys(changes).length && prepare ? prepare(current, changes, moments) : { changes };
       const finalChanges = toColumns(entity, applied);
 
       const sets = Object.keys(finalChanges).map((k) => `${k} = @${k}, `);
@@ -266,11 +286,13 @@ export function resolveConflict(db, { entity, id, body, user, now, prepare, afte
         entityId: id,
         action: 'RESOLVE',
         changes: diffChanges(currentApi, applied),
-        note: { conflict_id: conflictId, choice },
+        note: { ...note, conflict_id: conflictId, choice },
         label: auditLabel(entity, { ...currentApi, ...applied }),
         userId: user.id,
         version: current.version + 1,
         at: now,
+        // A status of the client keeps its time, so the history times the hold or the end.
+        editedAt: fromClient('status') ? conflict.client_edited_at : now,
       });
       afterWrite?.(current, applied);
     })

@@ -117,10 +117,14 @@ export const FR = {
   'Reason for rejection': 'Motif du refus',
   'Maintenance plan': 'Plan de maintenance',
   'Planned week': 'Semaine prévue',
+  'Hold reason': 'Motif de mise en attente',
+  'Hold note': 'Note sur la mise en attente',
+  'Technically done': 'Terminé techniquement',
   // format.js
   'Week {n}, {year}': 'Semaine {n}, {year}',
   Yes: 'Oui',
   No: 'Non',
+  '· assigned': '· assigné',
   // detail.js
   'Back to list': 'Retour à la liste',
   'Close details': 'Fermer les détails',
@@ -172,8 +176,11 @@ export const FR = {
   'Choose who will do the work': "Choisissez qui réalisera l'intervention",
   'Say why the request is rejected': 'Indiquez pourquoi la demande est refusée',
   Required: 'Obligatoire',
-  'A work report is required to close a work order.':
-    'Un compte rendu est obligatoire pour clôturer un bon de travaux.',
+  'Write the work report first: the work cannot be marked technically done without it.':
+    "Rédigez d'abord le compte rendu\u00a0: l'intervention ne peut pas être marquée terminée techniquement sans lui.",
+  'Say why the work order is on hold.': 'Indiquez pourquoi le bon de travaux est en attente.',
+  'The completion date cannot be earlier than the start date.':
+    'La date de fin technique ne peut pas être antérieure à la date de début.',
   'The due date cannot be earlier than the creation date.':
     'La date souhaitée ne peut pas précéder la date de création.',
   'The closing date cannot be earlier than the start date.':
@@ -185,6 +192,21 @@ export const FR = {
   User: 'Utilisateur',
   'Unsaved draft from {updated_at}. ': 'Brouillon non enregistré du {updated_at}. ',
   Restore: 'Restaurer',
+  'Report waived: marked technically done without a work report.':
+    'Compte rendu dispensé\u00a0: marqué terminé techniquement sans compte rendu.',
+  'action|Put on hold': 'Mettre en attente',
+  'Mark technically done': 'Marquer terminé techniquement',
+  'Mark done without a report': 'Marquer terminé sans compte rendu',
+  'action|Close': 'Clôturer',
+  Reopen: 'Rouvrir',
+  'Change status': 'Changer le statut',
+  'Mark done without a report?': 'Marquer terminé sans compte rendu\u00a0?',
+  '{number} will be marked technically done without a work report. The waiver is kept on the work order and in its history.':
+    '{number} sera marqué terminé techniquement sans compte rendu. La dispense est conservée sur le bon de travaux et dans son historique.',
+  'Change the status outside the usual steps?':
+    'Changer le statut hors des étapes habituelles\u00a0?',
+  'The change from {from} to {to} is logged in the history as an administrator override.':
+    "Le passage de {from} à {to} est inscrit dans l'historique comme une décision d'administrateur.",
   Discard: 'Abandonner',
   'This staff request is waiting for a supervisor’s review: it will then be assigned.':
     "Cette demande d'intervention attend l'examen d'un superviseur\u00a0: elle sera ensuite assignée.",
@@ -518,7 +540,8 @@ export const FR = {
   // dashboard.js
   'Open work orders': 'Bons de travaux ouverts',
   'In progress': 'En cours',
-  'Closed this month': 'Clôturés ce mois-ci',
+  'Done this month': 'Terminés ce mois-ci',
+  'To close': 'À clôturer',
   'Overdue work orders': 'Bons de travaux en retard',
   'Assets broken down': 'Équipements en panne',
   'Staff requests to review': 'Demandes à examiner',
@@ -750,6 +773,8 @@ export const FR = {
   'What did you do?': "Qu'avez-vous fait\u00a0?",
   Close: 'Fermer',
   // history.js
+  'Status changed by an administrator (override)':
+    'Statut changé par un administrateur (hors étapes)',
   Changed: 'Modification',
   Deleted: 'Suppression',
   'Edit not applied (conflict)': 'Modification non appliquée (conflit)',
@@ -1204,6 +1229,7 @@ export const FR = {
   'This record is waiting for a supervisor to resolve a conflict.':
     "Cette fiche attend qu'un superviseur résolve un conflit.",
   // requests.js
+  'request|Closed': 'Clôturée',
   Received: 'Reçue',
   'Approved and assigned': 'Approuvée et assignée',
   Done: 'Terminée',
@@ -1227,8 +1253,8 @@ export const FR = {
   Cancelled: 'Annulée',
   'The maintenance team cancelled this request: the comments may say why. If the problem is still there, send a new request.':
     "L'équipe de maintenance a annulé cette demande\u00a0: les commentaires en donnent peut-être la raison. Si le problème persiste, envoyez une nouvelle demande.",
-  'The work is finished ({closed_on}). If the problem is still there, add a comment.':
-    'Les travaux sont terminés ({closed_on}). Si le problème persiste, ajoutez un commentaire.',
+  'The work is finished ({completed_on}). If the problem is still there, add a comment.':
+    'Les travaux sont terminés ({completed_on}). Si le problème persiste, ajoutez un commentaire.',
   'The work is finished. If the problem is still there, add a comment.':
     'Les travaux sont terminés. Si le problème persiste, ajoutez un commentaire.',
   'On hold': 'En attente',
@@ -1592,28 +1618,28 @@ export const FR = {
   Reactive: 'Réactif',
   Improvement: 'Amélioration',
   Opened: 'Ouverts',
-  'count|Closed': 'Clôturés',
+  'count|Done': 'Terminés',
   'count|Cancelled': 'Annulés',
   'Unfinished at the end': 'Non terminés à la fin',
-  'Column chart, opened and closed per week. {map}.':
-    'Histogramme, ouverts et clôturés par semaine. {map}.',
-  'Column chart, opened and closed per month. {map}.':
-    'Histogramme, ouverts et clôturés par mois. {map}.',
-  '{title}: {opened} opened, {closed} closed': '{title}\u00a0: {opened} ouverts, {closed} clôturés',
+  'Column chart, opened and done per week. {map}.':
+    'Histogramme, ouverts et terminés par semaine. {map}.',
+  'Column chart, opened and done per month. {map}.':
+    'Histogramme, ouverts et terminés par mois. {map}.',
+  '{title}: {opened} opened, {closed} done': '{title}\u00a0: {opened} ouverts, {closed} terminés',
   'Line chart, unfinished work orders at the end of each week. {map}.':
     'Courbe, bons de travaux non terminés à la fin de chaque semaine. {map}.',
   'Line chart, unfinished work orders at the end of each month. {map}.':
     'Courbe, bons de travaux non terminés à la fin de chaque mois. {map}.',
   'Unfinished at the end of each week': 'Non terminés à la fin de chaque semaine',
   'Unfinished at the end of each month': 'Non terminés à la fin de chaque mois',
-  '{opened} opened, {closed} closed, {cancelled} cancelled. ':
-    '{opened} ouverts, {closed} clôturés, {cancelled} annulés. ',
+  '{opened} opened, {closed} done, {cancelled} cancelled. ':
+    '{opened} ouverts, {closed} terminés, {cancelled} annulés. ',
   'The backlog grew by {value}.': 'Le carnet de travaux a augmenté de {value}.',
   'The backlog shrank by {value}.': 'Le carnet de travaux a diminué de {value}.',
   'The backlog is stable.': 'Le carnet de travaux est stable.',
   ' (now {unfinished})': ' (actuellement {unfinished})',
-  'Opened and closed per week': 'Ouverts et clôturés par semaine',
-  'Opened and closed per month': 'Ouverts et clôturés par mois',
+  'Opened and done per week': 'Ouverts et terminés par semaine',
+  'Opened and done per month': 'Ouverts et terminés par mois',
   Unfinished: 'Non terminés',
   Total: 'Total',
   ' {n} urgent or high-priority work order is more than 30 days old.':
@@ -1649,24 +1675,24 @@ export const FR = {
   '{hours} h left on {n} work orders': '{hours} h restantes sur {n} bons de travaux',
   'Capacity: {capacity} h a week': 'Capacité\u00a0: {capacity} h par semaine',
   'Total hours': 'Total des heures',
-  'Stacked column chart, share of planned, reactive, staff request and improvement work closed per week':
-    "Histogramme empilé, part du travail planifié, réactif, des demandes d'intervention et d'amélioration clôturé par semaine",
-  'Stacked column chart, share of planned, reactive, staff request and improvement work closed per month':
-    "Histogramme empilé, part du travail planifié, réactif, des demandes d'intervention et d'amélioration clôturé par mois",
+  'Stacked column chart, share of planned, reactive, staff request and improvement work done per week':
+    "Histogramme empilé, part du travail planifié, réactif, des demandes d'intervention et d'amélioration terminé par semaine",
+  'Stacked column chart, share of planned, reactive, staff request and improvement work done per month':
+    "Histogramme empilé, part du travail planifié, réactif, des demandes d'intervention et d'amélioration terminé par mois",
   '; planned work: {share} over the period':
     '\u00a0; travail planifié\u00a0: {share} sur la période',
   Count: 'Compter',
   Hours: 'Heures',
-  'No work order was closed in this period.':
-    "Aucun bon de travaux n'a été clôturé sur cette période.",
-  'Planned work: {share} of the hours worked on the work orders closed in the period.':
-    'Travail planifié\u00a0: {share} des heures passées sur les bons de travaux clôturés sur la période.',
-  'Planned work: {share} of the work orders closed in the period.':
-    'Travail planifié\u00a0: {share} des bons de travaux clôturés sur la période.',
-  '{n} closed work order has no actual hours (counted as 0 h).':
-    "{n} bon de travaux clôturé n'a pas d'heures réelles (compté pour 0 h).",
-  '{n} closed work orders have no actual hours (counted as 0 h).':
-    "{n} bons de travaux clôturés n'ont pas d'heures réelles (comptés pour 0 h).",
+  'No work order was done in this period.':
+    "Aucun bon de travaux n'a été terminé sur cette période.",
+  'Planned work: {share} of the hours worked on the work orders done in the period.':
+    'Travail planifié\u00a0: {share} des heures passées sur les bons de travaux terminés sur la période.',
+  'Planned work: {share} of the work orders done in the period.':
+    'Travail planifié\u00a0: {share} des bons de travaux terminés sur la période.',
+  '{n} done work order has no actual hours (counted as 0 h).':
+    "{n} bon de travaux terminé n'a pas d'heures réelles (compté pour 0 h).",
+  '{n} done work orders have no actual hours (counted as 0 h).':
+    "{n} bons de travaux terminés n'ont pas d'heures réelles (comptés pour 0 h).",
   'Work closed per week, by kind': 'Travail clôturé par semaine, par nature',
   'Work closed per month, by kind': 'Travail clôturé par mois, par nature',
   'opened in {bucket}': 'ouverts en {bucket}',
@@ -1679,19 +1705,19 @@ export const FR = {
   '{value} min': '{value} min',
   '{days} d': '{days} j',
   'Time to start': 'Délai de prise en charge',
-  'From creation to the first “In progress”':
-    'De la création au premier passage «\u00a0En cours\u00a0»',
-  'Time to close': 'Délai de clôture',
-  'From creation to “Closed”': 'De la création au statut «\u00a0Clôturé\u00a0»',
+  'From the report to the first “In progress”':
+    'Du signalement au premier passage «\u00a0En cours\u00a0»',
+  'Time to done': 'Délai de réalisation',
+  'From the report to “Technically done”':
+    'Du signalement au statut «\u00a0Terminé techniquement\u00a0»',
   'count|Started': 'Démarrés',
   'Median to start': 'Médiane de prise en charge',
   '90% started within': '90\u00a0% démarrés en moins de',
-  'Median to close': 'Médiane de clôture',
-  '90% closed within': '90\u00a0% clôturés en moins de',
-  'No work order was started or closed in this period.':
-    "Aucun bon de travaux n'a été démarré ni clôturé sur cette période.",
-  'Half the work orders were started within {start} and closed within {close}.':
-    'La moitié des bons de travaux ont été démarrés en moins de {start} et clôturés en moins de {close}.',
+  '90% done within': '90\u00a0% terminés en moins de',
+  'No work order was started or done in this period.':
+    "Aucun bon de travaux n'a été démarré ni terminé sur cette période.",
+  'Half the work orders were started within {start} and done within {close}.':
+    'La moitié des bons de travaux ont été démarrés en moins de {start} et terminés en moins de {close}.',
   '{title} per priority. {map}.': '{title} par priorité. {map}.',
   '{priority}: median {median}, 90% within {p90}':
     '{priority}\u00a0: médiane {median}, 90\u00a0% en moins de {p90}',
@@ -1765,8 +1791,8 @@ export const FR = {
   'Estimated (h)': 'Estimé (h)',
   'Actual (h)': 'Réel (h)',
   'Actual ÷ estimate': 'Réel ÷ estimé',
-  'No work order closed in this period has both an estimate and actual hours.':
-    "Aucun bon de travaux clôturé sur cette période n'a à la fois une estimation et des heures réelles.",
+  'No work order done in this period has both an estimate and actual hours.':
+    "Aucun bon de travaux terminé sur cette période n'a à la fois une estimation et des heures réelles.",
   'Bar chart, actual hours divided by estimated hours per trade. {map}.':
     'Graphique en barres, heures réelles divisées par les heures estimées par domaine technique. {map}.',
   'Work took {ratio} its estimate: estimates are too low.':
@@ -1775,13 +1801,13 @@ export const FR = {
     'Le travail a pris {ratio} de son estimation\u00a0: les estimations sont trop hautes.',
   'Work took {ratio} its estimate: estimates are about right.':
     'Le travail a pris {ratio} de son estimation\u00a0: les estimations sont plutôt justes.',
-  'Dashed line: 1.0×, the estimate. {count} closed work orders with both hours.':
-    "Ligne pointillée\u00a0: 1,0×, l'estimation. {count} bons de travaux clôturés avec les deux valeurs.",
+  'Dashed line: 1.0×, the estimate. {count} done work orders with both hours.':
+    "Ligne pointillée\u00a0: 1,0×, l'estimation. {count} bons de travaux terminés avec les deux valeurs.",
   'Estimates against actual hours, by trade':
     'Estimations et heures réelles, par domaine technique',
   '{actual} h worked for {estimated} h estimated': '{actual} h passées pour {estimated} h estimées',
   started: 'démarrés',
-  closed: 'clôturés',
+  'response|done': 'terminés',
   rejected: 'refusées',
   'waiting for review': "en attente d'examen",
   done: 'réalisées',
@@ -1793,7 +1819,7 @@ export const FR = {
   'Hours to done': 'Heures avant réalisation',
   'Reason rejected': 'Motif du refus',
   'Previous work order': 'Bon de travaux précédent',
-  'Days since it closed': 'Jours depuis sa clôture',
+  'Days since it was done': 'Jours depuis sa réalisation',
   // widgets.js
   'Flow and backlog': 'Flux et carnet de travaux',
   Compliance: 'Conformité',
@@ -1801,7 +1827,7 @@ export const FR = {
   People: 'Personnes',
   Lists: 'Listes',
   'Work orders in progress': 'Bons de travaux en cours',
-  'Opened vs closed': 'Ouverts et clôturés',
+  'Opened vs done': 'Ouverts et terminés',
   'Backlog by age and priority': 'Carnet de travaux par ancienneté et priorité',
   'Backlog in weeks of work': 'Carnet de travaux en semaines de travail',
   'Planned vs reactive work': 'Travail planifié et réactif',
@@ -1914,6 +1940,32 @@ export const FR_SERVER = {
   'The creation time is in the future.': "L'heure de création est dans le futur.",
   'Closed and cancelled work orders are read-only.':
     'Les bons de travaux clôturés et annulés sont en lecture seule.',
+  'Its requester cancelled this request: it cannot be brought back.':
+    'Le demandeur a annulé cette demande\u00a0: elle ne peut pas être rétablie.',
+  'This request was rejected: it cannot be brought back.':
+    'Cette demande a été refusée\u00a0: elle ne peut pas être rétablie.',
+  'On a closed or cancelled work order, only the status and the fields it needs change.':
+    "Sur un bon de travaux clôturé ou annulé, seuls le statut et les champs qu'il demande changent.",
+  'This work has started: resume it instead of reopening it.':
+    'Ce travail a commencé\u00a0: reprenez-le au lieu de le rouvrir.',
+  'Only supervisors and admins close work orders.':
+    'Seuls les superviseurs et les administrateurs clôturent les bons de travaux.',
+  'Assign this work order to an active person to reopen it.':
+    'Assignez ce bon de travaux à une personne active pour le rouvrir.',
+  'A hold reason is given only when putting the work on hold.':
+    'Un motif de mise en attente se donne seulement en mettant le travail en attente.',
+  'The report is waived only on technically done work.':
+    "La dispense de compte rendu ne s'applique qu'à un travail terminé techniquement.",
+  'The completion date is set when the work is technically done.':
+    'La date de fin technique se fixe quand le travail est terminé techniquement.',
+  'The closing date is set when the work order is closed.':
+    'La date de clôture se fixe quand le bon de travaux est clôturé.',
+  'The completion date cannot be in the future.':
+    'La date de fin technique ne peut pas être dans le futur.',
+  'The closing date cannot be earlier than the completion date.':
+    'La date de clôture ne peut pas être antérieure à la date de fin technique.',
+  'Only supervisors and admins waive the work report':
+    'Seuls les superviseurs et les administrateurs dispensent du compte rendu',
   'Already used': 'Déjà utilisé',
   'Choose the place of the asset': "Choisissez le lieu de l'équipement",
   'Invalid body': 'Données non valides',
@@ -2059,10 +2111,18 @@ export const FR_VALUES = {
     OPEN: 'Ouvert',
     IN_PROGRESS: 'En cours',
     ON_HOLD: 'En attente',
+    COMPLETED: 'Terminé techniquement',
     CLOSED: 'Clôturé',
     CANCELLED: 'Annulé',
   },
   work_order_priority: { LOW: 'Basse', NORMAL: 'Normale', HIGH: 'Haute', URGENT: 'Urgente' },
+  hold_reason: {
+    WAITING_PARTS: 'En attente de pièces',
+    WAITING_CONTRACTOR: "En attente d'un prestataire",
+    WAITING_ACCESS: "En attente d'accès",
+    WAITING_APPROVAL: 'En attente de validation',
+    OTHER: 'Autre',
+  },
   review_status: {
     PENDING: 'À examiner',
     APPROVED: 'Approuvée',

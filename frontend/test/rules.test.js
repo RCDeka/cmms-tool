@@ -14,6 +14,8 @@ import {
   checkBeforeCreate,
   checkBeforeSave,
   editableFields,
+  isOverride,
+  statusActions,
   statusOptions,
 } from '../assets/js/rules.js';
 
@@ -38,13 +40,17 @@ describe('copies of the backend rules', () => {
 describe('editableFields', () => {
   const tech = { id: 4, role: 'TECHNICIAN' };
   const sup = { id: 2, role: 'SUPERVISOR' };
+  const admin = { id: 1, role: 'ADMIN' };
 
   it('gives technicians a few fields on their own open work orders only', () => {
     expect(editableFields('work_orders', tech, { status: 'OPEN', assignee_id: 4 })).toEqual([
       'status',
       'started_on',
+      'completed_on',
       'actual_hours',
       'work_report',
+      'hold_reason',
+      'hold_note',
     ]);
     expect(editableFields('work_orders', tech, { status: 'OPEN', assignee_id: 5 })).toEqual([]);
   });
@@ -55,23 +61,105 @@ describe('editableFields', () => {
     expect(editableFields('assets', sup, { has_conflict: true })).toEqual([]);
     expect(editableFields('assets', sup, { has_conflict: false })).toContain('name');
   });
+
+  it('lets an admin still move a closed or cancelled one, not a withdrawn request (BR-W17)', () => {
+    expect(editableFields('work_orders', admin, { status: 'CLOSED' })).toEqual([
+      'status',
+      'hold_reason',
+      'hold_note',
+    ]);
+    expect(
+      editableFields('work_orders', admin, { status: 'CANCELLED', review_status: 'WITHDRAWN' }),
+    ).toEqual([]);
+  });
 });
 
 describe('statusOptions', () => {
+  const tech = { id: 4, role: 'TECHNICIAN' };
+  const sup = { id: 2, role: 'SUPERVISOR' };
+
   it('offers the current status and its allowed next ones', () => {
-    expect(statusOptions('OPEN')).toEqual(['OPEN', 'IN_PROGRESS', 'CANCELLED']);
-    expect(statusOptions('ON_HOLD')).toEqual(['ON_HOLD', 'IN_PROGRESS', 'CANCELLED']);
+    expect(statusOptions({ status: 'OPEN' }, tech)).toEqual([
+      'OPEN',
+      'IN_PROGRESS',
+      'ON_HOLD',
+      'CANCELLED',
+    ]);
+    expect(statusOptions({ status: 'ON_HOLD' }, tech)).toEqual([
+      'ON_HOLD',
+      'OPEN',
+      'IN_PROGRESS',
+      'CANCELLED',
+    ]);
+    // Started: no way back to OPEN (BR-W5).
+    expect(
+      statusOptions({ status: 'ON_HOLD', first_started_at: '2026-10-02T08:00:00Z' }, tech),
+    ).toEqual(['ON_HOLD', 'IN_PROGRESS', 'CANCELLED']);
+  });
+
+  it('keeps the closing for supervisors and admins (BR-W16)', () => {
+    expect(statusOptions({ status: 'COMPLETED' }, tech)).toEqual(['COMPLETED', 'IN_PROGRESS']);
+    expect(statusOptions({ status: 'COMPLETED' }, sup)).toEqual([
+      'COMPLETED',
+      'CLOSED',
+      'IN_PROGRESS',
+    ]);
+  });
+
+  it('marks an admin change outside the steps as an override (BR-W17)', () => {
+    const admin = { id: 1, role: 'ADMIN' };
+    expect(isOverride({ status: 'OPEN' }, 'IN_PROGRESS', admin)).toBe(false);
+    expect(isOverride({ status: 'OPEN' }, 'CLOSED', admin)).toBe(true);
+    expect(isOverride({ status: 'CLOSED' }, 'COMPLETED', admin)).toBe(true);
+    expect(isOverride({ status: 'OPEN' }, 'CLOSED', sup)).toBe(false);
+  });
+});
+
+describe('statusActions', () => {
+  const tech = { id: 4, role: 'TECHNICIAN' };
+  const sup = { id: 2, role: 'SUPERVISOR' };
+  const admin = { id: 1, role: 'ADMIN' };
+  const keys = (record, user) => statusActions(record, user).map((a) => a.key);
+
+  it('follows BR-W4 and the role', () => {
+    const started = { status: 'IN_PROGRESS', assignee_id: 4, work_report: null };
+    expect(keys(started, tech)).toEqual(['hold', 'complete']);
+    expect(keys(started, sup)).toEqual(['hold', 'complete', 'waive']);
+    expect(keys({ ...started, work_report: 'Done' }, sup)).toEqual(['hold', 'complete']);
+    const done = { status: 'COMPLETED', assignee_id: 4, work_report: 'Done' };
+    expect(keys(done, tech)).toEqual(['reopen']);
+    expect(keys(done, sup)).toEqual(['close', 'reopen']);
+    expect(keys({ status: 'CLOSED' }, admin)).toEqual(['override']);
+    expect(keys({ status: 'CLOSED' }, sup)).toEqual([]);
+    expect(keys({ ...started, assignee_id: 5 }, tech)).toEqual([]);
+  });
+
+  it('waives the report with the technical end (BR-W6)', () => {
+    const [, , waive] = statusActions({ status: 'IN_PROGRESS', work_report: '' }, sup);
+    expect(waive).toEqual({ key: 'waive', status: 'COMPLETED', waive: true });
   });
 });
 
 describe('checks before saving', () => {
   const wo = { status: 'IN_PROGRESS', created_on: '2026-10-01', work_report: null };
 
-  it('requires a work report to close (BR-W6)', () => {
-    expect(checkBeforeSave('work_orders', wo, { status: 'CLOSED' })).toHaveProperty('work_report');
-    expect(checkBeforeSave('work_orders', wo, { status: 'CLOSED', work_report: 'Done' })).toEqual(
-      {},
+  it('requires a work report, or its waiver, to mark technically done (BR-W6)', () => {
+    expect(checkBeforeSave('work_orders', wo, { status: 'COMPLETED' })).toHaveProperty(
+      'work_report',
     );
+    expect(
+      checkBeforeSave('work_orders', wo, { status: 'COMPLETED', work_report: 'Done' }),
+    ).toEqual({});
+    expect(
+      checkBeforeSave('work_orders', wo, { status: 'COMPLETED', report_waived: true }),
+    ).toEqual({});
+  });
+
+  it('requires a hold reason (BR-W14)', () => {
+    expect(checkBeforeSave('work_orders', wo, { status: 'ON_HOLD' })).toHaveProperty('hold_reason');
+    expect(
+      checkBeforeSave('work_orders', wo, { status: 'ON_HOLD', hold_reason: 'WAITING_PARTS' }),
+    ).toEqual({});
   });
 
   it('checks required fields and date order', () => {

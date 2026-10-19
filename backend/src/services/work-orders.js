@@ -66,7 +66,7 @@ const reviewSchema = z.discriminatedUnion('decision', [
   }),
 ]);
 
-const ruleError = ({ rule, message }) => new HttpError(422, message, { rule });
+const ruleError = ({ rule, message, status = 422 }) => new HttpError(status, message, { rule });
 
 const FIELDS = [
   'id',
@@ -87,10 +87,18 @@ const FIELDS = [
   'created_on',
   'due_on',
   'started_on',
+  'completed_on',
   'closed_on',
   'estimated_hours',
   'actual_hours',
   'work_report',
+  'report_waived',
+  'hold_reason',
+  'hold_note',
+  'reported_at',
+  'first_assigned_at',
+  'first_started_at',
+  'completed_at',
   'client_id',
   'version',
   'has_conflict',
@@ -126,6 +134,7 @@ export const WORK_ORDER_SORTS = {
   assignee: "w.assignee_id IS NULL, asg.first_name || ' ' || asg.last_name",
   created_on: 'w.created_on',
   due_on: 'w.due_on IS NULL, w.due_on',
+  completed_on: 'w.completed_on IS NULL, w.completed_on',
   priority: rankExpression('w.priority', WORK_ORDER_PRIORITIES),
   status: rankExpression('w.status', WORK_ORDER_STATUSES),
   updated_at: 'w.updated_at',
@@ -146,6 +155,7 @@ export function toWorkOrder(row) {
   const wo = {};
   for (const f of FIELDS) wo[f] = row[f];
   wo.has_conflict = toBool(row.has_conflict);
+  wo.report_waived = toBool(row.report_waived);
   wo.asset =
     row.a__id === null
       ? null
@@ -309,10 +319,13 @@ export function createWorkOrderService(db, { locations }) {
   }
 
   /**
-   * Business rules of a change on the current row: workflow (BR-W4 to BR-W8) and references
-   * (BR-W2, BR-W3). Shared by updates and conflict resolutions. Returns the final changes.
+   * Business rules of a change on the current row: workflow (BR-W4 to BR-W8, BR-W14 to
+   * BR-W18) and references (BR-W2, BR-W3). Shared by updates and conflict resolutions.
+   * @param {import('./writes.js').WriteMoments} write when the changes were made
+   * @returns {{ changes: object, note?: object }} the final changes; an admin override is
+   *   noted in the audit entry (BR-W17)
    */
-  function prepareChanges(current, changes, now, timeZone) {
+  function prepareChanges(current, changes, { now, timeZone, user, write }) {
     const awaiting = fieldsAwaitingReview(current, changes);
     if (awaiting.length) {
       throw new HttpError(
@@ -321,7 +334,16 @@ export function createWorkOrderService(db, { locations }) {
         { rule: 'BR-R7', fields: awaiting },
       );
     }
-    const workflow = applyWorkOrderRules(current, changes, dateInZone(timeZone, now));
+    const at = (field) => (write.fromClient(field) ? write.editedAt : now.toISOString());
+    const assigneeId = 'assignee_id' in changes ? changes.assignee_id : current.assignee_id;
+    const workflow = applyWorkOrderRules(current, changes, {
+      today: dateInZone(timeZone, now),
+      editDay: dateInZone(timeZone, new Date(at('status'))),
+      role: user.role,
+      moments: { status: at('status'), assignee_id: at('assignee_id') },
+      assigneeActive:
+        assigneeId !== null && ['TECHNICIAN', 'SUPERVISOR'].includes(roleOf.get(assigneeId)),
+    });
     if (workflow.error) throw ruleError(workflow.error);
     // The work order of a plan's visit carries the visit's week (BR-P4, D55).
     if ('planned_week' in changes && current.plan_id !== null) {
@@ -331,7 +353,10 @@ export function createWorkOrderService(db, { locations }) {
       if (blocker) throw ruleError(blocker);
     }
     const derived = checkReferences({ ...current, ...workflow.changes }, changes, current);
-    return { ...workflow.changes, ...derived };
+    return {
+      changes: { ...workflow.changes, ...derived },
+      ...(workflow.override && { note: { status_override: true } }),
+    };
   }
   const groupBy = (expression) =>
     db.prepare(
@@ -349,6 +374,7 @@ export function createWorkOrderService(db, { locations }) {
       client_id: null,
       plan_id: null,
       planned_week: null,
+      reported_at: stamp,
       ...row,
       number: nextWorkOrderNumber(year, highestNumber.get(year)),
     };
@@ -359,13 +385,19 @@ export function createWorkOrderService(db, { locations }) {
             (number, client_id, type, status, priority, title, description, asset_id, site,
              location_id, place, location, category, assignee_id, supervisor_id, created_on,
              due_on, estimated_hours, created_by, updated_by, review_status, plan_id,
-             planned_week, created_at, updated_at)
+             planned_week, reported_at, first_assigned_at, created_at, updated_at)
            VALUES (@number, @client_id, @type, @status, @priority, @title, @description,
              @asset_id, @site, @location_id, @place, @location, @category, @assignee_id,
              @supervisor_id, @created_on, @due_on, @estimated_hours, @created_by, @updated_by,
-             @review_status, @plan_id, @planned_week, @stamp, @stamp)`,
+             @review_status, @plan_id, @planned_week, @reported_at, @first_assigned_at, @stamp,
+             @stamp)`,
         )
-        .run({ ...values, stamp }).lastInsertRowid,
+        .run({
+          ...values,
+          // BR-W18: created already assigned (a technician's own work order, BR-W12).
+          first_assigned_at: values.assignee_id ? values.reported_at : null,
+          stamp,
+        }).lastInsertRowid,
     );
     const { created_by: _createdBy, updated_by: _updatedBy, ...logged } = values;
     recordAudit(db, {
@@ -377,6 +409,7 @@ export function createWorkOrderService(db, { locations }) {
       userId,
       version: 1,
       at: stamp,
+      editedAt: values.reported_at,
     });
     return id;
   }
@@ -445,7 +478,8 @@ export function createWorkOrderService(db, { locations }) {
         editedAt,
         user,
         now: now.toISOString(),
-        prepare: (current) => prepareChanges(current, changes, now, timeZone),
+        prepare: (current, write) =>
+          prepareChanges(current, changes, { now, timeZone, user, write }),
         afterWrite: afterWrite(user, now, timeZone),
       });
       return { ...result, item: getById(id), changes, version };
@@ -459,7 +493,8 @@ export function createWorkOrderService(db, { locations }) {
         body,
         user,
         now: now.toISOString(),
-        prepare: (current, changes) => prepareChanges(current, changes, now, timeZone),
+        prepare: (current, changes, write) =>
+          prepareChanges(current, changes, { now, timeZone, user, write }),
         afterWrite: afterWrite(user, now, timeZone),
       });
       return getById(id);
@@ -515,6 +550,10 @@ export function createWorkOrderService(db, { locations }) {
             created_by: user.id,
             updated_by: user.id,
             review_status: reviewStatus,
+            // BR-W18: the SLA clocks start when the work was reported (the edit time).
+            reported_at: input.edited_at
+              ? new Date(input.edited_at).toISOString()
+              : now.toISOString(),
             // A staff request's place, already checked (BR-LOC9).
             ...place,
           };
@@ -563,6 +602,8 @@ export function createWorkOrderService(db, { locations }) {
             });
           }
           changes.review_status = 'APPROVED';
+          // BR-W18: the first assignment.
+          if (!current.first_assigned_at) changes.first_assigned_at = now.toISOString();
         } else {
           changes = { status: 'CANCELLED', review_status: 'REJECTED', review_note: reason };
         }

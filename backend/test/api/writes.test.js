@@ -144,7 +144,7 @@ describe('PUT /api/work-orders/:id', () => {
     expect(res.body.message).toMatch(/assigned to them/);
   });
 
-  it('runs the workflow for the assignee: start, then close with a report', async () => {
+  it('runs the workflow: start, technically done with a report, then closed by a supervisor', async () => {
     const mine =
       woWhere("status = 'OPEN' AND assignee_id = ? AND due_on IS NULL", USERS.technician1) ??
       woWhere("status = 'OPEN' AND assignee_id = ?", USERS.technician1);
@@ -161,26 +161,50 @@ describe('PUT /api/work-orders/:id', () => {
     });
 
     const noReport = await put('technician1', url, {
-      status: 'CLOSED',
+      status: 'COMPLETED',
       version: mine.version + 1,
     }).expect(422);
     expect(noReport.body.details).toEqual({ rule: 'BR-W6' });
 
-    const closed = await put('technician1', url, {
-      status: 'CLOSED',
+    const done = await put('technician1', url, {
+      status: 'COMPLETED',
       work_report: 'Belt replaced.',
       actual_hours: 1.5,
       version: mine.version + 1,
+      edited_at: '2026-10-04T09:15:00.000Z',
+    }).expect(200);
+    expect(done.body.item).toMatchObject({
+      status: 'COMPLETED',
+      completed_on: TODAY,
+      completed_at: '2026-10-04T09:15:00.000Z',
+      closed_on: null,
+      actual_hours: 1.5,
+    });
+
+    // BR-W16: the technician cannot close it, but still corrects the report (BR-W7).
+    const notMine = await put('technician1', url, {
+      status: 'CLOSED',
+      version: mine.version + 2,
+    }).expect(403);
+    expect(notMine.body.details).toEqual({ rule: 'BR-W16' });
+    await put('technician1', url, {
+      work_report: 'Belt replaced and tensioned.',
+      version: mine.version + 2,
+    }).expect(200);
+
+    const closed = await put('supervisor1', url, {
+      status: 'CLOSED',
+      version: mine.version + 3,
     }).expect(200);
     expect(closed.body.item).toMatchObject({
       status: 'CLOSED',
       closed_on: TODAY,
-      actual_hours: 1.5,
+      completed_at: '2026-10-04T09:15:00.000Z',
     });
 
-    const readOnly = await put('technician1', url, {
+    const readOnly = await put('supervisor1', url, {
       work_report: 'x',
-      version: mine.version + 2,
+      version: mine.version + 4,
     }).expect(422);
     expect(readOnly.body.details).toEqual({ rule: 'BR-W7' });
   });

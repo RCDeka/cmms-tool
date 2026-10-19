@@ -9,18 +9,24 @@ import { userRef, userRefColumns } from './mappers.js';
 /**
  * Appends one entry. Call inside the transaction of the change it describes.
  * @param {import('better-sqlite3').Database} db
+ * `at` is when the server applies the write; `editedAt`, when the user made it (the client's
+ * edited_at, D87), defaults to `at`.
  * @param {{ entityType: string, entityId: number, action: string, changes?: object,
- *   note?: object, label: string, userId: number | null, version?: number | null, at: string }} entry
+ *   note?: object, label: string, userId: number | null, version?: number | null, at: string,
+ *   editedAt?: string }} entry
  */
 export function recordAudit(db, entry) {
   db.prepare(
-    `INSERT INTO audit_log (entity_type, entity_id, action, changes, note, label, user_id, version, at)
-     VALUES (@entityType, @entityId, @action, @changes, @note, @label, @userId, @version, @at)`,
+    `INSERT INTO audit_log (entity_type, entity_id, action, changes, note, label, user_id, version,
+       at, edited_at)
+     VALUES (@entityType, @entityId, @action, @changes, @note, @label, @userId, @version, @at,
+       @editedAt)`,
   ).run({
     ...entry,
     changes: JSON.stringify(entry.changes ?? {}),
     note: entry.note ? JSON.stringify(entry.note) : null,
     version: entry.version ?? null,
+    editedAt: entry.editedAt ?? entry.at,
   });
 }
 
@@ -38,6 +44,7 @@ function toEntry(row) {
     user: userRef(row, 'u'),
     version: row.version,
     at: row.at,
+    edited_at: row.edited_at,
   };
 }
 

@@ -26,7 +26,19 @@ export const KPI_TILES = [
     label: t('In progress'),
     href: '/work-orders?status=IN_PROGRESS',
   },
-  { key: 'closed_this_month', label: t('Closed this month'), href: '/work-orders?status=CLOSED' },
+  // Technically done this month, closed or not (D86).
+  {
+    key: 'closed_this_month',
+    label: t('Done this month'),
+    href: '/work-orders?status=COMPLETED,CLOSED&sort=completed_on&order=desc',
+  },
+  // Supervisors and admins: technically done, waiting for the closing (D86).
+  {
+    key: 'to_close',
+    label: t('To close'),
+    href: '/work-orders?status=COMPLETED&sort=completed_on&order=asc',
+    attention: true,
+  },
   {
     key: 'overdue_work_orders',
     label: t('Overdue work orders'),

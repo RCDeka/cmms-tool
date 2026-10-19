@@ -51,10 +51,13 @@ beforeAll(async () => {
   const wo = db.prepare(`INSERT INTO work_orders
     (id, number, type, status, priority, title, site, location_id, category, created_on, started_on,
      closed_on, estimated_hours, actual_hours, work_report, review_status, created_by, created_at,
-     updated_at)
+     updated_at,
+     completed_on, completed_at, hold_reason)
     VALUES (@id, @number, @type, @status, @priority, 'Job', @site, ${SITE_ID('@site')}, @category,
      @created, @started,
-     @closed, @est, @act, @report, @review, 2, '2026-10-01T08:00:00.000Z', @updated)`);
+     @closed, @est, @act, @report, @review, 2, '2026-10-01T08:00:00.000Z', @updated,
+     @closed, CASE WHEN @closed IS NOT NULL THEN @closed || 'T12:00:00.000Z' END,
+     CASE WHEN @status = 'ON_HOLD' THEN 'OTHER' END)`);
   const rows = [
     [1, 'CORRECTIVE', 'OPEN', 'URGENT', 'Paris', 'HVAC', '2026-10-01', null, 4, null],
     [2, 'CORRECTIVE', 'OPEN', 'HIGH', 'Paris', 'HVAC', '2026-08-20', null, 10, null],

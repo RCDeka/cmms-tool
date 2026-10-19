@@ -473,5 +473,5 @@ export const VISIT_COLUMNS = [
   [t('Outcome'), (v) => OUTCOME_LABELS[v.outcome]],
   [t('Reason skipped'), (v) => v.skip_reason],
   [t('Work order'), (v) => v.work_order_number],
-  [t('Closed'), (v) => v.closed_on],
+  [t('Technically done'), (v) => v.completed_on],
 ];

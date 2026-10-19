@@ -31,7 +31,11 @@ Endpoints from the product brief keep their behavior, with English paths (D18). 
 | `PUT /assets/:id` | no | only `status`, `comment`, `last_serviced_on` | all editable fields | all editable fields |
 | `POST /assets`, `DELETE /assets/:id` | no | no | yes | yes |
 | `POST /work-orders` (create) | no | yes, assigned to themselves only (BR-W12) | yes | yes |
-| `PUT /work-orders/:id` | no | only work orders assigned to them; only `status`, `started_on`, `actual_hours`, `work_report` | all editable fields | all editable fields |
+| `PUT /work-orders/:id` | no | only work orders assigned to them; only `status`, `started_on`, `completed_on`, `actual_hours`, `work_report`, `hold_reason`, `hold_note` | all editable fields | all editable fields |
+| Put on hold, resume, mark technically done, reopen (D86) | no | own work orders | yes | yes |
+| Close a work order (`status = CLOSED`, BR-W16) | no | no (403) | yes | yes |
+| Waive the work report (`report_waived`, BR-W6) | no | no (403) | yes | yes |
+| Set any status (admin override, BR-W17) | no | no | no | yes |
 | `GET /users` | no | no | yes | yes |
 | `GET /audit-log` | no | no | yes, without user accounts | yes |
 | `/admin/users` (user administration) | no | no | no | yes |
@@ -56,7 +60,7 @@ Staff members are refused every path under `/api/assets`, `/api/work-orders`, `/
 
 Editable fields:
 - **Assets**: every column except `id`, `code`, `place`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`.
-- **Work orders**: every column except `id`, `number`, `client_id`, `place`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`, the review fields and `plan_id`.
+- **Work orders**: every column except `id`, `number`, `client_id`, `place`, `created_on`, `created_by`, `version`, `has_conflict`, `updated_by`, `created_at`, `updated_at`, the review fields, `plan_id` and the moments set by the server (`reported_at`, `first_assigned_at`, `first_started_at`, `completed_at`, BR-W18; 403 if sent).
 - `place` is the path of `location_id`, set by the server with `site` (BR-LOC7). `location_id` is a versioned field like the others: a change made offline from an older version becomes a conflict (D82).
 
 Sending a field the role may not edit → 403 with `details.fields`.
@@ -76,8 +80,10 @@ WorkOrder   { id, number, type, status, priority, title, description,
               site, location_id, place, location, category,
               assignee_id, assignee: UserRef|null,
               supervisor_id, supervisor: UserRef|null,
-              created_on, due_on, started_on, closed_on,
-              estimated_hours, actual_hours, work_report,
+              created_on, due_on, started_on, completed_on, closed_on,
+              estimated_hours, actual_hours, work_report, report_waived,
+              hold_reason, hold_note,
+              reported_at, first_assigned_at, first_started_at, completed_at,
               client_id, created_by: UserRef,
               review_status, reviewed_by: UserRef|null, reviewed_at, review_note,
               plan_id, plan: { id, code, title } | null, planned_week,
@@ -87,7 +93,7 @@ Location    { id, parent_id, site_id, level_type_id, name, code, is_active, vers
               (GET /admin/locations/:id and the writes add site and place: where it is, as records store it)
 LevelType   { id, name, token, offered_to_staff, is_active, version, created_at, updated_at }
 Request     { id, number, status, priority, title, description, site, location_id, place, location, category,
-              created_on, due_on, started_on, closed_on, work_report, client_id,
+              created_on, due_on, started_on, completed_on, closed_on, work_report, client_id,
               review_status, review_note, reviewed_at, assignee: UserRef|null, comment_count, last_comment_at, created_at, updated_at }
 Comment     { id, work_order_id, body, user: UserRef, user_role, created_at }
 Plan        { id, code, title, description, type, category, asset_id,
@@ -202,13 +208,14 @@ Every authenticated request also answers 401 when the account was deactivated (B
 ## Work orders
 
 ### GET /api/work-orders
-- Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
+- Query: `page`, `size`, `sort` (`number`|`title`|`site`|`assignee`|`created_on`|`due_on`|`completed_on`|`priority`|`status`|`updated_at`, default `created_on`), `order` (default `desc`), and the filters:
   - `q?` (full text), `status?`, `priority?`, `type?`, `category?`, `site?`, `assignee_id?` (each one value or several, e.g. `status=OPEN,IN_PROGRESS,ON_HOLD`);
   - `to_review?=true`: staff requests waiting for a review (`review_status = PENDING`, D47);
   - `awaiting_reply?=true`: staff requests whose latest comment is the requester's, i.e. waiting for a reply from the maintenance team (D80; `false` = the others);
   - `drill?` (D59, K9): the records of a dashboard widget segment, `<widget>[:<segment>]` with the segments of `GET /api/dashboard/widgets/:key/rows` (`backlog_age:URGENT:91+`), with `period?` (30, 90 or 365; only with `drill`, 400 otherwise). The list's own `site` and `category` filters carry the dashboard's sites and trades. Unknown widget or segment, or a widget without work orders (`recent_activity`, `assets_broken_down`, `pending_conflicts`) → 400. For the visit widgets the list holds the work orders of the counted visits (skipped visits usually have none: their Visits CSV lists them).
-  - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (non-terminal, `due_on` before today in `APP_TIMEZONE`).
-- `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee` and `due_on`, empty values (unassigned, no due date) come last in both orders (D42).
+  - `mine?=true`: assigned to the current user (`false` = no filter; the client writes it to turn off technicians' default, D44); `overdue?=true`: same definition as the dashboard KPI (unfinished, `due_on` before today in `APP_TIMEZONE`).
+  - The supervisors' "To close" queue is `status=COMPLETED&sort=completed_on&order=asc` (D86, D87: no extra flag).
+- `sort=assignee` orders by the assignee's displayed name (first then last name). For `assignee`, `due_on` and `completed_on`, empty values (unassigned, no due date, not done) come last in both orders (D42).
 - `200 Page<WorkOrder>`. Errors: 400 for an unknown status or flag value.
 
 ### GET /api/work-orders/stats
@@ -234,10 +241,13 @@ Every authenticated request also answers 401 when the account was deactivated (B
 - `200 WorkOrder` (with the linked asset). Errors: 404.
 
 ### PUT /api/work-orders/:id
-- Same contract as `PUT /api/assets/:id`, plus the work order rules BR-W2 to BR-W8 (422 on violation).
+- Same contract as `PUT /api/assets/:id`, plus the work order rules BR-W2 to BR-W8 and BR-W14 to BR-W18 (D86, D87).
+- `hold_reason`, `hold_note` and `completed_on` are editable by technicians on their work orders; `report_waived` by supervisors and admins (403 `BR-W6` for a technician). The moments `first_assigned_at`, `first_started_at` and `completed_at` take the body's `edited_at` (BR-W18).
+- An admin's status change outside BR-W4 is an override (BR-W17), with no extra field; its history entry carries `note: { status_override: true }`.
+- Errors: 422 `BR-W4` (transition), `BR-W5` (back to OPEN after the start), `BR-W6` (no report nor waiver; waiver, completion or closing date out of place), `BR-W7` (read-only), `BR-W8` (dates), `BR-W14` (hold reason), `BR-W15` (reopening without an active assignee), `BR-W17` (a withdrawn or rejected request); 403 `BR-W6` (a technician waiving), `BR-W16` (a technician closing).
 
 ### PUT /api/work-orders/:id/resolve-conflict
-- Same contract as for assets.
+- Same contract as for assets. A status or an assignee applied with the client's value (choice B, or a merge keeping it) takes the conflict's `client_edited_at` for its moments (BR-W18), and so does the history entry's `edited_at`.
 
 ### PUT /api/work-orders/:id/review (added, D47)
 - Roles: SUPERVISOR, ADMIN. Rules BR-R6 to BR-R9. Online only in the interface.
@@ -270,7 +280,7 @@ All routes: role STAFF (403 otherwise). A request is a work order the user creat
 - Errors: 400 invalid body (missing `title` or `site`, neither `location_id` nor `location` (`details.fields.location`); any other field such as `type`, `assignee_id` or `asset_id` is unknown); 403; 409 `client_id` used by someone else's work order; 422 `edited_at` out of range (BR-W9); 422 `BR-LOC5` the place is unknown or out of use, `BR-LOC9` it is on another site or of a type not offered to staff, `BR-LOC7` the site is unknown.
 
 ### GET /api/requests/:id
-- `200 { ...Request, "status_history": [{ "status", "at" }], "comments": [Comment] }`. `status_history` lists the creation (`OPEN`), the review (`APPROVED` or `REJECTED`) and each status change, oldest first (BR-R5).
+- `200 { ...Request, "status_history": [{ "status", "at" }], "comments": [Comment] }`. `status_history` lists the creation (`OPEN`), the review (`APPROVED` or `REJECTED`) and each status change (`COMPLETED` is shown as "Done", then `CLOSED`, D86), oldest first, each at the time it was made (`coalesce(edited_at, at)`) (BR-R5).
 - Errors: 400 malformed id; 404 not found **or created by someone else**.
 
 ### POST /api/requests/:id/comments
@@ -307,8 +317,9 @@ All routes: role STAFF (403 otherwise). A request is a work order the user creat
 
 ```
 AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } }, note,
-             label, user: UserRef | null, version, at }
+             label, user: UserRef | null, version, at, edited_at }
 ```
+- `at` is when the server applied the change, `edited_at` when the user made it (the client's `edited_at`; null for entries written before migration `016`, D87). An entry with `note.status_override` is an admin override (BR-W17).
 
 ### GET /api/audit-log
 - Roles: SUPERVISOR, ADMIN. Query: `page`, `size` (max 100), `entity_type?` (`assets` | `work_orders` | `users` | `maintenance_plans` | `plan_occurrences` | `allocations` | `planning_settings`).
@@ -318,7 +329,7 @@ AuditEntry { id, entity_type, entity_id, action, changes: { field: { from, to } 
 ## Reference data and users (added)
 
 ### GET /api/reference-data
-- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...], "assistant": boolean }`. `sites` lists the sites of the location tree (D82), in use or not, by name; the other lists are the enum codes. `assistant` is true when a model is configured for the AI assistant (`AI_PROVIDER`, D66).
+- `200 { "sites": string[], "categories": [...], "criticalities": [...], "asset_statuses": [...], "work_order_types": [...], "work_order_statuses": [...], "work_order_priorities": [...], "hold_reasons": [...], "assistant": boolean }`. `sites` lists the sites of the location tree (D82), in use or not, by name; the other lists are the enum codes. `assistant` is true when a model is configured for the AI assistant (`AI_PROVIDER`, D66).
 
 ### GET /api/users
 - Roles: SUPERVISOR, ADMIN. Returns the users that can be assigned to a work order (for dropdowns).
@@ -416,7 +427,7 @@ Rules BR-LOC1 to BR-LOC10 and BR-LT1 in `docs/data-model.md`; specification in `
   ```
   { "today": "2026-10-04", "generated_at": "2026-10-04T12:00:00.000Z",
     "kpis": { "open_work_orders": 18, "in_progress_work_orders": 25,
-              "closed_this_month": 40, "assets_broken_down": 21,
+              "closed_this_month": 40, "to_close": 6, "assets_broken_down": 21,
               "overdue_work_orders": 9, "pending_conflicts": 2,
               "requests_to_review": 1, "requests_awaiting_reply": 2 },
     "week_end": "2026-10-10",
@@ -424,7 +435,7 @@ Rules BR-LOC1 to BR-LOC10 and BR-LT1 in `docs/data-model.md`; specification in `
     "my_work_today": [WorkOrder],
     "my_work_week": [WorkOrder] }
   ```
-- `pending_conflicts`, `requests_to_review` (staff requests waiting for a review, D47) and `requests_awaiting_reply` (staff requests waiting for a reply, D80) are present for SUPERVISOR and ADMIN only. Technicians get `my_requests_awaiting_reply` instead: the same count, limited to the work orders assigned to them. Definitions: `docs/data-model.md` → KPI definitions.
+- `closed_this_month` counts the work done this month (technical end, closed or not, D86). `pending_conflicts`, `to_close` (technically done, waiting for their closing, D86), `requests_to_review` (staff requests waiting for a review, D47) and `requests_awaiting_reply` (staff requests waiting for a reply, D80) are present for SUPERVISOR and ADMIN only. Technicians get `my_requests_awaiting_reply` instead: the same count, limited to the work orders assigned to them. Definitions: `docs/data-model.md` → KPI definitions.
 - `today` is the date in `APP_TIMEZONE` used for the figures. `my_work_today` and `my_work_week` are sorted by priority (URGENT first), then due date (undated last), then number. `my_work_week` covers the next 7 days, today included, up to `week_end` (D43).
 - The charts use `GET /api/work-orders/stats?period=30` (`by_category` and `by_status`).
 

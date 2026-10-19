@@ -44,10 +44,11 @@ describe('history of the mock data', () => {
   it('tells the status story of a closed work order, newest first', async () => {
     const id = count("SELECT id FROM work_orders WHERE status = 'CLOSED' ORDER BY id LIMIT 1");
     const items = await history(`/api/work-orders/${id}/history`);
-    expect(items.map((e) => e.action)).toEqual(['UPDATE', 'UPDATE', 'CREATE']);
-    expect(items[0].changes.status).toEqual({ from: 'IN_PROGRESS', to: 'CLOSED' });
-    expect(items[0].changes).toHaveProperty('work_report');
-    expect(items[1].changes.status).toEqual({ from: 'OPEN', to: 'IN_PROGRESS' });
+    expect(items.map((e) => e.action)).toEqual(['UPDATE', 'UPDATE', 'UPDATE', 'CREATE']);
+    expect(items[0].changes.status).toEqual({ from: 'COMPLETED', to: 'CLOSED' });
+    expect(items[1].changes.status).toEqual({ from: 'IN_PROGRESS', to: 'COMPLETED' });
+    expect(items[1].changes).toHaveProperty('work_report');
+    expect(items[2].changes.status).toEqual({ from: 'OPEN', to: 'IN_PROGRESS' });
     expect(items.at(-1).changes.status).toEqual({ from: null, to: 'OPEN' });
     const times = items.map((e) => e.at);
     expect(times).toEqual([...times].sort().reverse());

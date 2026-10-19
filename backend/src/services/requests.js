@@ -43,6 +43,7 @@ const FIELDS = [
   'created_on',
   'due_on',
   'started_on',
+  'completed_on',
   'closed_on',
   'work_report',
   'review_status',
@@ -85,8 +86,8 @@ export function createRequestService(db, { workOrders, comments, locations }) {
        version = version + 1, updated_by = @user, updated_at = @now WHERE id = @id`,
   );
   const auditOf = db.prepare(
-    `SELECT action, changes, note, at FROM audit_log
-     WHERE entity_type = 'work_orders' AND entity_id = ? ORDER BY at, id`,
+    `SELECT action, changes, note, coalesce(edited_at, at) AS at FROM audit_log
+     WHERE entity_type = 'work_orders' AND entity_id = ? ORDER BY id`,
   );
   const getOwn = (id, userId) => {
     const row = ownById.get(id, userId);

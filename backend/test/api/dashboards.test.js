@@ -56,10 +56,13 @@ beforeAll(async () => {
   const wo = db.prepare(`INSERT INTO work_orders
     (id, number, type, status, priority, title, site, location_id, category, assignee_id,
      created_on, due_on, started_on, closed_on, work_report, review_status, created_by, created_at,
-     updated_at)
+     updated_at,
+     completed_on, completed_at, hold_reason)
     VALUES (@id, @number, 'CORRECTIVE', @status, @priority, @title, @site, ${SITE_ID('@site')},
      @category, @assignee,
-     @created_on, @due_on, @started_on, @closed_on, @report, @review, 2, @at, @at)`);
+     @created_on, @due_on, @started_on, @closed_on, @report, @review, 2, @at, @at,
+     @closed_on, CASE WHEN @closed_on IS NOT NULL THEN @closed_on || 'T12:00:00.000Z' END,
+     CASE WHEN @status = 'ON_HOLD' THEN 'OTHER' END)`);
   const rows = [
     [1, 'OPEN', 'Paris', 'HVAC', 2, '2026-10-01', '2026-10-03', null, null, 'NORMAL', null],
     [2, 'OPEN', 'Lyon', 'ELECTRICAL', null, '2026-09-20', null, null, null, 'NORMAL', 'PENDING'],
@@ -174,7 +177,7 @@ describe('GET /api/dashboards', () => {
       filters: { period: 30, sites: [], categories: [] },
     });
     expect(overview.widgets.map((w) => w.key)).toEqual(TEMPLATES.OVERVIEW);
-    expect(TEMPLATES.OVERVIEW).toHaveLength(12);
+    expect(TEMPLATES.OVERVIEW).toHaveLength(13);
     const again = await as('sup').get('/api/dashboards').expect(200);
     expect(ids(again.body.items)).toEqual([overview.id]);
     expectNoSecrets(again.body);
@@ -441,6 +444,7 @@ describe('GET /api/dashboard/widgets on the hand-made dataset', () => {
       OPEN: 2,
       IN_PROGRESS: 0,
       ON_HOLD: 1,
+      COMPLETED: 0,
       CLOSED: 2,
       CANCELLED: 1,
     });
@@ -449,6 +453,7 @@ describe('GET /api/dashboard/widgets on the hand-made dataset', () => {
       OPEN: 1,
       IN_PROGRESS: 1,
       ON_HOLD: 1,
+      COMPLETED: 0,
       CLOSED: 1,
       CANCELLED: 0,
     });

@@ -80,11 +80,11 @@ describe('periodBuckets', () => {
 
 describe('flowSeries', () => {
   const { buckets } = periodBuckets('2026-10-04', 30);
-  const wo = (id, created_on, status = 'OPEN', closed_on = null) => ({
+  const wo = (id, created_on, status = 'OPEN', completed_on = null) => ({
     id,
     created_on,
     status,
-    closed_on,
+    completed_on,
   });
 
   it('counts opened, closed, cancelled and the unfinished at the end of each week', () => {

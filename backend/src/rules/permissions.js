@@ -15,7 +15,15 @@ export const EDITABLE_BY_ROLE = {
     ADMIN: ALL_ASSET_FIELDS,
   },
   work_orders: {
-    TECHNICIAN: ['status', 'started_on', 'actual_hours', 'work_report'],
+    TECHNICIAN: [
+      'status',
+      'started_on',
+      'completed_on',
+      'actual_hours',
+      'work_report',
+      'hold_reason',
+      'hold_note',
+    ],
     SUPERVISOR: ALL_WORK_ORDER_FIELDS,
     ADMIN: ALL_WORK_ORDER_FIELDS,
   },

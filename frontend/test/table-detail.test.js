@@ -314,7 +314,13 @@ describe('field-work order of a work order', () => {
     const office = ENTITIES.work_orders.detailFields;
     const field = detailFieldsOf('work_orders', true);
     expect([...field].sort()).toEqual([...office].sort());
-    expect(field.slice(0, 3)).toEqual(['status', 'review_status', 'priority']);
+    expect(field.slice(0, 5)).toEqual([
+      'status',
+      'hold_reason',
+      'hold_note',
+      'review_status',
+      'priority',
+    ]);
     expect(field.indexOf('work_report')).toBeLessThan(field.indexOf('created_by'));
     expect(detailFieldsOf('work_orders', false)).toBe(office);
     expect(detailFieldsOf('assets', true)).toBe(ENTITIES.assets.detailFields);

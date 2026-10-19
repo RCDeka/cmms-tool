@@ -13,7 +13,14 @@ import { statusOptions } from './rules.js';
 import { t } from './i18n.js';
 
 const MULTILINE = new Set(['description', 'comment', 'work_report']);
-const MAX_LENGTH = { title: 200, name: 200, comment: 2000, description: 4000, work_report: 4000 };
+const MAX_LENGTH = {
+  title: 200,
+  name: 200,
+  comment: 2000,
+  description: 4000,
+  work_report: 4000,
+  hold_note: 500,
+};
 
 /** Detail field definition for an API field (asset_id → the asset definition). */
 function defForApiField(entity, apiField) {
@@ -57,16 +64,20 @@ function buildControl(entity, apiField, value, ctx) {
 
   if (apiField === 'status' && entity === 'work_orders') {
     const current = ctx.record?.status ?? 'OPEN';
-    const el = select(statusOptions(current).map((s) => [s, valueLabel('work_order_status', s)]));
+    const options = statusOptions(ctx.record ?? { status: current }, ctx.user);
+    const el = select(options.map((s) => [s, valueLabel('work_order_status', s)]));
     return { el, input: el, read: () => el.value, write: (v) => (el.value = v ?? current) };
   }
   if (def.type === 'enum') {
-    const nullable = entity === 'work_orders' && apiField === 'category';
+    const nullable = entity === 'work_orders' && ['category', 'hold_reason'].includes(apiField);
     // Creation forms never pre-select a required value silently: "— Choose —" first.
     const choose = !nullable && ctx.mode === 'create' && (value === null || value === undefined);
     const el = select(
       ENUMS[def.enum].map((code) => [code, valueLabel(def.enum, code)]),
-      { allowBlank: nullable || choose, blankLabel: nullable ? t('— None —') : t('— Choose —') },
+      {
+        allowBlank: nullable || choose,
+        blankLabel: nullable && apiField !== 'hold_reason' ? t('— None —') : t('— Choose —'),
+      },
     );
     return {
       el,
@@ -305,7 +316,7 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
       rows.push(
         h(
           'div',
-          { class: 'form-row' },
+          { class: 'form-row', dataset: { field: apiField } },
           h(
             'label',
             { for: `f-${apiField}` },
@@ -330,6 +341,21 @@ function buildRows(entity, fieldOrder, editable, values, ctx) {
         ),
       );
     }
+  }
+  // The hold reason and note are asked for while the status is "On hold" (BR-W14).
+  const status = controls.get('status');
+  if (entity === 'work_orders' && status) {
+    const holdRows = rows.filter((r) => ['hold_reason', 'hold_note'].includes(r.dataset.field));
+    const sync = () => {
+      for (const row of holdRows) row.hidden = status.read() !== 'ON_HOLD';
+    };
+    status.el.addEventListener('change', sync);
+    const write = status.write;
+    status.write = (v) => {
+      write(v);
+      sync();
+    };
+    sync();
   }
   // The place follows the asset (BR-W2, BR-LOC8): disabled while an asset is chosen.
   const place = controls.get('location_id');

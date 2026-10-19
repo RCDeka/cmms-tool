@@ -577,7 +577,7 @@ describe('carry-over (BR-S9)', () => {
       .expect(200);
     await sup()
       .put(`/api/work-orders/${wo.id}`, {
-        status: 'CLOSED',
+        status: 'COMPLETED',
         work_report: 'Done',
         version: current.version + 1,
       })

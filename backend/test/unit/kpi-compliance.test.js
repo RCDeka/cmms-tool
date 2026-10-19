@@ -43,21 +43,27 @@ describe('visitOutcome', () => {
   it('is on time when closed by the Sunday of the deadline week, late from the Monday', () => {
     expect(deadline).toBe('2026-09-20');
     expect(
-      visitOutcome({ status: 'RELEASED', wo_status: 'CLOSED', closed_on: '2026-09-20' }, deadline),
+      visitOutcome(
+        { status: 'RELEASED', wo_status: 'CLOSED', completed_on: '2026-09-20' },
+        deadline,
+      ),
     ).toBe('on_time');
     expect(
-      visitOutcome({ status: 'RELEASED', wo_status: 'CLOSED', closed_on: '2026-09-21' }, deadline),
+      visitOutcome(
+        { status: 'RELEASED', wo_status: 'CLOSED', completed_on: '2026-09-21' },
+        deadline,
+      ),
     ).toBe('late');
   });
 
   it('is late while unfinished, skipped when skipped', () => {
     expect(
-      visitOutcome({ status: 'RELEASED', wo_status: 'IN_PROGRESS', closed_on: null }, deadline),
+      visitOutcome({ status: 'RELEASED', wo_status: 'IN_PROGRESS', completed_on: null }, deadline),
     ).toBe('late');
     expect(
-      visitOutcome({ status: 'RELEASED', wo_status: 'CANCELLED', closed_on: null }, deadline),
+      visitOutcome({ status: 'RELEASED', wo_status: 'CANCELLED', completed_on: null }, deadline),
     ).toBe('late');
-    expect(visitOutcome({ status: 'SKIPPED', wo_status: null, closed_on: null }, deadline)).toBe(
+    expect(visitOutcome({ status: 'SKIPPED', wo_status: null, completed_on: null }, deadline)).toBe(
       'skipped',
     );
   });

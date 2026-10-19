@@ -70,14 +70,26 @@ export const WIDGETS = [
     rows: 'work_orders',
     href: '/work-orders?status=IN_PROGRESS',
   },
+  // Technically done this month, closed or not (D86); the key stays for saved dashboards.
   {
     key: 'closed_this_month',
-    label: t('Closed this month'),
+    label: t('Done this month'),
     group: t('Key figures'),
     size: 'S',
     filters: ['sites', 'categories'],
     rows: 'work_orders',
-    href: '/work-orders?status=CLOSED',
+    href: '/work-orders?status=COMPLETED,CLOSED&sort=completed_on&order=desc',
+  },
+  // Technically done, waiting for the administrative closing (D86), oldest first.
+  {
+    key: 'to_close',
+    label: t('To close'),
+    group: t('Key figures'),
+    size: 'S',
+    filters: ['sites', 'categories'],
+    rows: 'work_orders',
+    href: '/work-orders?status=COMPLETED&sort=completed_on&order=asc',
+    attention: true,
   },
   {
     key: 'overdue_work_orders',
@@ -131,7 +143,7 @@ export const WIDGETS = [
   },
   {
     key: 'opened_vs_closed',
-    label: t('Opened vs closed'),
+    label: t('Opened vs done'),
     group: t('Flow and backlog'),
     size: 'L',
     filters: ['period', 'sites', 'categories'],
@@ -482,6 +494,7 @@ const RECORD_COLUMNS = {
     [t('Created'), (wo) => wo.created_on],
     [t('Due'), (wo) => wo.due_on],
     [t('Started'), (wo) => wo.started_on],
+    [t('Technically done'), (wo) => wo.completed_on],
     [t('Closed'), (wo) => wo.closed_on],
     [t('Estimated hours'), (wo) => wo.estimated_hours],
     [t('Actual hours'), (wo) => wo.actual_hours],

@@ -39,34 +39,36 @@ const inPeriod = (date, ctx) =>
 export function peopleWidgets(db) {
   const dailyHours = db.prepare('SELECT daily_hours FROM planning_settings WHERE id = 1').pluck();
 
-  /** Work orders of the scope with the instants of their first start and their closing. */
+  /**
+   * Work orders of the scope with the moments of their report, first start and technical end
+   * (D86: the moments kept on the work order, with the client's time).
+   */
   function timedWorkOrders(ctx, extraSql = '1') {
     const where = combine({ sql: extraSql }, scopeClause('w', ctx));
     return db
       .prepare(
-        `SELECT w.id, w.priority, w.status, w.created_at, w.created_on, w.review_status,
-           w.reviewed_at,
-           (SELECT min(l.at) FROM audit_log l WHERE l.entity_type = 'work_orders'
-              AND l.entity_id = w.id AND json_extract(l.changes, '$.status.to') = 'IN_PROGRESS')
-             AS started_at,
-           (SELECT max(l.at) FROM audit_log l WHERE l.entity_type = 'work_orders'
-              AND l.entity_id = w.id AND json_extract(l.changes, '$.status.to') = 'CLOSED')
-             AS closed_at
+        `SELECT w.id, w.priority, w.status, w.reported_at, w.created_on, w.review_status,
+           w.reviewed_at, w.first_started_at AS started_at, w.completed_at AS closed_at
          FROM work_orders w ${where.clause}`,
       )
       .all(where.params);
   }
   const dayOf = (instant, ctx) => (instant ? dateInZone(ctx.timeZone, new Date(instant)) : null);
 
-  /** Response times: work orders started (or closed) in the period, with their hours. */
+  /** Response times: work orders started (or done) in the period, with their hours. */
   function responses(ctx) {
     const rows = timedWorkOrders(ctx);
     const start = rows
       .filter((w) => w.started_at && inPeriod(dayOf(w.started_at, ctx), ctx))
-      .map((w) => ({ ...w, hours: hoursBetween(w.created_at, w.started_at) }));
+      .map((w) => ({ ...w, hours: hoursBetween(w.reported_at, w.started_at) }));
     const close = rows
-      .filter((w) => w.status === 'CLOSED' && w.closed_at && inPeriod(dayOf(w.closed_at, ctx), ctx))
-      .map((w) => ({ ...w, hours: hoursBetween(w.created_at, w.closed_at) }));
+      .filter(
+        (w) =>
+          ['COMPLETED', 'CLOSED'].includes(w.status) &&
+          w.closed_at &&
+          inPeriod(dayOf(w.closed_at, ctx), ctx),
+      )
+      .map((w) => ({ ...w, hours: hoursBetween(w.reported_at, w.closed_at) }));
     return { start, close };
   }
   function responsesOf(ctx, segment) {
@@ -78,7 +80,7 @@ export function peopleWidgets(db) {
     return list.filter((w) => priority === null || w.priority === priority);
   }
 
-  /** Staff requests created in the period, with their review and closing times. */
+  /** Staff requests created in the period, with their review and technical end times. */
   function requestsIn(ctx) {
     const where = combine(
       {
@@ -89,18 +91,18 @@ export function peopleWidgets(db) {
     );
     return db
       .prepare(
-        `SELECT w.id, w.created_at, w.created_on, w.review_status, w.reviewed_at, w.status,
-           (SELECT max(l.at) FROM audit_log l WHERE l.entity_type = 'work_orders'
-              AND l.entity_id = w.id AND json_extract(l.changes, '$.status.to') = 'CLOSED')
-             AS closed_at
+        `SELECT w.id, w.reported_at, w.created_on, w.review_status, w.reviewed_at,
+           w.status, w.completed_at AS closed_at
          FROM work_orders w ${where.clause}`,
       )
       .all(where.params)
       .map((r) => ({
         ...r,
-        review_hours: r.reviewed_at ? hoursBetween(r.created_at, r.reviewed_at) : null,
+        review_hours: r.reviewed_at ? hoursBetween(r.reported_at, r.reviewed_at) : null,
         done_hours:
-          r.status === 'CLOSED' && r.closed_at ? hoursBetween(r.created_at, r.closed_at) : null,
+          ['COMPLETED', 'CLOSED'].includes(r.status) && r.closed_at
+            ? hoursBetween(r.reported_at, r.closed_at)
+            : null,
       }));
   }
   const requestSummary = (list) => {
@@ -125,7 +127,7 @@ export function peopleWidgets(db) {
     );
     return db
       .prepare(
-        `SELECT w.id, w.number, w.asset_id, w.created_on, w.status, w.closed_on,
+        `SELECT w.id, w.number, w.asset_id, w.created_on, w.status, w.completed_on,
            a.code AS asset_code, a.name AS asset_name, a.site AS asset_site,
            a.criticality AS asset_criticality
          FROM work_orders w JOIN assets a ON a.id = w.asset_id ${where.clause}`,
@@ -455,7 +457,7 @@ export function peopleWidgets(db) {
       where: (ctx, segment) => {
         const parts = [
           {
-            sql: `w.status = 'CLOSED' AND w.closed_on BETWEEN @acc_from AND @acc_to
+            sql: `w.status IN ('COMPLETED', 'CLOSED') AND w.completed_on BETWEEN @acc_from AND @acc_to
               AND w.estimated_hours > 0 AND w.actual_hours > 0`,
             params: { acc_from: periodStart(ctx.today, ctx.period), acc_to: ctx.today },
           },

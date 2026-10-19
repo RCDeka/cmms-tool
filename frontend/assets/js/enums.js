@@ -21,9 +21,32 @@ export const ASSET_STATUSES = ['IN_SERVICE', 'BROKEN_DOWN', 'UNDER_MAINTENANCE',
 
 export const WORK_ORDER_TYPES = ['CORRECTIVE', 'PREVENTIVE', 'IMPROVEMENT', 'REGULATORY'];
 
-export const WORK_ORDER_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'CLOSED', 'CANCELLED'];
+export const WORK_ORDER_STATUSES = [
+  'OPEN',
+  'IN_PROGRESS',
+  'ON_HOLD',
+  'COMPLETED',
+  'CLOSED',
+  'CANCELLED',
+];
 
+/** Read-only statuses (BR-W7). */
 export const TERMINAL_WORK_ORDER_STATUSES = ['CLOSED', 'CANCELLED'];
+
+/** Work still to do (D86). */
+export const UNFINISHED_WORK_ORDER_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD'];
+
+/** Technically done, closed or not (D86). */
+export const DONE_WORK_ORDER_STATUSES = ['COMPLETED', 'CLOSED'];
+
+/** Why a work order is on hold (BR-W14). */
+export const HOLD_REASONS = [
+  'WAITING_PARTS',
+  'WAITING_CONTRACTOR',
+  'WAITING_ACCESS',
+  'WAITING_APPROVAL',
+  'OTHER',
+];
 
 export const WORK_ORDER_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 
@@ -49,6 +72,7 @@ export const ENUMS = {
   work_order_type: WORK_ORDER_TYPES,
   work_order_status: WORK_ORDER_STATUSES,
   work_order_priority: WORK_ORDER_PRIORITIES,
+  hold_reason: HOLD_REASONS,
   review_status: REVIEW_STATUSES,
   schedule_mode: SCHEDULE_MODES,
   performed_by: PERFORMERS,

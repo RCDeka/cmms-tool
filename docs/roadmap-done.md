@@ -137,6 +137,10 @@ Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance cri
 
 - **Phase 34: French interface** — done (D85). Flags in the top bar and on the login page, the choice kept on the device, every text of the interface, the enum labels and the messages of the API in French, dates and numbers in the French format, the brief's French vocabulary. Acceptance: each page of every role reads in French with no English text other than content; the choice survives a reload, logging out and logging in again; an unsaved form asks before the page reloads in the other language; the French dictionary matches the code (`test/i18n.test.js`); no page is wider than the screen on phones, tablets and computers.
 
+## Work order process and SLA (D86)
+
+- **Phase 35: work order process** — done (D89). Technically done (`COMPLETED`) apart from the administrative closing (`CLOSED`, supervisors and admins), the report waiver and the admin status override (D87), hold reasons and notes, holding before the start, reopening, the SLA moments on the work order (`reported_at`, `first_assigned_at`, `first_started_at`, `completed_at`) and the client's time in the audit log (`edited_at`), the figures counted on the technical end, the "To close" queue and tile, the request steps "Done" then "Closed", seed data with every status and hold reason. Acceptance: see the spec, section 11.
+
 ## Production (D73)
 
 - **Phase 27: continuous integration** — done (`.github/workflows/ci.yml`). A GitHub Actions workflow on every push and pull request: Node 24, `npm ci`, then `npm run lint` and `npm test` in `backend/` and in `frontend/`. Acceptance: a push runs both packages' lint and tests; a failing test or a lint error marks the commit as failed; the workflow uses no secret.

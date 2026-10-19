@@ -5,6 +5,7 @@ import {
   ASSET_STATUSES,
   CATEGORIES,
   CRITICALITIES,
+  HOLD_REASONS,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TYPES,
@@ -28,6 +29,7 @@ export function createReferenceDataService(_db, { assistant, locations }) {
         work_order_types: WORK_ORDER_TYPES,
         work_order_statuses: WORK_ORDER_STATUSES,
         work_order_priorities: WORK_ORDER_PRIORITIES,
+        hold_reasons: HOLD_REASONS,
         assistant,
       };
     },

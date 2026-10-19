@@ -45,10 +45,10 @@ export const REPEAT_DAYS = 30;
 
 /**
  * Repeat failures among corrective work orders on assets (§6.4): for each work order, the
- * previous one on the same asset (created before it) closed less than 30 days before it was
- * created. Returns the repeats with their previous work order and the gap in days.
+ * previous one on the same asset (created before it) technically done (D86) less than 30 days
+ * before it was created. Returns the repeats with their previous work order and the gap in days.
  * @param {{ id: number, asset_id: number, created_on: string, status: string,
- *   closed_on: string | null, number: string }[]} workOrders every corrective, not cancelled
+ *   completed_on: string | null, number: string }[]} workOrders every corrective, not cancelled
  *   work order on an asset, any date
  * @param {(wo: object) => boolean} counted the ones created in the period
  */
@@ -63,8 +63,9 @@ export function repeatFailures(workOrders, counted) {
     list.sort((a, b) => a.created_on.localeCompare(b.created_on) || a.id - b.id);
     list.forEach((wo, i) => {
       const previous = list[i - 1];
-      if (!previous || !counted(wo) || previous.status !== 'CLOSED' || !previous.closed_on) return;
-      const gap = daysBetween(previous.closed_on, wo.created_on);
+      if (!previous || !counted(wo) || !previous.completed_on) return;
+      if (!['COMPLETED', 'CLOSED'].includes(previous.status)) return;
+      const gap = daysBetween(previous.completed_on, wo.created_on);
       if (gap >= 0 && gap < REPEAT_DAYS) repeats.push({ ...wo, previous, gap });
     });
   }

@@ -13,12 +13,16 @@ import { NOT_LISTED, PATH_SEPARATOR, placeIndex, placeOf, placePicker } from './
 import { t, tn } from './i18n.js';
 
 export const REQUEST_SCOPES = ['open', 'all'];
-/** Steps shown above a request; "On hold" takes the place of "In progress". */
+/**
+ * Steps shown above a request; "On hold" takes the place of "In progress". "Done" is the
+ * technical end, "Closed" the administrative one (D86).
+ */
 export const REQUEST_STEPS = [
   t('Received'),
   t('Approved and assigned'),
   t('In progress'),
   t('Done'),
+  t('request|Closed'),
 ];
 
 /** Labels of the urgency choices (priority codes). */
@@ -42,7 +46,7 @@ export function requestsUrl(scope = 'open', page = 1) {
 /**
  * Where a request stands and what happens next, in the requester's words. Pure.
  * @param {{ status: string, assignee: object | null, due_on: string | null,
- *   closed_on: string | null }} request
+ *   completed_on: string | null }} request
  * @returns {{ stage: string, label: string, tone: string, step: number | null, next: string }}
  *   `step`: index in REQUEST_STEPS, null for a cancelled request
  */
@@ -96,16 +100,18 @@ export function requestProgress(request) {
           'The maintenance team cancelled this request: the comments may say why. If the problem is still there, send a new request.',
         ),
       };
+    case 'COMPLETED':
     case 'CLOSED':
       return {
-        stage: 'DONE',
-        label: t('Done'),
+        stage: request.status === 'CLOSED' ? 'CLOSED' : 'DONE',
+        label: request.status === 'CLOSED' ? t('request|Closed') : t('Done'),
         tone: 'success',
-        step: 3,
-        next: request.closed_on
-          ? t('The work is finished ({closed_on}). If the problem is still there, add a comment.', {
-              closed_on: formatDate(request.closed_on),
-            })
+        step: request.status === 'CLOSED' ? 4 : 3,
+        next: request.completed_on
+          ? t(
+              'The work is finished ({completed_on}). If the problem is still there, add a comment.',
+              { completed_on: formatDate(request.completed_on) },
+            )
           : t('The work is finished. If the problem is still there, add a comment.'),
       };
     case 'ON_HOLD':
@@ -556,7 +562,8 @@ const STATUS_STEP_LABELS = {
   REJECTED: t('Rejected by a supervisor'),
   IN_PROGRESS: t('Work started'),
   ON_HOLD: t('Put on hold'),
-  CLOSED: t('Work finished'),
+  COMPLETED: t('Work finished'),
+  CLOSED: t('request|Closed'),
   CANCELLED: t('Cancelled'),
   WITHDRAWN: t('Cancelled by you'),
 };
@@ -611,7 +618,7 @@ function cancelSection(cancel) {
  */
 export function renderRequestDetail(container, { request, viewer, sendComment, cancelRequest }) {
   const progress = requestProgress(request);
-  const finished = ['CLOSED', 'CANCELLED'].includes(request.status);
+  const finished = ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(request.status);
   const field = (label, value) =>
     value === null || value === undefined || value === ''
       ? null
@@ -656,7 +663,7 @@ export function renderRequestDetail(container, { request, viewer, sendComment, c
         h('p', { class: 'request-next' }, h('strong', {}, t('Next step: ')), progress.next),
         canCancelRequest(request) ? cancelSection(cancelRequest) : null,
       ),
-      request.status === 'CLOSED' && request.work_report
+      ['COMPLETED', 'CLOSED'].includes(request.status) && request.work_report
         ? h(
             'section',
             { class: 'request-section' },

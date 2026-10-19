@@ -45,8 +45,8 @@ const link = (href, text) => (href ? h('a', { href, 'data-link': true }, text) :
 // --- Response times ----------------------------------------------------------------------------
 
 const KINDS = [
-  ['start', t('Time to start'), t('From creation to the first “In progress”')],
-  ['close', t('Time to close'), t('From creation to “Closed”')],
+  ['start', t('Time to start'), t('From the report to the first “In progress”')],
+  ['close', t('Time to done'), t('From the report to “Technically done”')],
 ];
 
 function responseTable(data, { drill }) {
@@ -56,9 +56,9 @@ function responseTable(data, { drill }) {
       { label: t('count|Started'), numeric: true },
       { label: t('Median to start'), numeric: true },
       { label: t('90% started within'), numeric: true },
-      { label: t('count|Closed'), numeric: true },
-      { label: t('Median to close'), numeric: true },
-      { label: t('90% closed within'), numeric: true },
+      { label: t('count|Done'), numeric: true },
+      { label: t('Median to done'), numeric: true },
+      { label: t('90% done within'), numeric: true },
     ],
     rows: data.rows.map((r) => [
       valueLabel('work_order_priority', r.priority),
@@ -89,7 +89,7 @@ function responseBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        t('No work order was started or closed in this period.'),
+        t('No work order was started or done in this period.'),
       ),
     };
   }
@@ -99,7 +99,7 @@ function responseBody(data, context) {
     h(
       'p',
       { class: 'widget-summary' },
-      tx('Half the work orders were started within {start} and closed within {close}.', {
+      tx('Half the work orders were started within {start} and done within {close}.', {
         start: h('strong', {}, durationText(data.start.median)),
         close: h('strong', {}, durationText(data.close.median)),
       }),
@@ -642,7 +642,7 @@ function accuracyBody(data, context) {
       element: h(
         'p',
         { class: 'empty-state' },
-        t('No work order closed in this period has both an estimate and actual hours.'),
+        t('No work order done in this period has both an estimate and actual hours.'),
       ),
     };
   }
@@ -673,7 +673,7 @@ function accuracyBody(data, context) {
       h(
         'p',
         { class: 'widget-note' },
-        t('Dashed line: 1.0×, the estimate. {count} closed work orders with both hours.', {
+        t('Dashed line: 1.0×, the estimate. {count} done work orders with both hours.', {
           count: numberFormat.format(data.count),
         }),
       ),
@@ -712,7 +712,7 @@ function segmentText(key, segment) {
   switch (key) {
     case 'response_times':
       return [
-        first === 'start' ? t('started') : t('closed'),
+        first === 'start' ? t('started') : t('response|done'),
         rest ? valueLabel('work_order_priority', rest) : null,
       ]
         .filter(Boolean)
@@ -765,7 +765,7 @@ export const EXTRA_COLUMNS = {
   ],
   repeat_failures: [
     [t('Previous work order'), (r) => r.dashboard?.previous],
-    [t('Days since it closed'), (r) => r.dashboard?.days_since_previous],
+    [t('Days since it was done'), (r) => r.dashboard?.days_since_previous],
   ],
   critical_downtime: [[t('Days broken down'), (r) => r.dashboard?.days_down]],
   estimate_accuracy: [[t('Actual ÷ estimate'), (r) => r.dashboard?.ratio]],

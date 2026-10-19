@@ -177,7 +177,10 @@ describe('PUT /api/assets/:id/resolve-conflict (BR-V5)', () => {
 });
 
 describe('PUT /api/work-orders/:id/resolve-conflict', () => {
-  /** In-progress work order of technician1; supervisor puts it on hold (A), technician closes it (B). */
+  /**
+   * In-progress work order of technician1; supervisor puts it on hold (A), technician marks it
+   * technically done (B).
+   */
   async function workOrderConflict() {
     const wo = ctx.db
       .prepare(
@@ -185,9 +188,13 @@ describe('PUT /api/work-orders/:id/resolve-conflict', () => {
       )
       .get();
     const url = `/api/work-orders/${wo.id}`;
-    await send('put', 'supervisor1', url, { status: 'ON_HOLD', version: wo.version }).expect(200);
+    await send('put', 'supervisor1', url, {
+      status: 'ON_HOLD',
+      hold_reason: 'WAITING_PARTS',
+      version: wo.version,
+    }).expect(200);
     const res = await send('put', 'technician1', url, {
-      status: 'CLOSED',
+      status: 'COMPLETED',
       work_report: 'Replaced the fuse.',
       version: wo.version,
     }).expect(409);

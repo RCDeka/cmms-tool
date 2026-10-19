@@ -16,7 +16,10 @@ export function createDashboardService(db, { workOrders }) {
   const workOrderCounts = db.prepare(`SELECT
       coalesce(sum(status = 'OPEN'), 0) AS open_work_orders,
       coalesce(sum(status = 'IN_PROGRESS'), 0) AS in_progress_work_orders,
-      coalesce(sum(status = 'CLOSED' AND closed_on BETWEEN @from AND @to), 0) AS closed_this_month,
+      -- Done this month: the technical end (D86), closed or not.
+      coalesce(sum(status IN ('COMPLETED', 'CLOSED') AND completed_on BETWEEN @from AND @to), 0)
+        AS closed_this_month,
+      coalesce(sum(status = 'COMPLETED'), 0) AS to_close,
       coalesce(sum(status IN ('OPEN', 'IN_PROGRESS', 'ON_HOLD') AND due_on < @today), 0)
         AS overdue_work_orders
     FROM work_orders`);
@@ -29,7 +32,7 @@ export function createDashboardService(db, { workOrders }) {
 
   return {
     /**
-     * Dashboard of a user. `pending_conflicts`, `requests_to_review` and
+     * Dashboard of a user. `pending_conflicts`, `to_close`, `requests_to_review` and
      * `requests_awaiting_reply` are only given to supervisors and admins, technicians get
      * `my_requests_awaiting_reply` instead.
      * @param {{ id: number, role: string }} user
@@ -47,6 +50,8 @@ export function createDashboardService(db, { workOrders }) {
       };
       if (['SUPERVISOR', 'ADMIN'].includes(user.role)) {
         kpis.pending_conflicts = pendingConflicts.get();
+        // Technically done, waiting for the administrative closing (D86).
+        kpis.to_close = counts.to_close;
         // Staff requests waiting for a supervisor (D47).
         kpis.requests_to_review = workOrders.countToReview();
         // Requests whose requester wrote last (D80); technicians: those assigned to them.

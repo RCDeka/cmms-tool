@@ -9,6 +9,7 @@ import { snapshotToApi } from '../../rules/conflict-diff.js';
 import { recordAudit } from '../../services/audit.js';
 import { generateOccurrences } from '../../services/occurrences.js';
 import { defaultTolerance, nextPlanCode } from '../../rules/planning.js';
+import { HOLD_REASONS } from '../../rules/enums.js';
 import { historyAnchor, insertPastWork } from './history.js';
 import { createRandom } from './random.js';
 import {
@@ -277,6 +278,7 @@ export async function seedDatabase(
     );
     const allocations = insertSchedule(db, today, now);
     const past = insertPastWork(db, { today, now });
+    deriveMoments(db);
     const conflicts = withConflicts ? insertConflicts(db, users, now) : 0;
     return {
       users: users.length + staff.length,
@@ -482,7 +484,9 @@ function requestDrafts(users, timestamp, today, places) {
   return STAFF_REQUESTS.map((r) => {
     const createdOn = addDays(today, r.created);
     const startedOn = r.started === undefined ? null : addDays(today, r.started);
-    const closedOn = r.closed === undefined ? null : addDays(today, r.closed);
+    // Technically done that day, closed by the supervisor the next day (D86).
+    const completedOn = r.closed === undefined ? null : addDays(today, r.closed);
+    const closedOn = completedOn && addDays(completedOn, 1);
     const assignee = r.assignee ? id(r.assignee) : null;
     const createdAt = timestamp(createdOn);
     const rejectedAt = r.rejected
@@ -507,10 +511,12 @@ function requestDrafts(users, timestamp, today, places) {
       created_on: createdOn,
       due_on: r.due === undefined ? null : addDays(today, r.due),
       started_on: startedOn,
+      completed_on: completedOn,
       closed_on: closedOn,
       estimated_hours: null,
       actual_hours: r.hours ?? null,
       work_report: r.report ?? null,
+      hold_reason: r.status === 'ON_HOLD' ? 'WAITING_PARTS' : null,
       created_by: requester,
       updated_by: startedOn ? assignee : assignee || r.rejected ? id('supervisor1') : requester,
       review_status: assignee ? 'APPROVED' : r.rejected ? 'REJECTED' : 'PENDING',
@@ -556,6 +562,7 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
   const earliest = (a, b) => (a < b ? a : b);
 
   const drafts = [];
+  let holds = 0;
   for (let i = 0; i < WORK_ORDER_COUNT; i++) {
     const createdOn = addDays(today, -rng.int(0, 29));
     const type = rng.weighted([
@@ -624,14 +631,34 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
     const description =
       type === 'CORRECTIVE' ? `${symptom} reported at ${where}.` : `${title} at ${where}.`;
 
+    // D86: the closed ones were technically done that day; those done in the last days wait
+    // for their closing (the "To close" queue), the others were closed two days later.
+    // Decided after the random draws, so the generated data stays the same.
+    let finalStatus = status;
+    let finalStartedOn = startedOn;
+    let finalClosedOn = closedOn;
+    let holdReason = null;
+    if (status === 'CLOSED' && closedOn >= addDays(today, -6)) {
+      finalStatus = 'COMPLETED';
+      finalClosedOn = null;
+    } else if (status === 'CLOSED') {
+      finalClosedOn = earliest(today, addDays(closedOn, 2));
+    }
+    if (status === 'ON_HOLD') {
+      holdReason = HOLD_REASONS[holds % HOLD_REASONS.length];
+      holds++;
+      // Every third hold came before the work started (BR-W4).
+      if (holds % 3 === 0) finalStartedOn = null;
+    }
+
     const createdAt = timestamp(createdOn);
-    const lastChange = closedOn ?? startedOn ?? createdOn;
+    const lastChange = finalClosedOn ?? closedOn ?? startedOn ?? createdOn;
     const changedAt = timestamp(lastChange);
     const updatedAt = changedAt > createdAt ? changedAt : createdAt;
 
     drafts.push({
       type,
-      status,
+      status: finalStatus,
       priority,
       title,
       description,
@@ -648,11 +675,13 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
       supervisor_id: rng.chance(0.9) ? rng.pick(supervisors).id : null,
       created_on: createdOn,
       due_on: dueOn,
-      started_on: startedOn,
-      closed_on: closedOn,
+      started_on: finalStartedOn,
+      completed_on: closedOn,
+      closed_on: finalClosedOn,
       estimated_hours: estimated,
-      actual_hours: actual,
+      actual_hours: finalStartedOn ? actual : null,
       work_report: status === 'CLOSED' ? rng.pick(WORK_REPORTS[type]) : null,
+      hold_reason: holdReason,
       created_by: creator.id,
       updated_by: started && assignee ? assignee.id : creator.id,
       created_at: createdAt,
@@ -664,21 +693,32 @@ function insertWorkOrders(db, rng, timestamp, today, users, assets, requests, pl
   drafts.push(...requests);
   drafts.sort((a, b) => a.created_at.localeCompare(b.created_at));
   const sequence = new Map();
+  // The moments (D86) are provisional here: insertHistory sets them from the history.
   const stmt = db.prepare(`INSERT INTO work_orders
     (number, type, status, priority, title, description, asset_id, site, location_id, place,
-     location, category, assignee_id, supervisor_id, created_on, due_on, started_on, closed_on, estimated_hours,
-     actual_hours, work_report, created_by, updated_by, review_status, reviewed_by, reviewed_at,
-     review_note, created_at, updated_at)
+     location, category, assignee_id, supervisor_id, created_on, due_on, started_on, completed_on,
+     closed_on, estimated_hours, actual_hours, work_report, hold_reason, reported_at,
+     first_assigned_at, completed_at, created_by, updated_by, review_status, reviewed_by,
+     reviewed_at, review_note, created_at, updated_at)
     VALUES (@number, @type, @status, @priority, @title, @description, @asset_id, @site,
      @location_id, @place, @location, @category,
-     @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @closed_on, @estimated_hours,
-     @actual_hours, @work_report, @created_by, @updated_by, @review_status, @reviewed_by,
+     @assignee_id, @supervisor_id, @created_on, @due_on, @started_on, @completed_on, @closed_on,
+     @estimated_hours, @actual_hours, @work_report, @hold_reason, @created_at,
+     @first_assigned_at, @completed_at, @created_by, @updated_by, @review_status, @reviewed_by,
      @reviewed_at, @review_note, @created_at, @updated_at)`);
   for (const wo of drafts) {
     const year = wo.created_on.slice(0, 4);
     const n = (sequence.get(year) ?? 0) + 1;
     sequence.set(year, n);
-    stmt.run({ ...wo, number: `WO-${year}-${String(n).padStart(5, '0')}` });
+    stmt.run({
+      ...wo,
+      completed_on: ['COMPLETED', 'CLOSED'].includes(wo.status) ? wo.completed_on : null,
+      completed_at: ['COMPLETED', 'CLOSED'].includes(wo.status)
+        ? `${wo.completed_on}T12:00:00.000Z`
+        : null,
+      first_assigned_at: wo.assignee_id ? (wo.reviewed_at ?? wo.created_at) : null,
+      number: `WO-${year}-${String(n).padStart(5, '0')}`,
+    });
   }
   return drafts.length;
 }
@@ -1039,26 +1079,68 @@ function insertHistory(db) {
     }
     const last = wo.started_on ? 'IN_PROGRESS' : 'OPEN';
     if (wo.status === 'ON_HOLD') {
-      entry('UPDATE', { status: { from: last, to: 'ON_HOLD' } }, worker, wo.updated_at);
-    } else if (wo.status === 'CLOSED') {
+      entry(
+        'UPDATE',
+        { status: { from: last, to: 'ON_HOLD' }, hold_reason: { from: null, to: wo.hold_reason } },
+        worker,
+        wo.updated_at,
+      );
+    } else if (wo.status === 'COMPLETED' || wo.status === 'CLOSED') {
+      // Technically done (D86), then closed by a supervisor.
+      // On its completion day (after the start), or at the last update for one not closed yet.
+      const startedAt = between(wo.created_at, wo.updated_at, 0.4);
+      const dayEnd = `${wo.completed_on}T15:00:00.000Z`;
+      const doneAt =
+        wo.status === 'COMPLETED'
+          ? wo.updated_at
+          : [startedAt, dayEnd < wo.updated_at ? dayEnd : wo.updated_at].sort()[1];
       entry(
         'UPDATE',
         diffChanges(
           { status: last },
           {
-            status: 'CLOSED',
-            closed_on: wo.closed_on,
+            status: 'COMPLETED',
+            completed_on: wo.completed_on,
+            completed_at: doneAt,
             work_report: wo.work_report,
             actual_hours: wo.actual_hours,
           },
         ),
         worker,
-        wo.updated_at,
+        doneAt,
       );
+      if (wo.status === 'CLOSED') {
+        entry(
+          'UPDATE',
+          {
+            status: { from: 'COMPLETED', to: 'CLOSED' },
+            closed_on: { from: null, to: wo.closed_on },
+          },
+          wo.supervisor_id ?? admin,
+          wo.updated_at,
+        );
+      }
     } else if (wo.status === 'CANCELLED') {
       entry('UPDATE', { status: { from: last, to: 'CANCELLED' } }, wo.created_by, wo.updated_at);
     }
   }
+}
+
+/**
+ * The moments of each work order (D86, BR-W18) from its history: the first start, the first
+ * assignment and the technical end.
+ */
+function deriveMoments(db) {
+  const of = (condition, pick = 'min(l.at)') =>
+    `(SELECT ${pick} FROM audit_log l WHERE l.entity_type = 'work_orders'
+       AND l.entity_id = work_orders.id AND ${condition})`;
+  db.exec(`UPDATE work_orders SET
+    first_started_at = ${of("json_extract(l.changes, '$.status.to') = 'IN_PROGRESS'")},
+    first_assigned_at = coalesce(
+      ${of("json_extract(l.changes, '$.assignee_id.to') IS NOT NULL")}, first_assigned_at),
+    completed_at = coalesce(
+      ${of("json_extract(l.changes, '$.completed_at.to') IS NOT NULL", "max(json_extract(l.changes, '$.completed_at.to'))")},
+      completed_at)`);
 }
 
 /**

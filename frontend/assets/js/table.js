@@ -4,7 +4,7 @@
 // Paginated table (brief → Table rendering; docs/ui-guidelines.md → Table rows, Accessibility).
 import { h, replaceChildren } from './dom.js';
 import { ENTITIES } from './entities.js';
-import { isEmpty, renderValue } from './format.js';
+import { isEmpty, renderValue, workOrderStatus } from './format.js';
 import { t, tn } from './i18n.js';
 
 /** Row ids are numbers, or `tmp-<uuid>` strings for creations not yet on the server. */
@@ -183,7 +183,11 @@ function renderRow(cfg, record, selected) {
       index === 0 && record._pending && !record._pendingCreate
         ? pendingMarker(t('Pending sync'))
         : null,
-      isEmpty(record[field]) ? '' : renderValue(field, cfg.fields[field], record[field]),
+      isEmpty(record[field])
+        ? ''
+        : cfg.key === 'work_orders' && field === 'status'
+          ? workOrderStatus(record)
+          : renderValue(field, cfg.fields[field], record[field]),
     ),
   );
   return h(

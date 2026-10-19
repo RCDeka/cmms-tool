@@ -105,9 +105,15 @@ describe('requestProgress', () => {
       step: 2,
       tone: 'warning',
     });
-    const done = requestProgress(request({ status: 'CLOSED', closed_on: '2026-10-08' }));
-    expect(done).toMatchObject({ stage: 'DONE', step: 3 });
+    // Done at the technical end, then closed (D86).
+    const done = requestProgress(request({ status: 'COMPLETED', completed_on: '2026-10-08' }));
+    expect(done).toMatchObject({ stage: 'DONE', label: 'Done', step: 3 });
     expect(done.next).toMatch(/finished \(8 Oct 2026\).*add a comment/);
+    const closed = requestProgress(
+      request({ status: 'CLOSED', completed_on: '2026-10-08', closed_on: '2026-10-09' }),
+    );
+    expect(closed).toMatchObject({ stage: 'CLOSED', label: 'Closed', step: 4 });
+    expect(closed.next).toMatch(/finished \(8 Oct 2026\)/);
     expect(requestProgress(request({ status: 'CANCELLED' }))).toMatchObject({
       stage: 'CANCELLED',
       step: null,
@@ -119,7 +125,7 @@ describe('cancellation by the requester (BR-R10, D79)', () => {
   it('is offered until work starts, reviewed or not', () => {
     expect(canCancelRequest(request({ review_status: 'PENDING' }))).toBe(true);
     expect(canCancelRequest(request({ review_status: 'APPROVED', assignee: karim }))).toBe(true);
-    for (const status of ['IN_PROGRESS', 'ON_HOLD', 'CLOSED', 'CANCELLED']) {
+    for (const status of ['IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CLOSED', 'CANCELLED']) {
       expect(canCancelRequest(request({ status }))).toBe(false);
     }
   });
@@ -272,11 +278,13 @@ describe('request pages', () => {
       request: request({
         status: 'CLOSED',
         assignee: karim,
+        completed_on: '2026-10-08',
         closed_on: '2026-10-08',
         work_report: 'Seal replaced.',
         status_history: [
           { status: 'OPEN', at: '2026-10-07T08:00:00.000Z' },
           { status: 'IN_PROGRESS', at: '2026-10-07T10:00:00.000Z' },
+          { status: 'COMPLETED', at: '2026-10-08T09:00:00.000Z' },
           { status: 'CLOSED', at: '2026-10-08T10:00:00.000Z' },
         ],
         comments: [
@@ -297,11 +305,12 @@ describe('request pages', () => {
       'request-step is-done',
       'request-step is-done',
       'request-step is-done',
+      'request-step is-done',
       'request-step is-current',
     ]);
-    expect(steps[3].getAttribute('aria-current')).toBe('step');
+    expect(steps[4].getAttribute('aria-current')).toBe('step');
     expect(container.querySelector('.request-report').textContent).toBe('Seal replaced.');
-    expect(container.querySelectorAll('.timeline-entry')).toHaveLength(3);
+    expect(container.querySelectorAll('.timeline-entry')).toHaveLength(4);
     expect(container.querySelector('.comment-head strong').textContent).toBe('You');
     expect(container.querySelector('a[href="/requests/all"]')).not.toBeNull();
   });

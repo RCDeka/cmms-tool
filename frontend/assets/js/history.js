@@ -131,6 +131,8 @@ export function withPeople(lookups, people = {}) {
 export function entryTitle(entry) {
   if (entry.note?.password_reset) return t('Password reset by an administrator');
   if (entry.note?.password_changed) return t('Password changed by the user');
+  // BR-W17: a status set by an admin outside the usual steps.
+  if (entry.note?.status_override) return t('Status changed by an administrator (override)');
   const base = ACTION_LABELS[entry.action] ?? entry.action;
   return entry.action === 'RESOLVE' && entry.note?.choice
     ? t('{label}: {value}', { label: base, value: CHOICE_LABELS[entry.note.choice] })
