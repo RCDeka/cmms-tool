@@ -5,7 +5,7 @@
 // plural() (i18n.js), in the same order as i18n-fr.js. The keys are those of the French
 // dictionary, contexts included ('count|Closed'). Polite form (Sie), the vocabulary of German
 // facility management (docs/decisions.md → D91): Anlage, Arbeitsauftrag, Meldung, Gewerk,
-// Arbeitsbericht, Kritikalität, Teamleiter, Kennzahl.
+// Arbeitsbericht, Kritikalität, Supervisor, Kennzahl.
 // test/i18n.test.js checks that every key of the code is here, and nothing else.
 
 export const DE = {
@@ -101,7 +101,7 @@ export const DE = {
   Priority: 'Priorität',
   Description: 'Beschreibung',
   Assignee: 'Zugewiesen an',
-  Supervisor: 'Teamleiter',
+  Supervisor: 'Supervisor',
   Created: 'Erstellt',
   Due: 'Fällig',
   Started: 'Begonnen',
@@ -129,7 +129,7 @@ export const DE = {
   'Close details': 'Details schließen',
   Conflict: 'Konflikt',
   ' — two versions of this record are waiting for a supervisor to arbitrate.':
-    ' — zwei Versionen dieses Datensatzes warten auf die Entscheidung eines Teamleiters.',
+    ' — zwei Versionen dieses Datensatzes warten auf die Entscheidung eines Supervisors.',
   'Open the conflict console': 'Konfliktkonsole öffnen',
   Retry: 'Erneut versuchen',
   'Update available — show the latest version':
@@ -208,7 +208,7 @@ export const DE = {
     'Der Wechsel von {from} zu {to} wird im Verlauf als Entscheidung eines Administrators protokolliert.',
   Discard: 'Verwerfen',
   'This staff request is waiting for a supervisor’s review: it will then be assigned.':
-    'Diese Meldung wartet auf die Prüfung durch einen Teamleiter: Danach wird sie zugewiesen.',
+    'Diese Meldung wartet auf die Prüfung durch einen Supervisor: Danach wird sie zugewiesen.',
   'Your changes are saved on this device and waiting to be sent to the server.':
     'Ihre Änderungen sind auf diesem Gerät gespeichert und warten auf die Übertragung an den Server.',
   'Your last change was not saved. ': 'Ihre letzte Änderung wurde nicht gespeichert. ',
@@ -272,14 +272,14 @@ export const DE = {
   'Log in': 'Anmelden',
   'Access denied': 'Zugriff verweigert',
   'Only supervisors and administrators can open this page.':
-    'Nur Teamleiter und Administratoren können diese Seite öffnen.',
+    'Nur Supervisoren und Administratoren können diese Seite öffnen.',
   'Only administrators can open this page.': 'Nur Administratoren können diese Seite öffnen.',
   'The year planner needs a larger screen: open it on a tablet or a computer.':
     'Die Jahresplanung braucht einen größeren Bildschirm: Öffnen Sie sie auf einem Tablet oder Computer.',
   'Only supervisors and administrators can rebalance the plans.':
-    'Nur Teamleiter und Administratoren können die Pläne ausgleichen.',
+    'Nur Supervisoren und Administratoren können die Pläne ausgleichen.',
   'Only supervisors and administrators can create plans.':
-    'Nur Teamleiter und Administratoren können Pläne anlegen.',
+    'Nur Supervisoren und Administratoren können Pläne anlegen.',
   'Staff requests': 'Meldungen',
   'This page is for staff members. Their requests are listed under Work orders.':
     'Diese Seite ist für Mitarbeiter. Ihre Meldungen stehen unter Arbeitsaufträge.',
@@ -360,7 +360,7 @@ export const DE = {
   '+ New work order': '+ Neuer Arbeitsauftrag',
   '+ New asset': '+ Neue Anlage',
   'Only supervisors and administrators can create assets.':
-    'Nur Teamleiter und Administratoren können Anlagen anlegen.',
+    'Nur Supervisoren und Administratoren können Anlagen anlegen.',
   'The record now shows the latest version.': 'Der Datensatz zeigt jetzt die neueste Version.',
   'An update is available for the open record.':
     'Für den geöffneten Datensatz ist eine Aktualisierung verfügbar.',
@@ -373,9 +373,9 @@ export const DE = {
   'Default order': 'Standardreihenfolge',
   'Work order {number} created.': 'Arbeitsauftrag {number} angelegt.',
   'Not saved: this record is waiting for a supervisor to resolve a conflict. Your edits are kept as a draft.':
-    'Nicht gespeichert: Dieser Datensatz wartet darauf, dass ein Teamleiter einen Konflikt löst. Ihre Änderungen bleiben als Entwurf erhalten.',
+    'Nicht gespeichert: Dieser Datensatz wartet darauf, dass ein Supervisor einen Konflikt löst. Ihre Änderungen bleiben als Entwurf erhalten.',
   'Conflict: someone changed this record before you. A supervisor will choose which version to keep.':
-    'Konflikt: Jemand hat diesen Datensatz vor Ihnen geändert. Ein Teamleiter wählt die Version, die bleibt.',
+    'Konflikt: Jemand hat diesen Datensatz vor Ihnen geändert. Ein Supervisor wählt die Version, die bleibt.',
   'Not saved: {message}': 'Nicht gespeichert: {message}',
   'Changes not sent': 'Änderungen nicht gesendet',
   '{n} change has not been sent to the server yet. If you log out now, it will be lost.':
@@ -596,13 +596,13 @@ export const DE = {
   Widgets: 'Kennzahlen',
   'Tick the widgets to show on “{name}”.':
     'Wählen Sie die Kennzahlen, die auf „{name}“ erscheinen sollen.',
-  'Switched off for supervisors': 'Für Teamleiter ausgeschaltet',
+  'Switched off for supervisors': 'Für Supervisoren ausgeschaltet',
   Off: 'Aus',
   'Loading the widgets…': 'Kennzahlen werden geladen…',
   'The dashboard widgets need a connection to the server.':
     'Die Kennzahlen der Dashboards brauchen eine Verbindung zum Server.',
-  '{label} switched on for supervisors.': '{label} für Teamleiter eingeschaltet.',
-  '{label} switched off for supervisors.': '{label} für Teamleiter ausgeschaltet.',
+  '{label} switched on for supervisors.': '{label} für Supervisoren eingeschaltet.',
+  '{label} switched off for supervisors.': '{label} für Supervisoren ausgeschaltet.',
   'You are offline: {label} was not changed.': 'Sie sind offline: {label} wurde nicht geändert.',
   'Your dashboards have not been loaded on this device yet, so they are not available offline.':
     'Ihre Dashboards wurden auf diesem Gerät noch nicht geladen und sind daher offline nicht verfügbar.',
@@ -1158,7 +1158,7 @@ export const DE = {
     'Anteil jeder Woche, der für Störungen und Meldungen frei bleibt (0 bis 80).',
   'Daily capacity (hours)': 'Tageskapazität (Stunden)',
   'Hours each technician and supervisor works on a working day.':
-    'Stunden, die jeder Techniker und Teamleiter an einem Arbeitstag arbeitet.',
+    'Stunden, die jeder Techniker und Supervisor an einem Arbeitstag arbeitet.',
   'Release horizon (weeks)': 'Vorlauf für Aufträge (Wochen)',
   'Work orders of plan visits are created this many weeks ahead.':
     'Arbeitsaufträge für Termine der Pläne werden so viele Wochen im Voraus angelegt.',
@@ -1166,9 +1166,9 @@ export const DE = {
   'Longer visits are flagged in the year planner: they will be split.':
     'Längere Termine werden in der Jahresplanung markiert: Sie werden aufgeteilt.',
   '{n} technician or supervisor counts as capacity.':
-    '{n} Techniker oder Teamleiter zählt zur Kapazität.',
+    '{n} Techniker oder Supervisor zählt zur Kapazität.',
   '{n} technicians and supervisors count as capacity.':
-    '{n} Techniker und Teamleiter zählen zur Kapazität.',
+    '{n} Techniker und Supervisoren zählen zur Kapazität.',
   ' Last changed by {updated_by} on {updated_at}.':
     ' Zuletzt geändert von {updated_by} am {updated_at}.',
   'Save settings': 'Einstellungen speichern',
@@ -1221,7 +1221,7 @@ export const DE = {
   'Key figures of the weeks shown': 'Kennzahlen der angezeigten Wochen',
   'Needs balancing': 'Auszugleichen',
   'Capacity: {weekly} a week ({daily} a day per technician and supervisor), keeping a {reserve}% reserve for breakdowns and staff requests, set by the administrators.':
-    'Kapazität: {weekly} pro Woche ({daily} pro Tag je Techniker und Teamleiter), mit einer Reserve von {reserve} % für Störungen und Meldungen, festgelegt von den Administratoren.',
+    'Kapazität: {weekly} pro Woche ({daily} pro Tag je Techniker und Supervisor), mit einer Reserve von {reserve} % für Störungen und Meldungen, festgelegt von den Administratoren.',
   'Change the settings': 'Einstellungen ändern',
   ' (preview)': ' (Vorschau)',
   Load: 'Auslastung',
@@ -1273,7 +1273,7 @@ export const DE = {
     'Ziehen Sie einen geplanten Termin in eine andere Woche, oder wählen Sie ihn aus und drücken Sie Umschalt + Pfeiltasten, dann die Eingabetaste (Esc bricht ab). Der erste geplante Termin einer Zeile verschiebt die ganze Serie; Alt + Umschalt + Pfeiltasten verschieben die Serie von jedem Termin aus.',
   // queue.js
   'This record is waiting for a supervisor to resolve a conflict.':
-    'Dieser Datensatz wartet darauf, dass ein Teamleiter einen Konflikt löst.',
+    'Dieser Datensatz wartet darauf, dass ein Supervisor einen Konflikt löst.',
   // requests.js
   'request|Closed': 'Abgeschlossen',
   Received: 'Eingegangen',
@@ -1287,15 +1287,15 @@ export const DE = {
   "I don't know": 'Weiß nicht',
   'Waiting for review': 'Wartet auf Prüfung',
   'A supervisor will review your request, then assign a technician to it.':
-    'Ein Teamleiter prüft Ihre Meldung und weist sie dann einem Techniker zu.',
+    'Ein Supervisor prüft Ihre Meldung und weist sie dann einem Techniker zu.',
   'Cancelled by you': 'Von Ihnen zurückgezogen',
   'Nothing: you cancelled this request. If the problem comes back, send a new request.':
     'Nichts: Sie haben diese Meldung zurückgezogen. Tritt das Problem wieder auf, senden Sie eine neue Meldung.',
   Rejected: 'Abgelehnt',
   'A supervisor rejected this request: “{note}”. If you disagree or the problem is still there, add a comment or send a new request.':
-    'Ein Teamleiter hat diese Meldung abgelehnt: „{note}“. Wenn Sie nicht einverstanden sind oder das Problem weiter besteht, fügen Sie einen Kommentar hinzu oder senden Sie eine neue Meldung.',
+    'Ein Supervisor hat diese Meldung abgelehnt: „{note}“. Wenn Sie nicht einverstanden sind oder das Problem weiter besteht, fügen Sie einen Kommentar hinzu oder senden Sie eine neue Meldung.',
   'A supervisor rejected this request. If you disagree or the problem is still there, add a comment or send a new request.':
-    'Ein Teamleiter hat diese Meldung abgelehnt. Wenn Sie nicht einverstanden sind oder das Problem weiter besteht, fügen Sie einen Kommentar hinzu oder senden Sie eine neue Meldung.',
+    'Ein Supervisor hat diese Meldung abgelehnt. Wenn Sie nicht einverstanden sind oder das Problem weiter besteht, fügen Sie einen Kommentar hinzu oder senden Sie eine neue Meldung.',
   Cancelled: 'Storniert',
   'The maintenance team cancelled this request: the comments may say why. If the problem is still there, send a new request.':
     'Das Instandhaltungsteam hat diese Meldung storniert: Die Kommentare nennen vielleicht den Grund. Besteht das Problem weiter, senden Sie eine neue Meldung.',
@@ -1358,8 +1358,8 @@ export const DE = {
   ' (done)': ' (erledigt)',
   ' (current step)': ' (aktueller Schritt)',
   ' (to come)': ' (folgt)',
-  'Approved by a supervisor': 'Von einem Teamleiter genehmigt',
-  'Rejected by a supervisor': 'Von einem Teamleiter abgelehnt',
+  'Approved by a supervisor': 'Von einem Supervisor genehmigt',
+  'Rejected by a supervisor': 'Von einem Supervisor abgelehnt',
   'Work started': 'Arbeit begonnen',
   'Put on hold': 'Zurückgestellt',
   'Work finished': 'Arbeit erledigt',
@@ -1429,12 +1429,12 @@ export const DE = {
   'Appointment unlocked.': 'Festtermin freigegeben.',
   'This day is not in this week': 'Dieser Tag liegt nicht in dieser Woche',
   'Only supervisors and administrators change the week':
-    'Nur Teamleiter und Administratoren ändern die Woche',
+    'Nur Supervisoren und Administratoren ändern die Woche',
   '{kind}: {hours} for {person} on {longDay}.': '{kind}: {hours} für {person} am {longDay}.',
   '{person}: usual hours on {longDay}.': '{person}: übliche Stunden am {longDay}.',
   '{person}: {hours} on {longDay}.': '{person}: {hours} am {longDay}.',
   'My week is for technicians and supervisors: administrators are not counted as capacity.':
-    'Meine Woche ist für Techniker und Teamleiter: Administratoren zählen nicht zur Kapazität.',
+    'Meine Woche ist für Techniker und Supervisoren: Administratoren zählen nicht zur Kapazität.',
   'Loading your week…': 'Ihre Woche wird geladen…',
   'This week has not been saved on this device yet: open My week once with a connection.':
     'Diese Woche wurde auf diesem Gerät noch nicht gespeichert: Öffnen Sie Meine Woche einmal mit Verbindung.',
@@ -1554,7 +1554,7 @@ export const DE = {
   'Show the work orders to schedule ({count})': 'Einzuplanende Arbeitsaufträge anzeigen ({count})',
   'Day shown': 'Angezeigter Tag',
   'To schedule': 'Einzuplanen',
-  'No active technician or supervisor.': 'Kein aktiver Techniker oder Teamleiter.',
+  'No active technician or supervisor.': 'Kein aktiver Techniker oder Supervisor.',
   // widget-charts.js
   '{v} wk': '{v} Wo.',
   'Weeks of work': 'Arbeitswochen',
@@ -1578,7 +1578,7 @@ export const DE = {
   'Switched on on {at}.': 'Eingeschaltet am {at}.',
   'Switched off on {at}.': 'Ausgeschaltet am {at}.',
   'Ticked widgets are offered to supervisors. Untick a widget still in development or not working: supervisors no longer see it in the sidebar or on their dashboards, and get it back, where it was, once it is ticked again. You keep seeing every widget, marked “Off” in the sidebar when it is switched off.':
-    'Ausgewählte Kennzahlen werden Teamleitern angeboten. Wählen Sie eine Kennzahl ab, die noch in Entwicklung ist oder nicht funktioniert: Teamleiter sehen sie dann weder in der Seitenleiste noch auf ihren Dashboards und erhalten sie an ihrer Stelle zurück, sobald sie wieder ausgewählt ist. Sie sehen weiterhin alle Kennzahlen, in der Seitenleiste mit „Aus“ markiert, wenn sie ausgeschaltet sind.',
+    'Ausgewählte Kennzahlen werden Supervisoren angeboten. Wählen Sie eine Kennzahl ab, die noch in Entwicklung ist oder nicht funktioniert: Supervisoren sehen sie dann weder in der Seitenleiste noch auf ihren Dashboards und erhalten sie an ihrer Stelle zurück, sobald sie wieder ausgewählt ist. Sie sehen weiterhin alle Kennzahlen, in der Seitenleiste mit „Aus“ markiert, wenn sie ausgeschaltet sind.',
   '{off} of {length} widgets switched off.': '{off} von {length} Kennzahlen ausgeschaltet.',
   'Every widget is switched on.': 'Alle Kennzahlen sind eingeschaltet.',
   // widgets-compliance.js
@@ -1999,7 +1999,7 @@ export const DE_SERVER = {
   'This work has started: resume it instead of reopening it.':
     'Diese Arbeit hat begonnen: Setzen Sie sie fort, statt sie wieder zu öffnen.',
   'Only supervisors and admins close work orders.':
-    'Nur Teamleiter und Administratoren schließen Arbeitsaufträge ab.',
+    'Nur Supervisoren und Administratoren schließen Arbeitsaufträge ab.',
   'Assign this work order to an active person to reopen it.':
     'Weisen Sie diesen Arbeitsauftrag einer aktiven Person zu, um ihn wieder zu öffnen.',
   'A hold reason is given only when putting the work on hold.':
@@ -2015,7 +2015,7 @@ export const DE_SERVER = {
   'The closing date cannot be earlier than the completion date.':
     'Das Abschlussdatum darf nicht vor dem Datum der technischen Erledigung liegen.',
   'Only supervisors and admins waive the work report':
-    'Nur Teamleiter und Administratoren verzichten auf den Arbeitsbericht',
+    'Nur Supervisoren und Administratoren verzichten auf den Arbeitsbericht',
   'Already used': 'Bereits verwendet',
   'Choose the place of the asset': 'Wählen Sie den Ort der Anlage',
   'Invalid body': 'Ungültige Daten',
@@ -2087,7 +2087,7 @@ export const DE_SERVER = {
   'Block not found': 'Zeitblock nicht gefunden',
   'Expected a time as HH:MM': 'Uhrzeit im Format HH:MM erwartet',
   'Only active technicians and supervisors can be given time.':
-    'Nur aktive Techniker und Teamleiter können Zeit erhalten.',
+    'Nur aktive Techniker und Supervisoren können Zeit erhalten.',
   'Only work blocks can be appointments.': 'Nur Arbeitsblöcke können Festtermine sein.',
   'Only work blocks have a work order': 'Nur Arbeitsblöcke haben einen Arbeitsauftrag',
   'Other time': 'Sonstige Zeit',
@@ -2143,7 +2143,7 @@ export const DE_VALUES = {
   role: {
     STAFF: 'Mitarbeiter',
     TECHNICIAN: 'Techniker',
-    SUPERVISOR: 'Teamleiter',
+    SUPERVISOR: 'Supervisor',
     ADMIN: 'Administrator',
   },
   category: {

@@ -125,7 +125,7 @@ describe('translated labels of the enum codes', () => {
     await useLanguageForTests('de');
     expect(valueLabel('work_order_status', 'CLOSED')).toBe('Abgeschlossen');
     expect(valueLabel('category', 'HVAC')).toBe('HLK');
-    expect(valueLabel('role', 'SUPERVISOR')).toBe('Teamleiter');
+    expect(valueLabel('role', 'SUPERVISOR')).toBe('Supervisor');
   });
 });
 
