@@ -78,13 +78,14 @@ describe('service worker', () => {
 
 describe('index.html', () => {
   it('preloads every module of the app, so they load in parallel', () => {
+    // The dictionaries are not: only the one of the interface language is loaded (D91).
     const html = fs.readFileSync(path.join(FRONTEND, 'index.html'), 'utf8');
     const preloaded = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)]
       .map((m) => m[1])
       .sort();
     const modules = fs
       .readdirSync(path.join(FRONTEND, 'assets/js'))
-      .filter((f) => f.endsWith('.js') && f !== 'app.js')
+      .filter((f) => f.endsWith('.js') && f !== 'app.js' && !/^i18n-[a-z]{2}\.js$/.test(f))
       .map((f) => `/assets/js/${f}`);
     expect(preloaded).toEqual([...modules, '/assets/vendor/idb-8.0.4/index.js'].sort());
   });

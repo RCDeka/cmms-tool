@@ -40,7 +40,7 @@ Stack: Node.js 24 LTS + Express 5 + better-sqlite3 (SQLite) on the backend; HTML
 
 ## Non-goals (do not implement)
 
-Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, interface languages other than English and French (D85), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Status of the specified features: `docs/roadmap.md`.
+Frontend frameworks (React, Vue, …), bundlers or any frontend build step, TypeScript, ORMs, PostgreSQL, Docker, microservices, websockets, GraphQL, message queues, multi-tenancy, interface languages other than English, French and German (D85, D91), deleting work orders or users (D35, D39), AI features beyond the assistant of D66, inventory, file uploads. Status of the specified features: `docs/roadmap.md`.
 
 ## Code conventions
 
@@ -67,7 +67,7 @@ Frontend frameworks (React, Vue, …), bundlers or any frontend build step, Type
 - No global mutable state outside the module that owns it (`auth.js` owns the user, `router.js` the current route, etc.).
 - All HTTP goes through `api.js`; all IndexedDB access through `db.js`.
 - **Never insert unescaped data into HTML** (D12): use `textContent`, or `escapeHtml` from `dom.js` inside template strings.
-- **Every interface text goes through `t()`, `tn()` or `tx()`** (`i18n.js`, D85) with a constant English key, `{name}` placeholders and whole sentences; add the French text to `i18n-fr.js` (`test/i18n.test.js` checks it). Never compare a server message to English text: `api.js` translates it.
+- **Every interface text goes through `t()`, `tn()` or `tx()`** (`i18n.js`, D85) with a constant English key, `{name}` placeholders and whole sentences; add the French text to `i18n-fr.js` and the German text to `i18n-de.js` (`test/i18n.test.js` checks both). Never compare a server message to English text: `api.js` translates it.
 - No inline scripts, inline styles or inline event handlers (CSP).
 - Third-party libraries are vendored in `assets/vendor/` with their version in the file name or a header comment (D17). No CDN.
 - Hide actions the user cannot perform, but never rely on the UI for security.

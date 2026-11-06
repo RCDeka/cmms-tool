@@ -10,10 +10,14 @@ import { LANGUAGES, language, setLanguage, t, tn, translateStatic } from './i18n
 
 const $ = (id) => document.getElementById(id);
 
-const FLAGS = { en: '/assets/img/flag-gb.svg', fr: '/assets/img/flag-fr.svg' };
+const FLAGS = {
+  en: '/assets/img/flag-gb.svg',
+  fr: '/assets/img/flag-fr.svg',
+  de: '/assets/img/flag-de.svg',
+};
 
 /**
- * Flags to choose the language of the interface (D85): one button per language, named in its
+ * Flags to choose the language of the interface (D85, D91): one button per language, named in its
  * own language; the current one is pressed. A click on another saves it and reloads the page.
  * @param {() => Promise<boolean> | boolean} [beforeChange] false keeps the page as it is
  */
@@ -46,6 +50,8 @@ export function languageSwitch(beforeChange = () => true) {
 export function initLayout({ onLogout, beforeLanguageChange }) {
   translateStatic();
   $('feedback-button').after(languageSwitch(beforeLanguageChange));
+  // Phones: the flags sit in the menu instead, to keep the top bar for the page title (D91).
+  $('user-role').after(languageSwitch(beforeLanguageChange));
   for (const el of document.querySelectorAll('[data-app-name]')) el.textContent = APP_NAME;
   $('menu-button').addEventListener('click', () =>
     setMenuOpen(!document.body.classList.contains('menu-open')),

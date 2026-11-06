@@ -60,7 +60,7 @@ const scrollToWidget = (
  * The pictures, grouped by user (one login each; the login is rate limited). `url(ids, call)`
  * gives the page (none: stay on the previous one); `call(method, path, body)` calls the API as the logged-in user. `action` runs
  * in the page once it has opened, `after` ms before the picture; `offline` cuts the network
- * first; `language: 'fr'` shows the interface in French for that picture (D85). README
+ * first; `language: 'fr'` or `'de'` shows the interface in French or German for that picture (D85, D91). README
  * pictures sit in docs/img/, the showcase ones (docs/showcase.md) in showcase/.
  */
 const SHOTS = [
@@ -140,6 +140,13 @@ const SHOTS = [
     url: (ids) => `/work-orders/${ids.workOrder}`,
     size: COMPUTER,
     language: 'fr',
+  },
+  {
+    name: 'showcase/german',
+    user: 'supervisor1',
+    url: (ids) => `/work-orders/${ids.workOrder}`,
+    size: COMPUTER,
+    language: 'de',
   },
   {
     name: 'showcase/review-request',

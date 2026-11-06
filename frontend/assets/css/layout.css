@@ -205,10 +205,29 @@ body:not(.is-logged-out) {
   cursor: default;
 }
 
+/* The flags of the menu (D91): on phones only, where the top bar keeps its room for the page
+   title; with three languages the other two flags no longer fit beside it. */
+.user-box .language-switch {
+  display: none;
+  margin-bottom: var(--space-2);
+}
+
+.user-box .language-button:hover {
+  background: var(--color-sidebar-hover);
+}
+
+.user-box .language-button[aria-pressed='true'] {
+  border-color: #666666;
+  background: transparent;
+}
+
 @media (max-width: 640px) {
-  /* Phones: the flag of the other language only, to keep room for the page title. */
-  .topbar .language-button[aria-pressed='true'] {
+  .topbar .language-switch {
     display: none;
+  }
+
+  .user-box .language-switch {
+    display: flex;
   }
 }
 

@@ -6,7 +6,7 @@ This file holds only open work and the backlog. Done phases move, with their tas
 
 ## Done
 
-Phases 0–6 (MVP), 8–24 (post-MVP, preventive maintenance, custom dashboards), 26 (finding the work order), 27–30 (production), 32 (location tree), 34 (French interface), 35 (work order process) and 36 (SLA); details in `docs/roadmap-done.md`. Phase 7 is done except the steps that need the VPS (below).
+Phases 0–6 (MVP), 8–24 (post-MVP, preventive maintenance, custom dashboards), 26 (finding the work order), 27–30 (production), 32 (location tree), 34 (French interface), 35 (work order process), 36 (SLA) and 37 (German interface); details in `docs/roadmap-done.md`. Phase 7 is done except the steps that need the VPS (below).
 
 ## Phase 7: Hardening and deployment
 

@@ -133,9 +133,10 @@ Specified in `docs/spec-dashboards.md` (section 11 holds the full acceptance cri
 
 - **Phase 32: location tree** — done (D83). Level types and places (`locations`), the migration of today's sites, buildings, floors and rooms into the tree, `location_id` on assets, work orders and plans with the site set by the server, the Places page replacing the Rooms page, one place picker for every form (offline, from the cached tree), paths in lists and search, the `location` filter and `group_by=area`. Acceptance: see the spec, section 11.
 
-## Interface language (D85)
+## Interface language (D85, D91)
 
 - **Phase 34: French interface** — done (D85). Flags in the top bar and on the login page, the choice kept on the device, every text of the interface, the enum labels and the messages of the API in French, dates and numbers in the French format, the brief's French vocabulary. Acceptance: each page of every role reads in French with no English text other than content; the choice survives a reload, logging out and logging in again; an unsaved form asks before the page reloads in the other language; the French dictionary matches the code (`test/i18n.test.js`); no page is wider than the screen on phones, tablets and computers.
+- **Phase 37: German interface** — done (D91). A third flag, "Deutsch"; `i18n-de.js` with every text of the interface, the enum labels and the messages of the API in German (polite form, German facility-management vocabulary); dates and numbers in the German format; only the dictionary of the chosen language is loaded; on phones the flags move into the menu. Acceptance: the German dictionary has the same keys as the French one and matches the code (`test/i18n.test.js`); a page loaded in German builds its labels, dates and counts in German; the showcase pages, in German, are no wider than the screen on a computer and on a phone (402 px).
 
 ## Work order process and SLA (D86)
 

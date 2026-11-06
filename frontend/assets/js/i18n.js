@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Language of the interface (D85): English or French, chosen with the flags of the top bar and
-// kept on the device. Only the interface is translated, never the content people type.
+// Language of the interface (D85, D91): English, French or German, chosen with the flags of the
+// top bar and kept on the device. Only the interface is translated, never the content people type.
 // The English text is the key: t('Work orders') gives 'Bons de travaux' in French and falls back
 // to the English text when the dictionary has no entry. The language is read once when the page
-// loads, so module-level labels are translated too; changing it reloads the page.
-import { FR, FR_PATTERNS, FR_SERVER, FR_VALUES } from './i18n-fr.js';
+// loads, so module-level labels are translated too; changing it reloads the page. Only the
+// dictionary of that language is loaded (top-level await: the modules importing this one wait).
 
 const STORAGE_KEY = 'tacto.language';
 
@@ -14,17 +14,41 @@ const STORAGE_KEY = 'tacto.language';
 export const LANGUAGES = [
   { code: 'en', name: 'English', locale: 'en-GB' },
   { code: 'fr', name: 'Français', locale: 'fr-FR' },
+  { code: 'de', name: 'Deutsch', locale: 'de-DE' },
 ];
 
-// One dictionary per language: the interface texts and the messages of the server.
-const DICTIONARIES = { en: null, fr: { ...FR_SERVER, ...FR } };
+/**
+ * One dictionary per language other than English: the interface texts with the messages of the
+ * server (`texts`), the enum labels (`values`) and the server messages holding a value
+ * (`patterns`).
+ */
+const LOADERS = {
+  fr: async () => {
+    const m = await import('./i18n-fr.js');
+    return { texts: { ...m.FR_SERVER, ...m.FR }, values: m.FR_VALUES, patterns: m.FR_PATTERNS };
+  },
+  de: async () => {
+    const m = await import('./i18n-de.js');
+    return { texts: { ...m.DE_SERVER, ...m.DE }, values: m.DE_VALUES, patterns: m.DE_PATTERNS };
+  },
+};
+
+/** The dictionary of a language, or null for English (or when it cannot be loaded). */
+async function loadDictionary(code) {
+  if (code === 'en') return null;
+  try {
+    return await LOADERS[code]();
+  } catch {
+    return null; // not reachable (offline before the service worker cached it): English
+  }
+}
 
 /**
  * Language to start with: the one saved on the device, else the browser's first language we
  * offer, else English. Pure.
  * @param {string | null} saved
  * @param {readonly string[]} browserLanguages navigator.languages
- * @returns {'en' | 'fr'}
+ * @returns {'en' | 'fr' | 'de'}
  */
 export function pickLanguage(saved, browserLanguages = []) {
   const known = (code) => LANGUAGES.some((l) => l.code === code);
@@ -48,7 +72,9 @@ let current = pickLanguage(
   readSaved(),
   typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language]),
 );
-let dictionary = DICTIONARIES[current];
+let active = await loadDictionary(current);
+if (!active) current = 'en';
+let dictionary = active?.texts ?? null;
 let pluralRules = new Intl.PluralRules(localeOf(current));
 let countFormat = new Intl.NumberFormat(localeOf(current));
 
@@ -56,12 +82,12 @@ function localeOf(code) {
   return LANGUAGES.find((l) => l.code === code).locale;
 }
 
-/** Code of the interface language ('en' or 'fr'). */
+/** Code of the interface language ('en', 'fr' or 'de'). */
 export function language() {
   return current;
 }
 
-/** Locale of the interface language for Intl formats ('en-GB', 'fr-FR'). */
+/** Locale of the interface language for Intl formats ('en-GB', 'fr-FR', 'de-DE'). */
 export function locale() {
   return localeOf(current);
 }
@@ -83,11 +109,12 @@ export function setLanguage(code) {
 /**
  * Switches the dictionary without reloading. For tests only: labels built when a module loads
  * keep the language they were built in.
- * @param {'en' | 'fr'} code
+ * @param {'en' | 'fr' | 'de'} code
  */
-export function useLanguageForTests(code) {
+export async function useLanguageForTests(code) {
   current = code;
-  dictionary = DICTIONARIES[code];
+  active = await loadDictionary(code);
+  dictionary = active?.texts ?? null;
   pluralRules = new Intl.PluralRules(localeOf(code));
   countFormat = new Intl.NumberFormat(localeOf(code));
 }
@@ -120,7 +147,7 @@ export function t(text, vars) {
 
 /**
  * The English form to use for a count in the current language: French uses the singular for
- * 0 and 1, English for 1 only. Translate the result with t() or tx().
+ * 0 and 1, English and German for 1 only. Translate the result with t() or tx().
  * @param {number} count
  * @param {string} one English singular
  * @param {string} other English plural
@@ -162,9 +189,9 @@ export function tx(text, vars) {
   return pieces.filter((p) => p !== '');
 }
 
-/** French labels of the enum codes ({ enum: { CODE: label } }), or null in English. */
+/** Labels of the enum codes in the current language ({ enum: { CODE: label } }), or null in English. */
 export function valueLabels() {
-  return current === 'fr' ? FR_VALUES : null;
+  return active?.values ?? null;
 }
 
 /**
@@ -176,7 +203,7 @@ export function valueLabels() {
 export function serverText(message) {
   if (!dictionary || typeof message !== 'string') return message;
   if (dictionary[message]) return dictionary[message];
-  for (const [pattern, replacement] of FR_PATTERNS) {
+  for (const [pattern, replacement] of active.patterns) {
     if (pattern.test(message)) return message.replace(pattern, replacement);
   }
   return message;

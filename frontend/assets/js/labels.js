@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexandre Carpentier (RCDeka)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// UI labels for enum codes and fields (docs/data-model.md → Enumerated values). The French
-// labels are keyed by enum and code (i18n-fr.js → FR_VALUES), since one English word may need
-// two French ones ('Low': "Faible" for a criticality, "Basse" for a priority).
+// UI labels for enum codes and fields (docs/data-model.md → Enumerated values). The French and
+// German labels are keyed by enum and code (i18n-fr.js → FR_VALUES, i18n-de.js → DE_VALUES),
+// since one English word may need two French ones ('Low': "Faible" for a criticality, "Basse"
+// for a priority).
 import { valueLabels } from './i18n.js';
 
 export const VALUE_LABELS = {

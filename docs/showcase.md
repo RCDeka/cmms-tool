@@ -35,7 +35,9 @@ One login page for everyone. The menu then depends on the role: staff see only t
 
 ![The work orders in French](img/showcase/french.png)
 
-The flags at the end of the top bar, and in the corner of the login page, switch the interface between English and French (D85). The browser remembers the choice, even after logging out. Everything Tacto writes is translated, with the vocabulary of French maintenance teams (bon de travaux, équipement, domaine technique, compte rendu); what people typed (titles, reports, comments, names of places) stays as it was written. The other pictures of this page are in English.
+The flags at the end of the top bar, and in the corner of the login page, switch the interface between English, French and German (D85, D91); on phones they are in the menu. The browser remembers the choice, even after logging out. Everything Tacto writes is translated, with the vocabulary of French maintenance teams (bon de travaux, équipement, domaine technique, compte rendu) and of German facility management (Arbeitsauftrag, Anlage, Gewerk, Arbeitsbericht); what people typed (titles, reports, comments, names of places) stays as it was written. The other pictures of this page are in English.
+
+![The work orders in German](img/showcase/german.png)
 
 ## 2. Dashboards
 
